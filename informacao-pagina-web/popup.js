@@ -387,23 +387,49 @@ async function extractPageDetails() {
     const hasLang =
       document.documentElement.lang && document.documentElement.lang.length > 0;
     const hasOg = document.querySelector('meta[property^="og:"]') !== null;
+    const hasTwitter =
+      document.querySelector('meta[name^="twitter:"]') !== null;
     const hasFavicon = document.querySelector('link[rel*="icon"]') !== null;
     const robotsMeta =
       document.querySelector('meta[name="robots"]')?.content || "";
     const isIndexable = !robotsMeta.toLowerCase().includes("noindex");
+    const charset = document.characterSet;
+    const hasDoctype = document.doctype !== null;
+    const deprecatedTagsList = [
+      "center",
+      "font",
+      "strike",
+      "u",
+      "dir",
+      "applet",
+      "acronym",
+      "big",
+      "frame",
+      "frameset",
+      "noframes",
+      "tt",
+    ];
+    const foundDeprecated = deprecatedTagsList.filter((tag) =>
+      document.querySelector(tag),
+    );
+    const hasDeprecated = foundDeprecated.length > 0;
 
     let seoScore = 0;
-    if (titleLen >= 30 && titleLen <= 60) seoScore += 15;
-    if (descLen >= 50 && descLen <= 160) seoScore += 15;
-    if (h1Count === 1) seoScore += 15;
+    if (titleLen >= 30 && titleLen <= 60) seoScore += 10;
+    if (descLen >= 50 && descLen <= 160) seoScore += 10;
+    if (h1Count === 1) seoScore += 10;
     if (imgsMissingAlt === 0) seoScore += 10;
     if (document.querySelector('link[rel="canonical"]')) seoScore += 10;
     if (document.querySelector('meta[name="viewport"]')) seoScore += 10;
 
     if (hasLang) seoScore += 5;
-    if (hasOg) seoScore += 10;
+    if (hasOg) seoScore += 5;
+    if (hasTwitter) seoScore += 5;
     if (hasFavicon) seoScore += 5;
     if (isIndexable) seoScore += 5;
+    if (charset === "UTF-8") seoScore += 5;
+    if (hasDoctype) seoScore += 5;
+    if (!hasDeprecated) seoScore += 5;
 
     const seo = {
       score: `${seoScore}/100`,
@@ -419,6 +445,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "O Google exibe cerca de 60 caracteres nos resultados. Títulos muito curtos são vagos e muito longos são cortados.",
         },
+        {
+          tag: "Exemplo",
+          text: 'Bom: "Tênis de Corrida Nike Air Zoom - Loja Esportiva" (47 chars).',
+        },
       ],
       descriptionCheck: [
         {
@@ -431,6 +461,10 @@ async function extractPageDetails() {
         {
           tag: "Motivo",
           text: "Meta descriptions ideais têm entre 50 e 160 caracteres para atrair cliques e aparecerem completas nos snippets.",
+        },
+        {
+          tag: "Exemplo",
+          text: 'Bom: "Compre o Tênis Nike Air Zoom com o melhor preço. Frete grátis e parcelamento em até 10x. Confira nossa coleção completa." (128 chars).',
         },
       ],
       h1Check: [
@@ -445,6 +479,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "Cada página deve ter apenas um H1 principal descrevendo o tópico para manter uma hierarquia semântica clara.",
         },
+        {
+          tag: "Exemplo",
+          text: "<h1>Tênis de Corrida Nike Air Zoom</h1> (Apenas um por página).",
+        },
       ],
       imagesAltCheck: [
         {
@@ -458,6 +496,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "O texto alternativo (alt) é crucial para leitores de tela (acessibilidade) e para o SEO de imagens do Google.",
         },
+        {
+          tag: "Exemplo",
+          text: '<img src="tenis.jpg" alt="Tênis de corrida azul da marca Nike">',
+        },
       ],
       canonicalCheck: [
         {
@@ -469,6 +511,10 @@ async function extractPageDetails() {
         {
           tag: "Motivo",
           text: "A tag canonical indica aos buscadores qual é a versão original da página, evitando punições por conteúdo duplicado.",
+        },
+        {
+          tag: "Exemplo",
+          text: '<link rel="canonical" href="https://www.loja.com.br/produto">',
         },
       ],
       mobileFriendly: [
@@ -482,6 +528,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "A tag viewport controla o dimensionamento em dispositivos móveis, essencial para a indexação mobile-first.",
         },
+        {
+          tag: "Exemplo",
+          text: '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+        },
       ],
       langCheck: [
         {
@@ -493,6 +543,10 @@ async function extractPageDetails() {
         {
           tag: "Motivo",
           text: "Definir o idioma no HTML ajuda navegadores e ferramentas de tradução a processar o conteúdo corretamente.",
+        },
+        {
+          tag: "Exemplo",
+          text: '<html lang="pt-BR">',
         },
       ],
       ogCheck: [
@@ -506,6 +560,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "O protocolo Open Graph controla a imagem, título e descrição exibidos ao compartilhar o link em redes sociais.",
         },
+        {
+          tag: "Exemplo",
+          text: '<meta property="og:title" content="...">, <meta property="og:image" content="...">',
+        },
       ],
       faviconCheck: [
         {
@@ -518,6 +576,10 @@ async function extractPageDetails() {
           tag: "Motivo",
           text: "O ícone da página melhora a experiência do usuário (UX) e a identificação da marca nas abas do navegador.",
         },
+        {
+          tag: "Exemplo",
+          text: '<link rel="icon" href="/favicon.ico">',
+        },
       ],
       indexingCheck: [
         {
@@ -527,6 +589,75 @@ async function extractPageDetails() {
         {
           tag: "Motivo",
           text: "A diretiva 'noindex' instrui os motores de busca a não incluírem esta página nos resultados da pesquisa.",
+        },
+        {
+          tag: "Exemplo",
+          text: '<meta name="robots" content="index, follow"> (Permitido)',
+        },
+      ],
+      twitterCheck: [
+        {
+          tag: "Avaliação",
+          text: hasTwitter
+            ? "✅ Tags Twitter Card detectadas"
+            : "⚠️ Tags Twitter Card ausentes.",
+        },
+        {
+          tag: "Motivo",
+          text: "As tags Twitter Card otimizam a exibição de tweets com links para o seu conteúdo, aumentando o engajamento.",
+        },
+        {
+          tag: "Exemplo",
+          text: '<meta name="twitter:card" content="summary_large_image">',
+        },
+      ],
+      charsetCheck: [
+        {
+          tag: "Avaliação",
+          text:
+            charset === "UTF-8"
+              ? `✅ UTF-8 detectado`
+              : `⚠️ Codificação atual: ${charset || "Desconhecida"}.`,
+        },
+        {
+          tag: "Motivo",
+          text: "UTF-8 é o padrão mundial para codificação de caracteres, garantindo que o texto seja exibido corretamente em qualquer idioma.",
+        },
+        {
+          tag: "Exemplo",
+          text: '<meta charset="UTF-8">',
+        },
+      ],
+      doctypeCheck: [
+        {
+          tag: "Avaliação",
+          text: hasDoctype
+            ? "✅ Doctype HTML5 presente"
+            : "⚠️ Doctype ausente.",
+        },
+        {
+          tag: "Motivo",
+          text: "A declaração <!DOCTYPE html> informa ao navegador para renderizar a página no modo padrão (standards mode).",
+        },
+        {
+          tag: "Exemplo",
+          text: "<!DOCTYPE html> (Na primeira linha do arquivo)",
+        },
+      ],
+      deprecatedCheck: [
+        {
+          tag: "Avaliação",
+          text: !hasDeprecated
+            ? "✅ Código limpo (sem tags obsoletas)"
+            : `⚠️ Tags obsoletas encontradas: ${foundDeprecated.join(", ")}.`,
+        },
+        {
+          tag: "Motivo",
+          text: "Tags como <font> ou <center> são obsoletas. Use CSS para estilização para manter o código semântico e moderno.",
+        },
+        {
+          tag: "Exemplo",
+          text: "Evite: <center>Texto</center>. Use CSS: text-align: center;",
         },
       ],
     };
@@ -573,6 +704,10 @@ const fieldDescriptions = {
   ogCheck: "Presença de meta tags para redes sociais (Open Graph).",
   faviconCheck: "Ícone da página para abas e favoritos.",
   indexingCheck: "Verifica se a página permite indexação por buscadores.",
+  twitterCheck: "Tags específicas para compartilhamento no Twitter.",
+  charsetCheck: "Codificação de caracteres da página (Recomendado: UTF-8).",
+  doctypeCheck: "Declaração do tipo de documento HTML.",
+  deprecatedCheck: "Verificação de tags HTML antigas/obsoletas.",
 };
 
 function escapeHtml(text) {
