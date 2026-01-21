@@ -13,10 +13,10 @@ function updateBadge(tabId, url) {
     url.includes("chromewebstore.google.com");
 
   if (isUnsupported) {
-    text = "Off";
+    text = " ";
     color = "#d93025"; // Vermelho
   } else if (url.startsWith("http")) {
-    text = "On";
+    text = " ";
     color = "#1a971a"; // Verde
   }
 

@@ -617,7 +617,7 @@ function renderWithExplanations(data) {
           value
             .map((item) => {
               if (item.tag && item.text)
-                return `<li style="margin-bottom:4px; padding: 4px; background: #fff; border: 1px solid #dadce0; border-radius: 4px; display: flex; align-items: baseline;"><span style="background:#e8f0fe; color: #1967d2; padding:1px 6px; border-radius:4px; font-size:0.85em; font-weight:bold; margin-right:6px; min-width: 30px; text-align: center;">${escapeHtml(item.tag)}</span> <span style="flex: 1;">${escapeHtml(item.text)}</span></li>`;
+                return `<li style="margin-bottom:4px; padding: 4px; background: #fff; border: 1px solid #dadce0; border-radius: 4px; display: flex; align-items: baseline;"><span style="background:#e8f0fe; color: #1967d2; padding:2px 8px; border-radius:12px; font-size:0.85em; font-weight:bold; margin-right:6px; min-width: 30px; text-align: center;">${escapeHtml(item.tag)}</span> <span style="flex: 1;">${escapeHtml(item.text)}</span></li>`;
               if (item.text && item.href)
                 return `<li style="margin-bottom:4px; padding: 4px; background: #fff; border: 1px solid #dadce0; border-radius: 4px;"><a href="${escapeHtml(item.href)}" target="_blank" style="text-decoration:none; color:#1a73e8; font-weight:500; display: block; margin-bottom: 2px;">${escapeHtml(item.text)}</a><span style="color:#5f6368; font-size:0.85em; word-break: break-all; display: block;">${escapeHtml(item.href)}</span></li>`;
               return `<li style="margin-bottom:3px; padding: 4px; background: #fff; border: 1px solid #dadce0; border-radius: 4px;">${Object.values(
@@ -870,13 +870,13 @@ function updateBadge(tabId, status) {
   let color = "";
 
   if (status === "success") {
-    text = "On";
+    text = " ";
     color = "#1a971a";
   } else if (status === "unsupported") {
-    text = "Off";
+    text = " ";
     color = "#d93025";
   } else if (status === "error") {
-    text = "Err";
+    text = " ";
     color = "#f29900";
   }
 
