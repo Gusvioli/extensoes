@@ -3,10 +3,10 @@
   "name": "Analisador de Página Web",
   "version": "1.0",
   "description": "Extrai e exibe informações detalhadas de uma página da web.",
-  "permissions": [
-    "activeTab",
-    "scripting"
-  ],
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
