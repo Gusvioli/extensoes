@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gerador de Ícones PNG</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        text-align: center;
+        background: #f0f2f5;
+      }
+      .container {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+      .card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      canvas {
+        border: 1px dashed #ccc;
+        margin: 10px 0;
+      }
+      button {
+        background: #1a73e8;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      button:hover {
+        background: #1557b0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gerador de Ícones da Extensão</h1>
+    <p>
+      Esta página converte o SVG do logotipo para PNG nos tamanhos necessários.
+    </p>
+
+    <div class="container" id="output"></div>
+
+    <!-- SVG Original Embutido -->
+    <div style="display: none">
+      <svg
+        id="source-svg"
+        width="128"
+        height="128"
+        viewBox="0 0 128 128"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          x="26"
+          y="18"
+          width="76"
+          height="92"
+          rx="4"
+          fill="#000"
+          fill-opacity="0.2"
+        />
+        <rect
+          x="22"
+          y="14"
+          width="76"
+          height="92"
+          rx="4"
+          fill="white"
+          stroke="#dadce0"
+          stroke-width="2"
+        />
+        <path
+          d="M23 15H97C98.6569 15 100 16.3431 100 18V28H22V18C22 16.3431 23.3431 15 25 15Z"
+          fill="#1a73e8"
+        />
+        <rect x="34" y="42" width="30" height="6" rx="3" fill="#e8f0fe" />
+        <rect x="34" y="56" width="52" height="6" rx="3" fill="#dadce0" />
+        <rect x="34" y="70" width="40" height="6" rx="3" fill="#dadce0" />
+        <rect x="34" y="84" width="25" height="6" rx="3" fill="#dadce0" />
+        <path
+          d="M88.5 88.5L110 110"
+          stroke="#202124"
+          stroke-width="10"
+          stroke-linecap="round"
+        />
+        <circle
+          cx="76"
+          cy="76"
+          r="26"
+          fill="#ffffff"
+          stroke="#1a73e8"
+          stroke-width="8"
+        />
+        <path
+          d="M86 64C90 67 92 71 92 76"
+          stroke="#8ab4f8"
+          stroke-width="4"
+          stroke-linecap="round"
+        />
+      </svg>
+    </div>
+
+    <script>
+      const sizes = [16, 48, 128];
+      const output = document.getElementById("output");
+      const svg = document.getElementById("source-svg");
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const img = new Image();
+      img.src =
+        "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgData);
+
+      img.onload = () => {
+        sizes.forEach((size) => {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, size, size);
+
+          const btn = document.createElement("button");
+          btn.textContent = `Baixar icon${size}.png`;
+          btn.onclick = () => {
+            const a = document.createElement("a");
+            a.download = `icon${size}.png`;
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+          };
+
+          card.appendChild(document.createTextNode(`${size}x${size}`));
+          card.appendChild(canvas);
+          card.appendChild(btn);
+          output.appendChild(card);
+        });
+      };
+    </script>
+  </body>
+</html>
