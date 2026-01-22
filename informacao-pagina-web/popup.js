@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const donateBtn = document.createElement("button");
   donateBtn.textContent = "☕ Apoiar com PIX";
   donateBtn.style.marginTop = "10px";
+  donateBtn.style.marginBottom = "10px";
   donateBtn.style.width = "100%";
   donateBtn.style.cursor = "pointer";
   donateBtn.style.backgroundColor = "#32bcad"; // Cor característica do PIX
@@ -44,6 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pixContainer = document.createElement("div");
   pixContainer.style.display = "none";
   pixContainer.style.marginTop = "10px";
+  pixContainer.style.marginBottom = "10px";
   pixContainer.style.padding = "15px";
   pixContainer.style.backgroundColor = "#e0f2f1";
   pixContainer.style.borderRadius = "8px";
@@ -92,8 +94,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  viewBtn.parentNode.insertBefore(donateBtn, viewBtn.nextSibling);
-  donateBtn.parentNode.insertBefore(pixContainer, donateBtn.nextSibling);
+  document.body.insertBefore(donateBtn, document.body.firstChild);
+  document.body.insertBefore(pixContainer, donateBtn.nextSibling);
 
   // Iniciar análise da página
   analyzePage();
@@ -732,7 +734,7 @@ function renderWithExplanations(data) {
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       html += `<tr style="background-color: #f8f9fa;">
         <td colspan="2" style="padding: 10px; border: 1px solid #e0e0e0;">
-          <strong style="color:#1a73e8; display:block; margin-bottom:6px; font-size: 1.1em;">${formattedKey}</strong>
+          <strong style="color:#1a73e8; display:block; margin-bottom:6px; font-size: 1.1em;">${escapeHtml(formattedKey)}</strong>
           <div style="padding-left:0;">${renderWithExplanations(value)}</div>
         </td>
       </tr>`;
@@ -786,7 +788,7 @@ function renderWithExplanations(data) {
 
     html += `<tr style="border-bottom: 1px solid #f1f3f4;">
       <td style="padding: 8px; border: 1px solid #e0e0e0; width: 35%; background-color: #fafafa; vertical-align: top;">
-        <strong style="color:#202124; font-size: 0.95em;">${formattedKey}</strong>
+        <strong style="color:#202124; font-size: 0.95em;">${escapeHtml(formattedKey)}</strong>
         ${desc ? `<div style="font-size:0.8em; color:#5f6368; margin-top:4px;">${desc}</div>` : ""}
       </td>
       <td style="padding: 8px; border: 1px solid #e0e0e0; vertical-align: top; color:#3c4043; word-break:break-word;">
