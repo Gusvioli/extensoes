@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Analisador de Página Web",
   "version": "1.0",
+  "author": "Gustavo Vieira de Oliveira",
   "description": "Extrai e exibe informações detalhadas de uma página da web.",
   "permissions": ["activeTab", "scripting", "tabs"],
   "background": {

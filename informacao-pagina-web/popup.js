@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   pixContainer.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
 
   // SUBSTITUA AQUI PELA SUA CHAVE PIX REAL
-  const pixKey = "seu-pix-aqui@exemplo.com";
+  const pixKey = "750ad87e-13b9-4b4d-b8bf-4639289dd196";
 
   pixContainer.innerHTML = `
     <div style="margin-bottom:10px; font-weight:bold; color:#00695c; font-size:1.1em;">Chave PIX para doação:</div>
@@ -1005,13 +1005,13 @@ function updateBadge(tabId, status) {
   let color = "";
 
   if (status === "success") {
-    text = " ";
+    text = "On";
     color = "#1a971a";
   } else if (status === "unsupported") {
-    text = " ";
+    text = "Off";
     color = "#d93025";
   } else if (status === "error") {
-    text = " ";
+    text = "Err";
     color = "#f29900";
   }
 

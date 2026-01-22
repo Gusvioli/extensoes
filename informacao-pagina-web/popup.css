@@ -39,7 +39,7 @@ body {
   display: none;
   padding: 15px;
   border-top: none;
-  max-height: 400px;
+  height: auto;
   overflow-y: auto;
 }
 
