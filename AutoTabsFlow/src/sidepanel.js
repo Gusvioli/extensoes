@@ -1,5 +1,119 @@
 import { summarizeContext, classifyTabContext } from "./ai-service.js";
 
+class GroupCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  set data({ group, tabs, timeStr }) {
+    this.group = group;
+    this.tabs = tabs;
+    this.render(timeStr);
+  }
+
+  render(timeStr) {
+    const style = `
+      <style>
+        :host { display: block; }
+        .card { background: white; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #ccc; font-family: 'Segoe UI', sans-serif; }
+        .card h3 { margin: 0 0 4px 0; font-size: 14px; display: flex; justify-content: space-between; align-items: center; color: #333; }
+        .btn { background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 8px; transition: background 0.2s; }
+        .btn:hover { background: #2980b9; }
+        .btn-focus { background: #27ae60; }
+        .btn-focus:hover { background: #219150; }
+        .summary { font-size: 12px; color: #666; margin-top: 8px; line-height: 1.4; background: #f0f4f8; padding: 8px; border-radius: 4px; display: none; }
+        .badge { font-size: 10px; background: #eee; padding: 2px 6px; border-radius: 10px; font-weight: normal; color: #555; }
+        .time-badge { font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 8px; }
+        .group-title-text { cursor: pointer; border-bottom: 1px dashed #ccc; }
+        .title-input { width: 60%; font-size: 14px; }
+      </style>
+    `;
+
+    this.shadowRoot.innerHTML = `
+      ${style}
+      <div class="card" style="border-left-color: ${this.group.color}">
+        <h3>
+          <span class="group-title-text" id="group-title">${this.group.title || "Sem Nome"}</span>
+          <span class="badge">${this.tabs.length} abas</span>
+        </h3>
+        <span class="time-badge">⏱️ Foco: ${timeStr}</span>
+        <button class="btn btn-focus" id="btn-focus">🎯 Modo Túnel de Foco</button>
+        <button class="btn btn-summary" id="btn-summary">📝 Gerar Resumo</button>
+        <div class="summary" id="summary-content"></div>
+      </div>
+    `;
+
+    this.shadowRoot
+      .getElementById("btn-focus")
+      .addEventListener("click", () => {
+        this.dispatchEvent(
+          new CustomEvent("focus-mode", {
+            detail: { groupId: this.group.id },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      });
+
+    this.shadowRoot
+      .getElementById("btn-summary")
+      .addEventListener("click", () => {
+        this.dispatchEvent(
+          new CustomEvent("generate-summary", {
+            detail: { groupId: this.group.id },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      });
+
+    const titleEl = this.shadowRoot.getElementById("group-title");
+    titleEl.addEventListener("click", () => this.makeTitleEditable(titleEl));
+  }
+
+  showSummary(text) {
+    const el = this.shadowRoot.getElementById("summary-content");
+    if (el) {
+      el.style.display = "block";
+      el.innerText = text;
+    }
+  }
+
+  makeTitleEditable(titleSpan) {
+    const oldTitle = titleSpan.innerText;
+    const h3 = titleSpan.parentElement;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = oldTitle;
+    input.className = "title-input";
+    h3.insertBefore(input, titleSpan);
+    titleSpan.style.display = "none";
+    input.focus();
+    input.select();
+    const saveTitle = () => {
+      const newTitle = input.value.trim();
+      if (newTitle && newTitle !== oldTitle) {
+        this.dispatchEvent(
+          new CustomEvent("update-title", {
+            detail: { groupId: this.group.id, title: newTitle },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
+      input.remove();
+      titleSpan.style.display = "inline";
+    };
+    input.addEventListener("blur", saveTitle);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") input.blur();
+    });
+  }
+}
+
+customElements.define("group-card", GroupCard);
+
 document.addEventListener("DOMContentLoaded", loadGroups);
 document
   .getElementById("clear-distractions")
@@ -21,9 +135,18 @@ document
   .getElementById("delete-session")
   .addEventListener("click", deleteSession);
 
-document.addEventListener("click", (e) => {
-  if (e.target && e.target.classList.contains("group-title-text"))
-    makeTitleEditable(e.target);
+// Event delegation for Shadow DOM events
+const container = document.getElementById("flows-container");
+container.addEventListener("focus-mode", (e) =>
+  toggleFocusMode(e.detail.groupId),
+);
+container.addEventListener("generate-summary", (e) =>
+  generateSummary(e.target, e.detail.groupId),
+);
+container.addEventListener("update-title", async (e) => {
+  await chrome.tabGroups.update(parseInt(e.detail.groupId), {
+    title: e.detail.title,
+  });
 });
 
 // Helper function to manage button state during async operations
@@ -95,62 +218,10 @@ async function loadGroups() {
     const timeMs = stats[group.id] || 0;
     const timeStr = formatTime(timeMs);
 
-    const card = document.createElement("div");
-    card.className = "card";
-    card.style.borderLeftColor = group.color;
-    card.innerHTML = `
-      <h3><span class="group-title-text" data-group-id="${group.id}">${group.title || "Sem Nome"}</span> <span class="badge">${tabs.length} abas</span></h3>
-      <span class="time-badge">⏱️ Foco: ${timeStr}</span>
-      <button class="btn btn-focus" data-id="${group.id}">🎯 Modo Túnel de Foco</button>
-      <button class="btn btn-summary" data-id="${group.id}">📝 Gerar Resumo</button>
-      <div class="summary" id="summary-${group.id}"></div>
-    `;
+    const card = document.createElement("group-card");
+    card.data = { group, tabs, timeStr };
     container.appendChild(card);
   }
-
-  document
-    .querySelectorAll(".btn-focus")
-    .forEach((b) =>
-      b.addEventListener("click", (e) => toggleFocusMode(e.target.dataset.id)),
-    );
-  document
-    .querySelectorAll(".btn-summary")
-    .forEach((b) =>
-      b.addEventListener("click", (e) => generateSummary(e.target.dataset.id)),
-    );
-}
-
-function makeTitleEditable(titleSpan) {
-  const groupId = titleSpan.dataset.groupId;
-  const oldTitle = titleSpan.innerText;
-  const h3 = titleSpan.parentElement;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = oldTitle;
-  input.className = "title-input";
-  input.style.width = "60%";
-  input.style.fontSize = "14px";
-
-  h3.insertBefore(input, titleSpan);
-  titleSpan.style.display = "none";
-  input.focus();
-  input.select();
-
-  const saveTitle = async () => {
-    const newTitle = input.value.trim();
-    if (newTitle && newTitle !== oldTitle) {
-      await chrome.tabGroups.update(parseInt(groupId), { title: newTitle });
-    }
-    // The UI will be refreshed by the onUpdated listener, so we just need to remove the input
-    input.remove();
-    titleSpan.style.display = "inline";
-  };
-
-  input.addEventListener("blur", saveTitle);
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") input.blur();
-  });
 }
 
 async function toggleFocusMode(targetGroupId) {
@@ -173,27 +244,15 @@ async function toggleFocusMode(targetGroupId) {
   }
 }
 
-async function generateSummary(groupId) {
+async function generateSummary(cardElement, groupId) {
   groupId = parseInt(groupId);
-  const summaryDiv = document.getElementById(`summary-${groupId}`);
-  const summaryBtn = document.querySelector(
-    `.btn-summary[data-id='${groupId}']`,
-  );
-
-  if (summaryDiv.style.display === "block") {
-    summaryDiv.style.display = "none";
-    if (summaryBtn) summaryBtn.innerHTML = "📝 Gerar Resumo";
-    return;
+  if (cardElement && cardElement.showSummary) {
+    cardElement.showSummary("✨ A IA está lendo suas abas...");
+    const group = await chrome.tabGroups.get(groupId);
+    const tabs = await chrome.tabs.query({ groupId: groupId });
+    const summary = await summarizeContext(group.title, tabs);
+    cardElement.showSummary(summary);
   }
-
-  if (summaryBtn) summaryBtn.innerHTML = "✨ Gerando...";
-  summaryDiv.style.display = "block";
-  summaryDiv.innerText = "✨ A IA está lendo suas abas...";
-  const group = await chrome.tabGroups.get(groupId);
-  const tabs = await chrome.tabs.query({ groupId: groupId });
-  const summary = await summarizeContext(group.title, tabs);
-  summaryDiv.innerText = summary;
-  if (summaryBtn) summaryBtn.innerHTML = "🙈 Ocultar Resumo";
 }
 
 async function clearDistractions() {
