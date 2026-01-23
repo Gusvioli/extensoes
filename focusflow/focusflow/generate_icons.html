@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gerar Ícones FocusFlow</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        padding: 50px;
+        background: #f0f0f0;
+      }
+      canvas {
+        border: 1px solid #ccc;
+        margin: 10px;
+        background: transparent;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        padding: 12px 24px;
+        font-size: 16px;
+        cursor: pointer;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #2980b9;
+      }
+      p {
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎨 Gerador de Ícones FocusFlow</h1>
+    <p>
+      Clique no botão abaixo para gerar e baixar os ícones (16px, 48px, 128px).
+    </p>
+    <p>
+      Depois, mova os arquivos baixados para a pasta
+      <code>icons/</code> substituindo os vazios.
+    </p>
+
+    <canvas id="canvas"></canvas>
+    <br /><br />
+    <button onclick="generateAndDownload()">⬇️ Baixar Ícones</button>
+
+    <div style="margin-top: 15px">
+      <p style="font-size: 12px">
+        Se o download automático falhar, baixe individualmente:
+      </p>
+      <button onclick="download(16)" style="font-size: 12px; padding: 8px">
+        16px
+      </button>
+      <button onclick="download(48)" style="font-size: 12px; padding: 8px">
+        48px
+      </button>
+      <button onclick="download(128)" style="font-size: 12px; padding: 8px">
+        128px
+      </button>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      function drawIcon(size) {
+        canvas.width = size;
+        canvas.height = size;
+        ctx.clearRect(0, 0, size, size);
+
+        // Fundo Azul
+        ctx.fillStyle = "#3498db";
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Alvo (Target) Branco
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = size * 0.1;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size * 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Ponto Central
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function download(size) {
+        drawIcon(size);
+        const link = document.createElement("a");
+        link.download = `icon${size}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      }
+
+      function generateAndDownload() {
+        // Baixa sequencialmente com pequeno delay
+        setTimeout(() => download(16), 200);
+        setTimeout(() => download(48), 600);
+        setTimeout(() => download(128), 1000);
+
+        // Restaura visualização grande
+        setTimeout(() => drawIcon(128), 1200);
+      }
+
+      // Visualização inicial
+      drawIcon(128);
+    </script>
+  </body>
+</html>

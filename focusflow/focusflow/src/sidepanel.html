@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FocusFlow</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 16px;
+        background-color: #f9f9f9;
+        color: #333;
+      }
+      h1 {
+        font-size: 18px;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card {
+        background: white;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        border-left: 5px solid #ccc;
+      }
+      .card h3 {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        align-items: center;
+      }
+      .btn {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        width: 100%;
+        margin-top: 8px;
+      }
+      .btn:hover {
+        background: #2980b9;
+      }
+      .btn-focus {
+        background: #27ae60;
+      }
+      .btn-focus:hover {
+        background: #219150;
+      }
+      .summary {
+        font-size: 12px;
+        color: #666;
+        margin-top: 8px;
+        line-height: 1.4;
+        background: #f0f4f8;
+        padding: 8px;
+        border-radius: 4px;
+        display: none;
+      }
+      .badge {
+        font-size: 10px;
+        background: #eee;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: normal;
+      }
+      .time-badge {
+        font-size: 11px;
+        color: #7f8c8d;
+        display: block;
+        margin-bottom: 8px;
+      }
+      .group-title-text {
+        cursor: pointer;
+      }
+      .group-title-text:hover {
+        background-color: #f0f4f8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🚀 FocusFlow</h1>
+    <button
+      id="toggle-extension"
+      class="btn"
+      style="background-color: #27ae60; margin-bottom: 15px"
+    >
+      ✅ Extensão Ativa
+    </button>
+    <p style="font-size: 12px; color: #777">Seus contextos ativos:</p>
+    <div id="flows-container"><p>Carregando fluxos...</p></div>
+    <button
+      id="clear-distractions"
+      class="btn"
+      style="background-color: #e74c3c; margin-top: 20px"
+    >
+      🧹 Limpar Distrações
+    </button>
+    <button
+      id="toggle-groups"
+      class="btn"
+      style="background-color: #9b59b6; margin-top: 10px"
+    >
+      🔄 Reagrupar Tudo
+    </button>
+    <button
+      id="expand-all"
+      class="btn"
+      style="background-color: #2ecc71; margin-top: 10px"
+    >
+      📂 Expandir Tudo
+    </button>
+    <div
+      class="session-manager"
+      style="border-top: 1px solid #eee; margin-top: 20px; padding-top: 10px"
+    >
+      <p style="font-size: 12px; color: #777; margin-top: 0">
+        Gerenciador de Sessões:
+      </p>
+      <button id="save-session" class="btn" style="background-color: #16a085">
+        💾 Salvar Sessão Atual
+      </button>
+      <select
+        id="session-list"
+        style="width: 100%; margin-top: 10px; padding: 5px"
+      ></select>
+      <div style="display: flex; gap: 10px; margin-top: 8px">
+        <button
+          id="restore-session"
+          class="btn"
+          style="background-color: #2980b9; margin-top: 0; flex: 1"
+        >
+          🔄 Restaurar
+        </button>
+        <button
+          id="delete-session"
+          class="btn"
+          style="background-color: #c0392b; margin-top: 0; flex: 1"
+        >
+          🗑️ Deletar
+        </button>
+      </div>
+    </div>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
