@@ -8,7 +8,7 @@ const iconsDir = path.join(rootDir, "icons");
 const files = {
   "manifest.json": `{
   "manifest_version": 3,
-  "name": "FocusFlow: IA de Contexto e Abas",
+  "name": "AutoTabsFlow: Contexto e Foco com IA",
   "version": "1.0",
   "description": "Organiza suas abas automaticamente por contexto e resume suas pesquisas usando IA.",
   "permissions": [
@@ -30,7 +30,7 @@ const files = {
     "default_path": "src/sidepanel.html"
   },
   "action": {
-    "default_title": "Abrir FocusFlow"
+    "default_title": "Abrir AutoTabsFlow"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -152,7 +152,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         currentGroupId = groupId;
       }
     } catch (error) {
-      console.error("Erro no FocusFlow:", error);
+      console.error("Erro no AutoTabsFlow:", error);
     }
   }
 });
@@ -169,7 +169,7 @@ function getRandomColor() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FocusFlow</title>
+  <title>AutoTabsFlow</title>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 16px; background-color: #f9f9f9; color: #333; }
     h1 { font-size: 18px; color: #2c3e50; display: flex; align-items: center; gap: 8px; }
@@ -185,7 +185,7 @@ function getRandomColor() {
   </style>
 </head>
 <body>
-  <h1>🚀 FocusFlow</h1>
+  <h1>🚀 AutoTabsFlow</h1>
   <p style="font-size: 12px; color: #777;">Seus contextos ativos:</p>
   <div id="flows-container"><p>Carregando fluxos...</p></div>
   <button id="clear-distractions" class="btn" style="background-color: #e74c3c; margin-top: 20px;">🧹 Limpar Distrações</button>
@@ -321,7 +321,9 @@ const iconBuffer = Buffer.from(iconBase64, "base64");
 });
 console.log("✅ Ícones (placeholders válidos) criados.");
 
-console.log("\\n🚀 Tudo pronto! A pasta 'focusflow' foi criada.");
+console.log(
+  "\\n🚀 Tudo pronto! A pasta 'focusflow' foi criada com o nome AutoTabsFlow.",
+);
 console.log(
   "👉 Agora vá em chrome://extensions e carregue a pasta 'focusflow'.",
 );

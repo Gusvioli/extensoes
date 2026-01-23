@@ -4,7 +4,8 @@ let currentGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
 let lastActiveTime = Date.now();
 
 async function updateFocusTime() {
-  const { extensionEnabled } = await chrome.storage.local.get("extensionEnabled");
+  const { extensionEnabled } =
+    await chrome.storage.local.get("extensionEnabled");
   if (extensionEnabled === false) return;
 
   const now = Date.now();
@@ -38,7 +39,8 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  const { extensionEnabled } = await chrome.storage.local.get("extensionEnabled");
+  const { extensionEnabled } =
+    await chrome.storage.local.get("extensionEnabled");
   if (extensionEnabled === false) return;
 
   // Verifica se o status completou OU se o título mudou (para agilizar o reconhecimento)
@@ -52,7 +54,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     try {
       let contextCategory = await classifyTabContext(tab.title || "", tab.url);
       console.log(
-        `[FocusFlow] Classificado: "${tab.title}" -> ${contextCategory}`,
+        `[AutoTabsFlow] Classificado: "${tab.title}" -> ${contextCategory}`,
       );
 
       // Fallback: Se a IA retornar Geral, usa o domínio do site como categoria
@@ -91,7 +93,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         currentGroupId = groupId;
       }
     } catch (error) {
-      console.error("Erro no FocusFlow:", error);
+      console.error("Erro no AutoTabsFlow:", error);
     }
   }
 });

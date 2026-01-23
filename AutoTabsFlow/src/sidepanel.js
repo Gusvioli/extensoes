@@ -14,12 +14,30 @@ document
   .getElementById("toggle-extension")
   .addEventListener("click", toggleExtension);
 document.getElementById("save-session").addEventListener("click", saveSession);
-document.getElementById("restore-session").addEventListener("click", restoreSession);
-document.getElementById("delete-session").addEventListener("click", deleteSession);
+document
+  .getElementById("restore-session")
+  .addEventListener("click", restoreSession);
+document
+  .getElementById("delete-session")
+  .addEventListener("click", deleteSession);
 
-document.addEventListener('click', (e) => {
-    if (e.target && e.target.classList.contains('group-title-text')) makeTitleEditable(e.target);
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.classList.contains("group-title-text"))
+    makeTitleEditable(e.target);
 });
+
+// Helper function to manage button state during async operations
+function setButtonLoading(button, isLoading) {
+  if (!button) return;
+  if (isLoading) {
+    button.disabled = true;
+    button.dataset.originalText = button.innerHTML;
+    button.innerHTML = "⏳ Carregando...";
+  } else {
+    button.disabled = false;
+    button.innerHTML = button.dataset.originalText || "";
+  }
+}
 
 let debounceTimeout;
 function debouncedLoadGroups() {
@@ -103,36 +121,37 @@ async function loadGroups() {
 }
 
 function makeTitleEditable(titleSpan) {
-    const groupId = titleSpan.dataset.groupId;
-    const oldTitle = titleSpan.innerText;
-    const h3 = titleSpan.parentElement;
+  const groupId = titleSpan.dataset.groupId;
+  const oldTitle = titleSpan.innerText;
+  const h3 = titleSpan.parentElement;
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = oldTitle;
-    input.className = 'title-input';
-    input.style.width = '60%';
-    input.style.fontSize = '14px';
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = oldTitle;
+  input.className = "title-input";
+  input.style.width = "60%";
+  input.style.fontSize = "14px";
 
-    h3.insertBefore(input, titleSpan);
-    titleSpan.style.display = 'none';
-    input.focus();
-    input.select();
+  h3.insertBefore(input, titleSpan);
+  titleSpan.style.display = "none";
+  input.focus();
+  input.select();
 
-    const saveTitle = async () => {
-        const newTitle = input.value.trim();
-        if (newTitle && newTitle !== oldTitle) {
-            await chrome.tabGroups.update(parseInt(groupId), { title: newTitle });
-        }
-        // The UI will be refreshed by the onUpdated listener, so we just need to remove the input
-        input.remove();
-        titleSpan.style.display = 'inline';
-    };
+  const saveTitle = async () => {
+    const newTitle = input.value.trim();
+    if (newTitle && newTitle !== oldTitle) {
+      await chrome.tabGroups.update(parseInt(groupId), { title: newTitle });
+    }
+    // The UI will be refreshed by the onUpdated listener, so we just need to remove the input
+    input.remove();
+    titleSpan.style.display = "inline";
+  };
 
-    input.addEventListener('blur', saveTitle);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  input.addEventListener("blur", saveTitle);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+  });
 }
-
 
 async function toggleFocusMode(targetGroupId) {
   targetGroupId = parseInt(targetGroupId);
@@ -187,7 +206,6 @@ async function clearDistractions() {
     confirm(`Fechar ${idsToRemove.length} abas soltas?`)
   ) {
     await chrome.tabs.remove(idsToRemove);
-    loadGroups();
   } else if (idsToRemove.length === 0) {
     alert("Nenhuma distração encontrada!");
   }
@@ -197,6 +215,7 @@ async function toggleGroups() {
   const tabs = await chrome.tabs.query({});
   const groups = await chrome.tabGroups.query({});
   const hasGroups = groups.length > 0;
+  const btn = document.getElementById("toggle-groups");
 
   if (hasGroups) {
     // Lógica de Desagrupar
@@ -215,6 +234,8 @@ async function toggleGroups() {
   } else {
     // Lógica de Reagrupar
     if (!confirm("Deseja reorganizar todas as abas automaticamente?")) return;
+
+    setButtonLoading(btn, true);
 
     for (const tab of tabs) {
       if (!tab.url || tab.url.startsWith("chrome://")) continue;
@@ -288,7 +309,10 @@ function updateExtensionStatus(enabled) {
 }
 
 async function saveSession() {
-  const sessionName = prompt("Digite um nome para a sessão:", new Date().toLocaleString());
+  const sessionName = prompt(
+    "Digite um nome para a sessão:",
+    new Date().toLocaleString(),
+  );
   if (!sessionName) return;
 
   const groups = await chrome.tabGroups.query({});
@@ -307,8 +331,9 @@ async function saveSession() {
       tabs: tabs.map((t) => ({ url: t.url })),
     });
   }
-  
-  const { savedSessions = {} } = await chrome.storage.local.get("savedSessions");
+
+  const { savedSessions = {} } =
+    await chrome.storage.local.get("savedSessions");
   savedSessions[sessionName] = newSessionData;
 
   await chrome.storage.local.set({ savedSessions });
@@ -319,6 +344,7 @@ async function saveSession() {
 async function restoreSession() {
   const sessionList = document.getElementById("session-list");
   const sessionName = sessionList.value;
+  const restoreBtn = document.getElementById("restore-session");
 
   if (!sessionName) {
     alert("Por favor, selecione uma sessão para restaurar.");
@@ -333,7 +359,10 @@ async function restoreSession() {
     return;
   }
 
-  if (!confirm(`Restaurar a sessão "${sessionName}" em uma nova janela?`)) return;
+  if (!confirm(`Restaurar a sessão "${sessionName}" em uma nova janela?`))
+    return;
+
+  setButtonLoading(restoreBtn, true);
 
   const newWindow = await chrome.windows.create({ focused: true });
 
@@ -369,49 +398,53 @@ async function restoreSession() {
   ) {
     await chrome.tabs.remove(blankTab.id);
   }
+
+  setButtonLoading(restoreBtn, false);
 }
 
 async function deleteSession() {
-    const sessionList = document.getElementById("session-list");
-    const sessionName = sessionList.value;
-    if (!sessionName) {
-        alert("Por favor, selecione uma sessão para deletar.");
-        return;
-    }
+  const sessionList = document.getElementById("session-list");
+  const sessionName = sessionList.value;
+  if (!sessionName) {
+    alert("Por favor, selecione uma sessão para deletar.");
+    return;
+  }
 
-    if (confirm(`Tem certeza que deseja deletar a sessão "${sessionName}"?`)) {
-        const { savedSessions = {} } = await chrome.storage.local.get("savedSessions");
-        delete savedSessions[sessionName];
-        await chrome.storage.local.set({ savedSessions });
-        alert(`Sessão "${sessionName}" deletada.`);
-        updateSessionList();
-    }
+  if (confirm(`Tem certeza que deseja deletar a sessão "${sessionName}"?`)) {
+    const { savedSessions = {} } =
+      await chrome.storage.local.get("savedSessions");
+    delete savedSessions[sessionName];
+    await chrome.storage.local.set({ savedSessions });
+    alert(`Sessão "${sessionName}" deletada.`);
+    updateSessionList();
+  }
 }
 
 async function updateSessionList() {
-    const { savedSessions = {} } = await chrome.storage.local.get("savedSessions");
-    const sessionList = document.getElementById("session-list");
-    const restoreBtn = document.getElementById("restore-session");
-    const deleteBtn = document.getElementById("delete-session");
+  const { savedSessions = {} } =
+    await chrome.storage.local.get("savedSessions");
+  const sessionList = document.getElementById("session-list");
+  const restoreBtn = document.getElementById("restore-session");
+  const deleteBtn = document.getElementById("delete-session");
 
-    sessionList.innerHTML = '';
-    const sessionNames = Object.keys(savedSessions);
+  sessionList.innerHTML = "";
+  const sessionNames = Object.keys(savedSessions);
 
-    if (sessionNames.length === 0) {
-        sessionList.style.display = 'none';
-        restoreBtn.style.display = 'none';
-        deleteBtn.style.display = 'none';
-    } else {
-        sessionList.style.display = 'block';
-        restoreBtn.style.display = 'block';
-        deleteBtn.style.display = 'block';
-        sessionNames.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.innerText = name;
-            sessionList.appendChild(option);
-        });
-    }
+  if (sessionNames.length === 0) {
+    sessionList.style.display = "none";
+    restoreBtn.style.display = "none";
+    deleteBtn.style.display = "none";
+  } else {
+    sessionList.style.display = "block";
+    restoreBtn.style.display = "block";
+    deleteBtn.style.display = "block";
+    sessionNames.forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.innerText = name;
+      sessionList.appendChild(option);
+    });
+  }
 }
 
 function formatTime(ms) {

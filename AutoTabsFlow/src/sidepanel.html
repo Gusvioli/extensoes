@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FocusFlow</title>
+    <title>AutoTabsFlow</title>
     <style>
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -86,11 +86,12 @@
     </style>
   </head>
   <body>
-    <h1>🚀 FocusFlow</h1>
+    <h1>🚀 AutoTabsFlow</h1>
     <button
       id="toggle-extension"
       class="btn"
       style="background-color: #27ae60; margin-bottom: 15px"
+      title="Ativa ou desativa o agrupamento automático e o rastreamento de tempo."
     >
       ✅ Extensão Ativa
     </button>
@@ -100,6 +101,7 @@
       id="clear-distractions"
       class="btn"
       style="background-color: #e74c3c; margin-top: 20px"
+      title="Fecha todas as abas que não estão em nenhum grupo."
     >
       🧹 Limpar Distrações
     </button>
@@ -107,6 +109,7 @@
       id="toggle-groups"
       class="btn"
       style="background-color: #9b59b6; margin-top: 10px"
+      title="Alterna entre reagrupar todas as abas ou desagrupar todas."
     >
       🔄 Reagrupar Tudo
     </button>
@@ -114,6 +117,7 @@
       id="expand-all"
       class="btn"
       style="background-color: #2ecc71; margin-top: 10px"
+      title="Alterna entre expandir ou colapsar todos os grupos de abas."
     >
       📂 Expandir Tudo
     </button>
@@ -124,7 +128,12 @@
       <p style="font-size: 12px; color: #777; margin-top: 0">
         Gerenciador de Sessões:
       </p>
-      <button id="save-session" class="btn" style="background-color: #16a085">
+      <button
+        id="save-session"
+        class="btn"
+        style="background-color: #16a085"
+        title="Salva todos os grupos e abas atuais como uma sessão nomeada."
+      >
         💾 Salvar Sessão Atual
       </button>
       <select
@@ -136,6 +145,7 @@
           id="restore-session"
           class="btn"
           style="background-color: #2980b9; margin-top: 0; flex: 1"
+          title="Abre a sessão selecionada em uma nova janela."
         >
           🔄 Restaurar
         </button>
@@ -143,6 +153,7 @@
           id="delete-session"
           class="btn"
           style="background-color: #c0392b; margin-top: 0; flex: 1"
+          title="Remove permanentemente a sessão selecionada."
         >
           🗑️ Deletar
         </button>
