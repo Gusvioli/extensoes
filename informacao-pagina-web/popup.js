@@ -99,9 +99,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Iniciar análise da página
   analyzePage();
-
-  // Ativar proteção contra inspeção básica
-  enableProtection();
 });
 
 let extractedData = null;
@@ -973,31 +970,6 @@ function viewReport() {
   const blob = new Blob([reportHtml], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   chrome.tabs.create({ url: url });
-}
-
-function enableProtection() {
-  // Desabilita o menu de contexto (botão direito) para dificultar o acesso ao "Inspecionar"
-  document.addEventListener("contextmenu", (event) => event.preventDefault());
-
-  // Desabilita atalhos de teclado comuns para ferramentas de desenvolvedor
-  document.addEventListener("keydown", (event) => {
-    // F12
-    if (event.key === "F12") {
-      event.preventDefault();
-    }
-    // Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
-    if (
-      event.ctrlKey &&
-      event.shiftKey &&
-      ["I", "J", "C"].includes(event.key)
-    ) {
-      event.preventDefault();
-    }
-    // Ctrl+U (Ver código-fonte)
-    if (event.ctrlKey && event.key === "u") {
-      event.preventDefault();
-    }
-  });
 }
 
 function updateBadge(tabId, status) {

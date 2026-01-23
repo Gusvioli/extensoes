@@ -76,11 +76,19 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
       const groups = await chrome.tabGroups.query({ title: contextCategory });
       let groupId;
+      let grouped = false;
 
       if (groups.length > 0) {
         groupId = groups[0].id;
-        await chrome.tabs.group({ tabIds: tabId, groupId: groupId });
-      } else {
+        try {
+          await chrome.tabs.group({ tabIds: tabId, groupId: groupId });
+          grouped = true;
+        } catch (e) {
+          // Grupo não encontrado, prossegue para criar um novo
+        }
+      }
+
+      if (!grouped) {
         groupId = await chrome.tabs.group({ tabIds: tabId });
         await chrome.tabGroups.update(groupId, {
           title: contextCategory,
