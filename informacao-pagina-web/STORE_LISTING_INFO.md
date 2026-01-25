@@ -112,3 +112,19 @@ Nós não vendemos, trocamos ou transferimos suas informações. A única forma 
 #### 4. Contato
 
 Para questões relacionadas a esta política ou ao funcionamento da extensão, entre em contato através do suporte na Chrome Web Store ou pelo repositório oficial do projeto.
+
+---
+
+## 4. Resolução de Avisos (Troubleshooting)
+
+**Aviso: "Essa extensão não é considerada confiável pelo recurso Navegação segura com proteção reforçada"**
+
+Este aviso é comum para novos desenvolvedores e não indica necessariamente um erro no código. Para resolvê-lo e ganhar o selo de "Confiável", siga estes passos no Painel do Desenvolvedor:
+
+1. **Verificação da Conta:** Certifique-se de que pagou a taxa de registro e verificou seu e-mail e número de telefone.
+2. **Autenticação de Dois Fatores (2FA):** Ative a verificação em duas etapas na sua conta Google usada para publicar.
+3. **Histórico:** O Google exige alguns meses de histórico positivo (sem violações de política) e um certo número de instalações ativas para remover este aviso automaticamente.
+4. **Política de Privacidade:** Mantenha o link da Política de Privacidade sempre ativo e atualizado na aba "Privacidade" do painel.
+5. **Permissões:** Se o aviso persistir por muito tempo, considere remover a permissão `tabs` (se possível), pois ela é considerada de alto risco e exige maior nível de confiança.
+
+*Nota: Este processo é automático pelo algoritmo do Google e pode levar de algumas semanas a meses.*

@@ -32,11 +32,15 @@ A extensão solicita as seguintes permissões para funcionar:
 
 Nós não vendemos, trocamos ou transferimos suas informações para terceiros. A única forma de os dados saírem do seu navegador é se você utilizar explicitamente a função "Exportar JSON" ou "Gerar Relatório", o que cria um arquivo local no seu dispositivo.
 
-## 5. Alterações
+## 5. Segurança
+
+A segurança dos seus dados é importante para nós. Como esta extensão opera localmente, não mantemos bancos de dados de usuários. O código é aberto e auditável para garantir que nenhuma transmissão oculta de dados ocorra.
+
+## 6. Alterações
 
 Podemos atualizar esta política de privacidade ocasionalmente. As alterações serão refletidas na data de "Última atualização" no topo desta página.
 
-## 6. Contato
+## 7. Contato
 
 Se tiver dúvidas sobre esta política, entre em contato através da página de suporte na Chrome Web Store ou pelo repositório do projeto.
 

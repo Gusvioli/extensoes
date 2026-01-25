@@ -1,0 +1,158 @@
+:root {
+    --primary-color: #007bff;
+    --primary-hover: #0056b3;
+    --danger-color: #dc3545;
+    --danger-hover: #c82333;
+    --light-gray: #f8f9fa;
+    --medium-gray: #e9ecef;
+    --dark-gray: #6c757d;
+    --sent-bg: #dcf8c6;
+    --received-bg: #ffffff;
+    --border-color: #dee2e6;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    width: 380px;
+    margin: 0;
+    color: #212529;
+}
+
+.hidden { display: none !important; }
+
+#app { display: flex; flex-direction: column; }
+
+.app-header {
+    background-color: var(--light-gray);
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.app-header h1 {
+    font-size: 16px;
+    margin: 0 0 5px 0;
+    text-align: center;
+}
+
+#connection-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--dark-gray);
+}
+
+#my-id-display span {
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    background-color: var(--medium-gray);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+#peer-status::before {
+    content: '⚫';
+    margin-right: 5px;
+    font-size: 12px;
+}
+#peer-status.online { color: #28a745; }
+#peer-status.online::before { content: '🟢'; }
+#peer-status.offline { color: var(--danger-color); }
+#peer-status.offline::before { content: '🔴'; }
+
+main { padding: 15px; }
+
+#setup-view p {
+    font-size: 13px;
+    color: var(--dark-gray);
+    text-align: center;
+    margin-top: 0;
+}
+
+.input-group, #input-area {
+    display: flex;
+    gap: 8px;
+}
+
+input[type="text"] {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+}
+input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+button {
+    padding: 8px 12px;
+    border: none;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+button:hover { background-color: var(--primary-hover); }
+
+#disconnect-btn { background-color: var(--danger-color); }
+#disconnect-btn:hover { background-color: var(--danger-hover); }
+
+#chat-view footer {
+    padding: 0 15px 15px 15px;
+}
+
+#messages {
+    height: 250px;
+    border: 1px solid var(--border-color);
+    background-color: var(--light-gray);
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.message {
+    padding: 8px 12px;
+    border-radius: 12px;
+    max-width: 80%;
+    word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+}
+.message.sent {
+    background-color: var(--sent-bg);
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+.message.received {
+    background-color: var(--received-bg);
+    align-self: flex-start;
+    border: 1px solid var(--medium-gray);
+    border-bottom-left-radius: 2px;
+}
+.message img {
+    max-width: 100%;
+    border-radius: 8px;
+    display: block;
+}
+
+.file-label {
+    cursor: pointer;
+    font-size: 20px;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#send-btn {
+    font-size: 18px;
+    padding: 0 12px;
+}
