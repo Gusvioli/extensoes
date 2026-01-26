@@ -1,11 +1,12 @@
 // extension/popup.js
 
 document.addEventListener("DOMContentLoaded", () => {
-  const SIGNALING_SERVER_URL = "ws://localhost:8080";
+  // const SIGNALING_SERVER_URL = "stun.l.google.com:19302";
 
   // --- Elementos da UI ---
   const myIdDisplaySpan = document.querySelector("#my-id-display span");
   const peerStatus = document.getElementById("peer-status");
+  const editIdBtn = document.getElementById("edit-id-btn");
   const setupView = document.getElementById("setup-view");
   const chatView = document.getElementById("chat-view");
   const peerIdInput = document.getElementById("peer-id-input");
@@ -18,7 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const contactNicknameInput = document.getElementById("contact-nickname");
   const saveContactBtn = document.getElementById("save-contact-btn");
   const contactsList = document.getElementById("contacts-list");
+  const contactIdToSaveInput = document.getElementById("contact-id-to-save");
   const pinBtn = document.getElementById("pin-btn");
+  const conversationInfo = document.getElementById("conversation-info");
 
   const connectionModeSelect = document.getElementById("connection-mode");
   const autoModeUi = document.getElementById("auto-mode-ui");
@@ -31,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const processManualCodeBtn = document.getElementById(
     "process-manual-code-btn",
   );
+  const signalingUrlInput = document.getElementById("signaling-url-input");
 
   // --- Estado da Aplicação ---
   let myId = null;
@@ -46,27 +50,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function connectToSignaling() {
     if (connectionModeSelect.value === "manual") return;
-    signalingSocket = new WebSocket(SIGNALING_SERVER_URL);
-    signalingSocket.onmessage = handleSignalingMessage;
-    signalingSocket.onopen = () =>
-      console.log("🔗 Conectado ao servidor de sinalização.");
-    signalingSocket.onclose = () => {
-      console.log("🔌 Desconectado do servidor de sinalização.");
-      displaySystemMessage(
-        "Desconectado do servidor. Tentando reconectar...",
-        "warning",
-      );
-      updatePeerStatus("Offline", "offline");
-      if (connectionModeSelect.value === "auto")
-        setTimeout(connectToSignaling, 3000);
-    };
-    signalingSocket.onerror = () => {
-      console.error("❌ Erro no WebSocket.");
-      displaySystemMessage(
-        "Erro de conexão com o servidor de sinalização.",
-        "warning",
-      );
-    };
+
+    let baseUrl = signalingUrlInput.value.trim();
+
+    // Se estiver vazio ou for o endereço STUN (que não é WebSocket), usa localhost
+    if (!baseUrl || baseUrl.includes("stun.l.google.com")) {
+      baseUrl = "ws://localhost:8080";
+      signalingUrlInput.value = baseUrl;
+    }
+
+    // Garante que a URL comece com ws:// ou wss://
+    if (!baseUrl.startsWith("ws://") && !baseUrl.startsWith("wss://")) {
+      baseUrl = `ws://${baseUrl}`;
+      signalingUrlInput.value = baseUrl;
+    }
+    chrome.storage.local.set({ signalingUrl: baseUrl });
+
+    chrome.storage.local.get(["customId"], (result) => {
+      let url = baseUrl;
+      const separator = url.includes("?") ? "&" : "?";
+      if (result.customId) {
+        url += `${separator}id=${encodeURIComponent(result.customId)}`;
+      }
+
+      signalingSocket = new WebSocket(url);
+      signalingSocket.onmessage = handleSignalingMessage;
+      signalingSocket.onopen = () =>
+        console.log("🔗 Conectado ao servidor de sinalização.");
+      signalingSocket.onclose = () => {
+        console.log("🔌 Desconectado do servidor de sinalização.");
+        displaySystemMessage(
+          "Desconectado do servidor. Tentando reconectar...",
+          "warning",
+        );
+        updatePeerStatus("Offline", "offline");
+        if (connectionModeSelect.value === "auto")
+          setTimeout(connectToSignaling, 3000);
+      };
+      signalingSocket.onerror = () => {
+        console.error("❌ Erro no WebSocket.");
+        displaySystemMessage(
+          "Falha ao conectar ao servidor. Verifique se ele está rodando e a URL está correta.",
+          "warning",
+        );
+      };
+    });
   }
 
   function sendSignalingMessage(type, payload) {
@@ -268,6 +296,12 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Estado da conexão WebRTC:", state);
     if (state === "connected") {
       updatePeerStatus("Conectado (Seguro)", "online");
+      if (myId && peerId) {
+        conversationInfo.textContent = `${myId} <--> ${peerId}`;
+        conversationInfo.style.display = "block";
+      } else {
+        conversationInfo.style.display = "none";
+      }
       activateChat();
     } else if (["disconnected", "failed", "closed"].includes(state)) {
       resetState();
@@ -286,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function saveContact() {
-    const id = peerIdInput.value.trim();
+    const id = contactIdToSaveInput.value.trim() || peerIdInput.value.trim();
     const nickname = contactNicknameInput.value.trim() || id;
 
     if (!id) {
@@ -311,6 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           loadContacts();
           contactNicknameInput.value = "";
+          contactIdToSaveInput.value = "";
           displaySystemMessage("Contato salvo com sucesso!", "success");
         }
       });
@@ -434,6 +469,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setupView.classList.remove("hidden");
     messagesDiv.innerHTML = "";
     peerIdInput.value = "";
+    conversationInfo.textContent = "";
+    conversationInfo.style.display = "none";
 
     peerId = null;
     keyPair = null;
@@ -544,6 +581,31 @@ document.addEventListener("DOMContentLoaded", () => {
   processManualCodeBtn.addEventListener("click", processManualCode);
   manualCodeDisplay.addEventListener("click", () => manualCodeDisplay.select());
 
+  // --- Alterar ID Personalizado ---
+  editIdBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const currentId = myId || "";
+    const newId = prompt(
+      "Defina seu ID Personalizado (deixe vazio para aleatório):",
+      currentId,
+    );
+
+    if (newId !== null) {
+      const trimmedId = newId.trim();
+      if (trimmedId) {
+        chrome.storage.local.set({ customId: trimmedId }, () => {
+          displaySystemMessage(`ID definido. Reconectando...`, "info");
+          if (signalingSocket) signalingSocket.close();
+        });
+      } else {
+        chrome.storage.local.remove("customId", () => {
+          displaySystemMessage("Voltando para ID aleatório...", "info");
+          if (signalingSocket) signalingSocket.close();
+        });
+      }
+    }
+  });
+
   // --- Event Listeners ---
   connectBtn.addEventListener("click", startConnection);
   if (saveContactBtn) saveContactBtn.addEventListener("click", saveContact);
@@ -567,7 +629,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // --- Inicialização da Aplicação ---
-  connectToSignaling();
+  chrome.storage.local.get(["signalingUrl"], (result) => {
+    // Carrega a URL salva, exceto se for o endereço STUN incorreto (correção de legado)
+    if (
+      result.signalingUrl &&
+      !result.signalingUrl.includes("stun.l.google.com")
+    ) {
+      signalingUrlInput.value = result.signalingUrl;
+    } else {
+      signalingUrlInput.value = "ws://localhost:8080";
+    }
+    connectToSignaling();
+  });
   updatePeerStatus("Offline", "offline");
   loadContacts();
 });
