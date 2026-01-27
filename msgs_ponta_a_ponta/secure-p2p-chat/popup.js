@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let keyPair = null;
   let sharedSecretKey = null;
   let rtcHandler = null;
+  let currentFingerprint = null;
 
   // =================================================================================
   // 1. INICIALIZAÇÃO E SINALIZAÇÃO (WEBSOCKET)
@@ -50,6 +51,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function connectToSignaling() {
     if (connectionModeSelect.value === "manual") return;
+
+    // Fecha conexão existente se houver, para evitar duplicidade e loops de reconexão
+    if (signalingSocket) {
+      signalingSocket.onclose = null; // Remove handler para não agendar reconexão automática do socket antigo
+      signalingSocket.close();
+    }
 
     let baseUrl = signalingUrlInput.value.trim();
 
@@ -80,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
       signalingSocket.onclose = () => {
         console.log("🔌 Desconectado do servidor de sinalização.");
         displaySystemMessage(
-          "Desconectado do servidor. Tentando reconectar...",
+          "Conexão com o servidor perdida. Tentando reconectar...",
           "warning",
         );
         updatePeerStatus("Offline", "offline");
@@ -90,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
       signalingSocket.onerror = () => {
         console.error("❌ Erro no WebSocket.");
         displaySystemMessage(
-          "Falha ao conectar ao servidor. Verifique se ele está rodando e a URL está correta.",
+          "Não foi possível conectar ao servidor. Verifique a URL e se o servidor está ativo.",
           "warning",
         );
       };
@@ -128,12 +135,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const myPublicKey = await CryptoHandler.exportPublicKey(
           keyPair.publicKey,
         );
+        currentFingerprint = await CryptoHandler.computeFingerprint(
+          myPublicKey,
+          msg.payload.publicKey,
+        );
         sendSignalingMessage("key-exchange-reply", { publicKey: myPublicKey });
         break;
 
       case "key-exchange-reply":
         sharedSecretKey = await CryptoHandler.deriveSharedSecret(
           keyPair.privateKey,
+          msg.payload.publicKey,
+        );
+        const myPub = await CryptoHandler.exportPublicKey(keyPair.publicKey);
+        currentFingerprint = await CryptoHandler.computeFingerprint(
+          myPub,
           msg.payload.publicKey,
         );
         const offer = await rtcHandler.createOffer();
@@ -163,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Lógica Manual (Sem Servidor) ---
   async function createManualOffer() {
-    displaySystemMessage("Gerando código de convite... Aguarde.", "info");
+    displaySystemMessage("Criando convite seguro... Aguarde.", "info");
     initializeWebRTCHandler();
     keyPair = await CryptoHandler.generateKeys();
     const myPublicKey = await CryptoHandler.exportPublicKey(keyPair.publicKey);
@@ -182,7 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
     manualCodeDisplay.style.display = "block";
     manualCodeDisplay.select();
     displaySystemMessage(
-      "Copie o código acima e envie para seu contato.",
+      "Convite gerado! Copie o código acima e envie para o contato.",
       "success",
     );
   }
@@ -196,7 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data.type === "offer") {
         // Recebi um convite, vou gerar resposta
-        displaySystemMessage("Processando convite...", "info");
+        displaySystemMessage("Verificando e processando convite...", "info");
         initializeWebRTCHandler();
         keyPair = await CryptoHandler.generateKeys();
 
@@ -211,6 +227,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const myPublicKey = await CryptoHandler.exportPublicKey(
           keyPair.publicKey,
         );
+        currentFingerprint = await CryptoHandler.computeFingerprint(
+          myPublicKey,
+          data.publicKey,
+        );
 
         const responseData = {
           type: "answer",
@@ -223,28 +243,35 @@ document.addEventListener("DOMContentLoaded", () => {
         manualCodeDisplay.style.display = "block";
         manualCodeDisplay.select();
         displaySystemMessage(
-          "Convite aceito! Envie o código acima de volta para quem te convidou.",
+          "Convite validado! Envie o código de resposta acima para o remetente.",
           "success",
         );
       } else if (data.type === "answer") {
         // Recebi a resposta do meu convite
         if (!rtcHandler || !keyPair) {
           displaySystemMessage(
-            "Erro: Sessão perdida. Mantenha a janela aberta.",
+            "Erro: Sessão interrompida. Mantenha a janela aberta durante a conexão.",
             "error",
           );
           return;
         }
-        displaySystemMessage("Finalizando conexão...", "info");
+        displaySystemMessage("Estabelecendo conexão segura...", "info");
         sharedSecretKey = await CryptoHandler.deriveSharedSecret(
           keyPair.privateKey,
+          data.publicKey,
+        );
+        const myPubManual = await CryptoHandler.exportPublicKey(
+          keyPair.publicKey,
+        );
+        currentFingerprint = await CryptoHandler.computeFingerprint(
+          myPubManual,
           data.publicKey,
         );
         await rtcHandler.handleAnswer(data.sdp);
       }
     } catch (e) {
       console.error(e);
-      displaySystemMessage("Código inválido.", "error");
+      displaySystemMessage("O código inserido é inválido.", "error");
     }
   }
 
@@ -264,7 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     if (!decryptedData) {
       displaySystemMessage(
-        "Falha ao descriptografar mensagem recebida.",
+        "Erro ao descriptografar a mensagem recebida.",
         "error",
       );
       return;
@@ -288,7 +315,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (e) {
       console.error("Erro ao processar payload recebido:", e);
-      displaySystemMessage("Recebida mensagem em formato inválido.", "warning");
+      displaySystemMessage(
+        "Formato de mensagem desconhecido recebido.",
+        "warning",
+      );
     }
   }
 
@@ -297,7 +327,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state === "connected") {
       updatePeerStatus("Conectado (Seguro)", "online");
       if (myId && peerId) {
-        conversationInfo.textContent = `${myId} <--> ${peerId}`;
+        let infoText = `${myId} <--> ${peerId}`;
+        if (currentFingerprint) {
+          infoText += `\n🔐 Safety Number: ${currentFingerprint}`;
+        }
+        conversationInfo.textContent = infoText;
+        conversationInfo.style.whiteSpace = "pre-wrap"; // Garante que a quebra de linha \n funcione
         conversationInfo.style.display = "block";
       } else {
         conversationInfo.style.display = "none";
@@ -324,7 +359,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nickname = contactNicknameInput.value.trim() || id;
 
     if (!id) {
-      displaySystemMessage("Digite um ID para salvar.", "error");
+      displaySystemMessage("Informe um ID para salvar o contato.", "error");
       return;
     }
 
@@ -341,12 +376,12 @@ document.addEventListener("DOMContentLoaded", () => {
       chrome.storage.local.set({ contacts }, () => {
         if (chrome.runtime.lastError) {
           console.error("Erro ao salvar contato:", chrome.runtime.lastError);
-          displaySystemMessage("Erro ao salvar contato.", "error");
+          displaySystemMessage("Não foi possível salvar o contato.", "error");
         } else {
           loadContacts();
           contactNicknameInput.value = "";
           contactIdToSaveInput.value = "";
-          displaySystemMessage("Contato salvo com sucesso!", "success");
+          displaySystemMessage("Contato salvo!", "success");
         }
       });
     });
@@ -387,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function startConnection() {
     const id = peerIdInput.value.trim();
     if (!id) {
-      displaySystemMessage("Por favor, insira o ID do outro usuário.", "error");
+      displaySystemMessage("Insira o ID do usuário para conectar.", "error");
       return;
     }
     peerId = id;
@@ -402,10 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const text = messageInput.value;
     if (!text) return;
     if (!sharedSecretKey) {
-      displaySystemMessage(
-        "Erro: Chave de criptografia não estabelecida.",
-        "error",
-      );
+      displaySystemMessage("Erro: Conexão segura não estabelecida.", "error");
       return;
     }
 
@@ -422,17 +454,14 @@ document.addEventListener("DOMContentLoaded", () => {
       messageInput.value = "";
     } catch (error) {
       console.error("Falha ao enviar mensagem:", error);
-      displaySystemMessage("Falha ao enviar a mensagem.", "error");
+      displaySystemMessage("Não foi possível enviar a mensagem.", "error");
     }
   }
 
   function sendFile(file) {
     if (!file) return;
     if (!sharedSecretKey) {
-      displaySystemMessage(
-        "Erro: Chave de criptografia não estabelecida.",
-        "error",
-      );
+      displaySystemMessage("Erro: Conexão segura não estabelecida.", "error");
       return;
     }
 
@@ -455,7 +484,7 @@ document.addEventListener("DOMContentLoaded", () => {
         displayImage(URL.createObjectURL(file), "sent");
       } catch (error) {
         console.error("Falha ao enviar arquivo:", error);
-        displaySystemMessage("Falha ao enviar o arquivo.", "error");
+        displaySystemMessage("Não foi possível enviar o arquivo.", "error");
       }
     };
     reader.readAsDataURL(file);
@@ -476,6 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
     keyPair = null;
     sharedSecretKey = null;
     rtcHandler = null;
+    currentFingerprint = null;
   }
 
   function updatePeerStatus(text, className) {
@@ -580,30 +610,84 @@ document.addEventListener("DOMContentLoaded", () => {
   createManualOfferBtn.addEventListener("click", createManualOffer);
   processManualCodeBtn.addEventListener("click", processManualCode);
   manualCodeDisplay.addEventListener("click", () => manualCodeDisplay.select());
+  
+  // Salva e reconecta quando o usuário altera a URL do servidor
+  signalingUrlInput.addEventListener("change", () => {
+    connectToSignaling();
+  });
 
   // --- Alterar ID Personalizado ---
   editIdBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const currentId = myId || "";
-    const newId = prompt(
-      "Defina seu ID Personalizado (deixe vazio para aleatório):",
-      currentId,
-    );
 
-    if (newId !== null) {
-      const trimmedId = newId.trim();
-      if (trimmedId) {
-        chrome.storage.local.set({ customId: trimmedId }, () => {
-          displaySystemMessage(`ID definido. Reconectando...`, "info");
+    // Criação do Modal para substituir o prompt
+    const modalOverlay = document.createElement("div");
+    modalOverlay.style.cssText =
+      "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:2000;";
+
+    const modalContent = document.createElement("div");
+    modalContent.style.cssText =
+      "background:white;padding:20px;border-radius:8px;width:85%;max-width:300px;box-shadow:0 4px 6px rgba(0,0,0,0.1);";
+
+    const title = document.createElement("h3");
+    title.textContent = "Defina seu ID Personalizado";
+    title.style.cssText = "margin-top:0;font-size:16px;color:#333;";
+
+    const desc = document.createElement("p");
+    desc.textContent = "Deixe vazio para usar um ID aleatório.";
+    desc.style.cssText = "font-size:12px;color:#666;margin-bottom:10px;";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = myId || "";
+    input.placeholder = "Ex: usuario123";
+    input.style.cssText =
+      "width:100%;padding:8px;margin-bottom:15px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;";
+
+    const btnContainer = document.createElement("div");
+    btnContainer.style.cssText =
+      "display:flex;justify-content:flex-end;gap:10px;";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancelar";
+    cancelBtn.style.cssText =
+      "background:#6c757d;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;";
+    cancelBtn.onclick = () => document.body.removeChild(modalOverlay);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Salvar";
+    saveBtn.style.cssText =
+      "background:#007bff;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;";
+
+    saveBtn.onclick = () => {
+      const newId = input.value.trim();
+      document.body.removeChild(modalOverlay);
+
+      if (newId) {
+        chrome.storage.local.set({ customId: newId }, () => {
+          displaySystemMessage(
+            `ID personalizado definido. Reconectando...`,
+            "info",
+          );
           if (signalingSocket) signalingSocket.close();
         });
       } else {
         chrome.storage.local.remove("customId", () => {
-          displaySystemMessage("Voltando para ID aleatório...", "info");
+          displaySystemMessage("Restaurando ID aleatório...", "info");
           if (signalingSocket) signalingSocket.close();
         });
       }
-    }
+    };
+
+    btnContainer.appendChild(cancelBtn);
+    btnContainer.appendChild(saveBtn);
+    modalContent.appendChild(title);
+    modalContent.appendChild(desc);
+    modalContent.appendChild(input);
+    modalContent.appendChild(btnContainer);
+    modalOverlay.appendChild(modalContent);
+    document.body.appendChild(modalOverlay);
+    input.focus();
   });
 
   // --- Event Listeners ---

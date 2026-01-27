@@ -30,8 +30,18 @@ const projectStructure = {
 }`,
       "server.js": `// server/server.js
 
-const WebSocket = require('ws');
 const url = require('url');
+let WebSocket;
+
+try {
+    WebSocket = require('ws');
+} catch (e) {
+    console.error("\\n❌ Erro Crítico: O módulo 'ws' não foi encontrado.");
+    console.error("Isso indica que as dependências não foram instaladas no ambiente.");
+    console.error("👉 NO RENDER: Vá em 'Settings' > 'Root Directory' e defina como 'server' (ou o nome da pasta onde está o package.json).");
+    console.error("👉 LOCALMENTE: Entre na pasta do servidor e rode 'npm install'.\\n");
+    process.exit(1);
+}
 
 // Inicia o servidor WebSocket na porta 8080.
 const port = process.env.PORT || 8080;
