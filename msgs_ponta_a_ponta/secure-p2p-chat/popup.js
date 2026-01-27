@@ -23,18 +23,55 @@ document.addEventListener("DOMContentLoaded", () => {
   const pinBtn = document.getElementById("pin-btn");
   const conversationInfo = document.getElementById("conversation-info");
 
-  const connectionModeSelect = document.getElementById("connection-mode");
-  const autoModeUi = document.getElementById("auto-mode-ui");
-  const manualModeUi = document.getElementById("manual-mode-ui");
-  const createManualOfferBtn = document.getElementById(
-    "create-manual-offer-btn",
-  );
-  const manualCodeDisplay = document.getElementById("manual-code-display");
-  const manualCodeInput = document.getElementById("manual-code-input");
-  const processManualCodeBtn = document.getElementById(
-    "process-manual-code-btn",
-  );
   const signalingUrlInput = document.getElementById("signaling-url-input");
+
+  // --- Botão de Expandir para Aba (Novo - Movido para o topo) ---
+  const expandBtn = document.createElement("button");
+  expandBtn.textContent = "❐"; // Ícone de "Pop-out" mais comum
+  expandBtn.title = "Abrir em uma nova aba";
+  expandBtn.style.cssText =
+    "background: none; border: none; cursor: pointer; font-size: 18px; padding: 0 5px; margin-right: 5px; color: #333;";
+
+  // Agrupa os botões no cabeçalho para ficarem alinhados à direita
+  if (pinBtn && pinBtn.parentNode) {
+    const headerContainer = pinBtn.parentNode;
+    // Verifica se já não agrupamos (para evitar duplicidade em reloads parciais)
+    if (!document.getElementById("header-btn-group")) {
+      const btnGroup = document.createElement("div");
+      btnGroup.id = "header-btn-group";
+      btnGroup.style.display = "flex";
+      btnGroup.style.alignItems = "center";
+
+      // Insere o grupo e move os botões para dentro dele
+      headerContainer.insertBefore(btnGroup, pinBtn);
+      btnGroup.appendChild(expandBtn);
+      btnGroup.appendChild(pinBtn);
+    }
+  }
+
+  expandBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?tab=true") });
+  });
+
+  // --- Rodapé Global (Informações e Créditos) ---
+  const appContainer = document.getElementById("app");
+  if (appContainer) {
+      const footer = document.createElement("footer");
+      footer.style.cssText = "padding: 8px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #dee2e6; background-color: #f8f9fa; flex-shrink: 0;";
+      
+      const manifest = chrome.runtime.getManifest();
+      
+      footer.innerHTML = `
+          <div style="margin-bottom: 3px;">
+            <strong>${manifest.name}</strong> <span style="background: #e9ecef; padding: 1px 4px; border-radius: 3px; font-size: 10px;">v${manifest.version}</span>
+          </div>
+          <div style="margin-bottom: 3px;">Criado por <strong>Gusvioli</strong></div>
+          <div style="color: #28a745; font-size: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Suas mensagens são criptografadas de ponta a ponta">
+            <span>🔒</span> Segurança E2EE Ativa
+          </div>
+      `;
+      appContainer.appendChild(footer);
+  }
 
   // --- Estado da Aplicação ---
   let myId = null;
@@ -50,8 +87,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // =================================================================================
 
   function connectToSignaling() {
-    if (connectionModeSelect.value === "manual") return;
-
     // Fecha conexão existente se houver, para evitar duplicidade e loops de reconexão
     if (signalingSocket) {
       signalingSocket.onclose = null; // Remove handler para não agendar reconexão automática do socket antigo
@@ -91,8 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
           "warning",
         );
         updatePeerStatus("Offline", "offline");
-        if (connectionModeSelect.value === "auto")
-          setTimeout(connectToSignaling, 3000);
+        setTimeout(connectToSignaling, 3000);
       };
       signalingSocket.onerror = () => {
         console.error("❌ Erro no WebSocket.");
@@ -176,104 +210,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // =================================================================================
   // 2. LÓGICA P2P (WEBRTC) E CRIPTOGRAFIA
   // =================================================================================
-
-  // --- Lógica Manual (Sem Servidor) ---
-  async function createManualOffer() {
-    displaySystemMessage("Criando convite seguro... Aguarde.", "info");
-    initializeWebRTCHandler();
-    keyPair = await CryptoHandler.generateKeys();
-    const myPublicKey = await CryptoHandler.exportPublicKey(keyPair.publicKey);
-
-    // Cria oferta e espera coletar todos os candidatos ICE
-    const offer = await rtcHandler.createOfferWithGathering();
-
-    const codeData = {
-      type: "offer",
-      sdp: offer,
-      publicKey: myPublicKey,
-    };
-
-    const codeString = btoa(JSON.stringify(codeData));
-    manualCodeDisplay.value = codeString;
-    manualCodeDisplay.style.display = "block";
-    manualCodeDisplay.select();
-    displaySystemMessage(
-      "Convite gerado! Copie o código acima e envie para o contato.",
-      "success",
-    );
-  }
-
-  async function processManualCode() {
-    const codeString = manualCodeInput.value.trim();
-    if (!codeString) return;
-
-    try {
-      const data = JSON.parse(atob(codeString));
-
-      if (data.type === "offer") {
-        // Recebi um convite, vou gerar resposta
-        displaySystemMessage("Verificando e processando convite...", "info");
-        initializeWebRTCHandler();
-        keyPair = await CryptoHandler.generateKeys();
-
-        // Deriva chave secreta
-        sharedSecretKey = await CryptoHandler.deriveSharedSecret(
-          keyPair.privateKey,
-          data.publicKey,
-        );
-
-        // Gera resposta WebRTC
-        const answer = await rtcHandler.createAnswerWithGathering(data.sdp);
-        const myPublicKey = await CryptoHandler.exportPublicKey(
-          keyPair.publicKey,
-        );
-        currentFingerprint = await CryptoHandler.computeFingerprint(
-          myPublicKey,
-          data.publicKey,
-        );
-
-        const responseData = {
-          type: "answer",
-          sdp: answer,
-          publicKey: myPublicKey,
-        };
-
-        const responseString = btoa(JSON.stringify(responseData));
-        manualCodeDisplay.value = responseString;
-        manualCodeDisplay.style.display = "block";
-        manualCodeDisplay.select();
-        displaySystemMessage(
-          "Convite validado! Envie o código de resposta acima para o remetente.",
-          "success",
-        );
-      } else if (data.type === "answer") {
-        // Recebi a resposta do meu convite
-        if (!rtcHandler || !keyPair) {
-          displaySystemMessage(
-            "Erro: Sessão interrompida. Mantenha a janela aberta durante a conexão.",
-            "error",
-          );
-          return;
-        }
-        displaySystemMessage("Estabelecendo conexão segura...", "info");
-        sharedSecretKey = await CryptoHandler.deriveSharedSecret(
-          keyPair.privateKey,
-          data.publicKey,
-        );
-        const myPubManual = await CryptoHandler.exportPublicKey(
-          keyPair.publicKey,
-        );
-        currentFingerprint = await CryptoHandler.computeFingerprint(
-          myPubManual,
-          data.publicKey,
-        );
-        await rtcHandler.handleAnswer(data.sdp);
-      }
-    } catch (e) {
-      console.error(e);
-      displaySystemMessage("O código inserido é inválido.", "error");
-    }
-  }
 
   function initializeWebRTCHandler() {
     rtcHandler = WebRTCHandler(
@@ -558,14 +494,47 @@ document.addEventListener("DOMContentLoaded", () => {
       setupView.classList.add("hidden");
       chatView.classList.remove("hidden");
       messageInput.focus();
-
-      // Limpa UI manual para evitar confusão se desconectar
-      if (manualCodeDisplay) {
-        manualCodeDisplay.value = "";
-        manualCodeDisplay.style.display = "none";
-      }
-      if (manualCodeInput) manualCodeInput.value = "";
     }
+  }
+
+  // --- Lógica de Aba Cheia (Melhoria de Formatação) ---
+  const isTab = window.location.search.includes("tab=true");
+  if (isTab) {
+    // Esconde botões de janela (pin/expandir) pois já estamos na aba
+    if (pinBtn) pinBtn.style.display = "none";
+    expandBtn.style.display = "none";
+
+    // Injeta CSS específico para melhorar a visualização em tela cheia
+    const style = document.createElement("style");
+    style.textContent = `
+        html, body {
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #app {
+            width: 90%;
+            max-width: 1000px;
+            height: 90vh;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+        .app-header { padding: 15px 25px; }
+        .app-header h1 { font-size: 20px; }
+        #messages { font-size: 16px; padding: 20px; }
+        .message { max-width: 60%; padding: 10px 15px; }
+        #input-area { padding: 15px 25px; }
+        #message-input { padding: 12px; font-size: 15px; }
+        #setup-view { max-width: 500px; margin: 0 auto; padding: 40px; width: 100%; }
+      `;
+    document.head.appendChild(style);
   }
 
   // --- Lógica de Fixar Janela (Pop-out) ---
@@ -594,23 +563,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Alternar Modos ---
-  connectionModeSelect.addEventListener("change", (e) => {
-    if (e.target.value === "manual") {
-      autoModeUi.classList.add("hidden");
-      manualModeUi.classList.remove("hidden");
-      if (signalingSocket) signalingSocket.close();
-    } else {
-      autoModeUi.classList.remove("hidden");
-      manualModeUi.classList.add("hidden");
-      connectToSignaling();
-    }
-  });
-
-  createManualOfferBtn.addEventListener("click", createManualOffer);
-  processManualCodeBtn.addEventListener("click", processManualCode);
-  manualCodeDisplay.addEventListener("click", () => manualCodeDisplay.select());
-  
   // Salva e reconecta quando o usuário altera a URL do servidor
   signalingUrlInput.addEventListener("change", () => {
     connectToSignaling();
@@ -713,6 +665,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // --- Inicialização da Aplicação ---
+  // Esconde o seletor de modo, já que agora é apenas automático
+  const modeSelector = document.getElementById("connection-mode");
+  if (modeSelector && modeSelector.parentElement) {
+      modeSelector.parentElement.style.display = "none";
+  }
+
   chrome.storage.local.get(["signalingUrl"], (result) => {
     // Carrega a URL salva, exceto se for o endereço STUN incorreto (correção de legado)
     if (
