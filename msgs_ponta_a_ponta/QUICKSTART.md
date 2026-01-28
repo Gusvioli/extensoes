@@ -1,52 +1,63 @@
-# 🚀 Quick Start - P2P Secure Chat
+# 🚀 Quick Start - Nome de Exibição
 
-Inicie o servidor e a extensão em 5 minutos!
+## Para Usuários (5 minutos)
 
-## 📋 Pré-requisitos
+### 1. Abra a extensão
+Clique no ícone 🔐
 
-- Node.js 14+ (`node --version`)
-- npm (`npm --version`)
-- Chrome/Chromium/Edge
-
-## ⚡ Setup Rápido
-
-### 1️⃣ Terminal - Iniciar Servidor
-
-```bash
-cd server
-npm install
-npm start
+### 2. Veja seu ID
+```
+Seu ID: a5123b48e8c10919... ✏️
 ```
 
-**Anote o token que aparece no console!**
+### 3. Clique no ✏️
+Modal abre
+
+### 4. Digite seu nome
+```
+Nome de Exibição: Alice
+```
+
+### 5. Clique [Salvar]
+✅ Pronto!
+
+---
+
+## Seu nome aparece em:
+
+- ✅ Header: `Seu ID: a5... (Alice) ✏️`
+- ✅ Mensagens: `📤 Você (Alice) Oi!`
+- ✅ Imagens: `📤 Você (Alice) [imagem]`
+
+---
+
+## Exemplos de Nomes
 
 ```
-⚠️  Autenticação ATIVADA. Token obrigatório: a1b2c3d4e5f6...
+"Alice"
+"Bob"
+"Avó"
+"Neto 🚀"
+"Casa"
+"Trabalho"
+"Frontend"
 ```
 
-### 2️⃣ Chrome - Carregar Extensão
+---
 
-1. Abra `chrome://extensions/`
-2. Ative **"Modo de desenvolvedor"** (canto superior direito)
-3. Clique **"Carregar extensão sem empacotamento"**
-4. Selecione a pasta: `secure-p2p-chat/`
+## FAQ
 
-### 3️⃣ Chrome - Usar Extensão
+**P: Posso mudar?**  
+R: Clique em ✏️ novamente
 
-1. Clique no ícone da extensão
-2. **Aguarde conectar** (verá seu ID)
-3. **Cole o token** no campo 🔐
-4. Clique **"Autenticar"**
-5. Copie seu ID com um clique
-6. **Compartilhe com outro usuário**
+**P: Se deixar em branco?**  
+R: Mostra primeiros 8 caracteres
 
-### 4️⃣ Conectar com Par
+**P: Outra pessoa vê?**  
+R: Sim, é assim que funciona
 
-1. **Outro usuário** segue os passos 1-5
-2. **Você cole** o ID do outro no campo
-3. Clique **"Conectar"**
-4. Aguarde a conexão P2P estabelecer
-5. **Comece a conversar!** 💬
+**P: É seguro?**  
+R: Sim, criptografia não afeta
 
 ## 🔗 Usar em Outro Computador
 

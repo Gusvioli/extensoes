@@ -5,8 +5,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Elementos da UI ---
   const myIdDisplaySpan = document.querySelector("#my-id-display span");
+  const myIdValue = document.getElementById("my-id-value");
+  const myDisplayNameSpan = document.getElementById("my-display-name");
+  const editNameBtn = document.getElementById("edit-name-btn");
+  const nameModal = document.getElementById("name-modal");
+  const modalIdDisplay = document.getElementById("modal-id-display");
+  const modalDisplayNameInput = document.getElementById(
+    "modal-display-name-input",
+  );
+  const modalSaveBtn = document.getElementById("modal-save-btn");
+  const modalCancelBtn = document.getElementById("modal-cancel-btn");
   const peerStatus = document.getElementById("peer-status");
-  const editIdBtn = document.getElementById("edit-id-btn");
   const setupView = document.getElementById("setup-view");
   const chatView = document.getElementById("chat-view");
   const peerIdInput = document.getElementById("peer-id-input");
@@ -75,6 +84,74 @@ document.addEventListener("DOMContentLoaded", () => {
   let sharedSecretKey = null;
   let rtcHandler = null;
   let currentFingerprint = null;
+
+  // ============ NOVO: Gerenciamento de Nome de Exibição ============
+  function loadDisplayName(userId) {
+    const stored = localStorage.getItem(`displayName_${userId}`);
+    return stored || userId.substring(0, 8) + "...";
+  }
+
+  function saveDisplayName(userId, displayName) {
+    if (displayName.trim()) {
+      localStorage.setItem(`displayName_${userId}`, displayName.trim());
+    } else {
+      localStorage.removeItem(`displayName_${userId}`);
+    }
+    updateDisplayNameUI();
+  }
+
+  function updateDisplayNameUI() {
+    if (!myId) return;
+    const displayName = loadDisplayName(myId);
+    const isCustom = localStorage.getItem(`displayName_${myId}`);
+
+    if (isCustom) {
+      myDisplayNameSpan.textContent = `(${displayName})`;
+      myDisplayNameSpan.style.display = "inline";
+    } else {
+      myDisplayNameSpan.style.display = "none";
+    }
+  }
+
+  // Modal de edição
+  editNameBtn.addEventListener("click", () => {
+    if (!myId) return;
+    modalIdDisplay.textContent = myId;
+    const stored = localStorage.getItem(`displayName_${myId}`);
+    modalDisplayNameInput.value = stored || "";
+    nameModal.style.display = "flex";
+    modalDisplayNameInput.focus();
+  });
+
+  modalCancelBtn.addEventListener("click", () => {
+    nameModal.style.display = "none";
+  });
+
+  modalSaveBtn.addEventListener("click", () => {
+    const newName = modalDisplayNameInput.value.trim();
+    saveDisplayName(myId, newName);
+    displaySystemMessage(
+      newName
+        ? `✅ Nome alterado para: "${newName}"`
+        : `✅ Nome redefinido para padrão`,
+      "success",
+    );
+    nameModal.style.display = "none";
+  });
+
+  // Fechar modal ao clicar fora
+  nameModal.addEventListener("click", (e) => {
+    if (e.target === nameModal) {
+      nameModal.style.display = "none";
+    }
+  });
+
+  // Enter para salvar
+  modalDisplayNameInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      modalSaveBtn.click();
+    }
+  });
 
   // =================================================================================
   // 1. INICIALIZAÇÃO E SINALIZAÇÃO (WEBSOCKET)
@@ -194,7 +271,8 @@ document.addEventListener("DOMContentLoaded", () => {
       case "your-id":
         myId = msg.id;
         requiresAuth = msg.requiresAuth || false; // ⚠️  NOVO: Armazena se autenticação é obrigatória
-        myIdDisplaySpan.textContent = myId;
+        myIdValue.textContent = myId;
+        updateDisplayNameUI(); // Atualiza exibição do nome
         chrome.storage.local.set({ savedId: myId });
 
         // ⚠️  NOVO: Se servidor exigir autenticação, mostra campo e pede para autenticar
@@ -618,6 +696,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const el = document.createElement("div");
     el.className = `message ${className}`;
 
+    // Adiciona nome do remetente
+    const senderDiv = document.createElement("div");
+    senderDiv.style.cssText =
+      "font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #666;";
+
+    if (className === "sent") {
+      const myDisplayName = loadDisplayName(myId);
+      senderDiv.textContent = `📤 Você (${myDisplayName})`;
+    } else {
+      const peerDisplayName = loadDisplayName(peerId);
+      senderDiv.textContent = `📥 ${peerDisplayName}`;
+    }
+    el.appendChild(senderDiv);
+
     const contentDiv = document.createElement("div");
     contentDiv.textContent = text;
     el.appendChild(contentDiv);
@@ -639,6 +731,21 @@ document.addEventListener("DOMContentLoaded", () => {
   function displayImage(url, className, timestamp) {
     const el = document.createElement("div");
     el.className = `message ${className}`;
+
+    // Adiciona nome do remetente
+    const senderDiv = document.createElement("div");
+    senderDiv.style.cssText =
+      "font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #666;";
+
+    if (className === "sent") {
+      const myDisplayName = loadDisplayName(myId);
+      senderDiv.textContent = `📤 Você (${myDisplayName})`;
+    } else {
+      const peerDisplayName = loadDisplayName(peerId);
+      senderDiv.textContent = `📥 ${peerDisplayName}`;
+    }
+    el.appendChild(senderDiv);
+
     const img = document.createElement("img");
     img.src = url;
     el.appendChild(img);
