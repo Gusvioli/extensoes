@@ -22,46 +22,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const contactIdToSaveInput = document.getElementById("contact-id-to-save");
   const pinBtn = document.getElementById("pin-btn");
   const conversationInfo = document.getElementById("conversation-info");
+  let typingTimeout = null;
 
   const signalingUrlInput = document.getElementById("signaling-url-input");
 
-  // --- Botão de Expandir para Aba (Novo - Movido para o topo) ---
-  const expandBtn = document.createElement("button");
-  expandBtn.textContent = "❐"; // Ícone de "Pop-out" mais comum
-  expandBtn.title = "Abrir em uma nova aba";
-  expandBtn.style.cssText =
-    "background: none; border: none; cursor: pointer; font-size: 18px; padding: 0 5px; margin-right: 5px; color: #333;";
+  // ============ NOVO: Suporte a Token de Autenticação ============
+  let authTokenInput = document.getElementById("auth-token-input");
+  let requiresAuth = false; // Flag que indica se o servidor exige autenticação
 
-  // Agrupa os botões no cabeçalho para ficarem alinhados à direita
-  if (pinBtn && pinBtn.parentNode) {
-    const headerContainer = pinBtn.parentNode;
-    // Verifica se já não agrupamos (para evitar duplicidade em reloads parciais)
-    if (!document.getElementById("header-btn-group")) {
-      const btnGroup = document.createElement("div");
-      btnGroup.id = "header-btn-group";
-      btnGroup.style.display = "flex";
-      btnGroup.style.alignItems = "center";
-
-      // Insere o grupo e move os botões para dentro dele
-      headerContainer.insertBefore(btnGroup, pinBtn);
-      btnGroup.appendChild(expandBtn);
-      btnGroup.appendChild(pinBtn);
-    }
+  // Se o elemento não existir no HTML, cria um dinamicamente
+  if (!authTokenInput) {
+    const setupView = document.getElementById("setup-view");
+    const tokenContainer = document.createElement("div");
+    tokenContainer.id = "token-container";
+    tokenContainer.style.cssText =
+      "margin-bottom: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px; display: none;";
+    tokenContainer.innerHTML = `
+      <label style="display: block; font-size: 12px; margin-bottom: 4px; font-weight: bold;">🔐 Token de Autenticação:</label>
+      <input id="auth-token-input" type="password" placeholder="Digite o token do servidor" style="width: 100%; padding: 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box;" />
+      <small style="display: block; margin-top: 4px; color: #666;">Obrigatório para conectar ao servidor seguro</small>
+    `;
+    setupView.insertBefore(tokenContainer, setupView.children[1]);
+    authTokenInput = document.getElementById("auth-token-input");
   }
-
-  expandBtn.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?tab=true") });
-  });
 
   // --- Rodapé Global (Informações e Créditos) ---
   const appContainer = document.getElementById("app");
   if (appContainer) {
-      const footer = document.createElement("footer");
-      footer.style.cssText = "padding: 8px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #dee2e6; background-color: #f8f9fa; flex-shrink: 0;";
-      
-      const manifest = chrome.runtime.getManifest();
-      
-      footer.innerHTML = `
+    const footer = document.createElement("footer");
+    footer.style.cssText =
+      "padding: 8px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #dee2e6; background-color: #f8f9fa; flex-shrink: 0;";
+
+    const manifest = chrome.runtime.getManifest();
+
+    footer.innerHTML = `
           <div style="margin-bottom: 3px;">
             <strong>${manifest.name}</strong> <span style="background: #e9ecef; padding: 1px 4px; border-radius: 3px; font-size: 10px;">v${manifest.version}</span>
           </div>
@@ -70,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <span>🔒</span> Segurança E2EE Ativa
           </div>
       `;
-      appContainer.appendChild(footer);
+    appContainer.appendChild(footer);
   }
 
   // --- Estado da Aplicação ---
@@ -108,34 +102,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     chrome.storage.local.set({ signalingUrl: baseUrl });
 
-    chrome.storage.local.get(["customId"], (result) => {
-      let url = baseUrl;
-      const separator = url.includes("?") ? "&" : "?";
-      if (result.customId) {
-        url += `${separator}id=${encodeURIComponent(result.customId)}`;
-      }
-
-      signalingSocket = new WebSocket(url);
-      signalingSocket.onmessage = handleSignalingMessage;
-      signalingSocket.onopen = () =>
-        console.log("🔗 Conectado ao servidor de sinalização.");
-      signalingSocket.onclose = () => {
-        console.log("🔌 Desconectado do servidor de sinalização.");
-        displaySystemMessage(
-          "Conexão com o servidor perdida. Tentando reconectar...",
-          "warning",
-        );
-        updatePeerStatus("Offline", "offline");
-        setTimeout(connectToSignaling, 3000);
-      };
-      signalingSocket.onerror = () => {
-        console.error("❌ Erro no WebSocket.");
-        displaySystemMessage(
-          "Não foi possível conectar ao servidor. Verifique a URL e se o servidor está ativo.",
-          "warning",
-        );
-      };
-    });
+    // ⚠️  MUDANÇA SEGURANÇA: Não envia ID via query string, deixa o servidor gerar
+    signalingSocket = new WebSocket(baseUrl);
+    signalingSocket.onmessage = handleSignalingMessage;
+    signalingSocket.onopen = () => {
+      console.log("🔗 Conectado ao servidor de sinalização.");
+      // Aguarda resposta com ID antes de fazer qualquer coisa
+    };
+    signalingSocket.onclose = () => {
+      console.log("🔌 Desconectado do servidor de sinalização.");
+      displaySystemMessage(
+        "Conexão com o servidor perdida. Tentando reconectar...",
+        "warning",
+      );
+      updatePeerStatus("Offline", "offline");
+      setTimeout(connectToSignaling, 3000);
+    };
+    signalingSocket.onerror = () => {
+      console.error("❌ Erro no WebSocket.");
+      displaySystemMessage(
+        "Não foi possível conectar ao servidor. Verifique a URL e se o servidor está ativo.",
+        "warning",
+      );
+    };
   }
 
   function sendSignalingMessage(type, payload) {
@@ -148,13 +137,105 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ⚠️  NOVO: Função para autenticar com o servidor
+  function authenticateWithServer() {
+    const token = authTokenInput.value.trim();
+    if (!token) {
+      displaySystemMessage("❌ Insira o token de autenticação.", "error");
+      authTokenInput.focus();
+      return;
+    }
+
+    if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+      signalingSocket.send(
+        JSON.stringify({
+          type: "authenticate",
+          token: token,
+        }),
+      );
+    } else {
+      displaySystemMessage(
+        "❌ Não conectado ao servidor. Tente novamente.",
+        "error",
+      );
+    }
+  }
+
+  // ⚠️  NOVO: Adiciona listener para o campo de token (Enter para autenticar)
+  if (authTokenInput) {
+    authTokenInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        authenticateWithServer();
+      }
+    });
+  }
+
   async function handleSignalingMessage(event) {
     const msg = JSON.parse(event.data);
+
+    // --- Proteção contra múltiplas conexões ---
+    // Se já estivermos conectados (peerId definido) e recebermos mensagem de outro usuário, ignoramos.
+    // Mensagens do sistema (como 'your-id') não têm 'from', então passam direto.
+    if (peerId && msg.from && msg.from !== peerId) {
+      if (msg.type === "key-exchange") {
+        displaySystemMessage(
+          `Tentativa de conexão de ${msg.from} bloqueada. Você já está em uma sessão.`,
+          "warning",
+        );
+      } else {
+        console.warn(
+          `Ignorando mensagem ${msg.type} de ${msg.from} pois estamos conectados com ${peerId}.`,
+        );
+      }
+      return;
+    }
 
     switch (msg.type) {
       case "your-id":
         myId = msg.id;
+        requiresAuth = msg.requiresAuth || false; // ⚠️  NOVO: Armazena se autenticação é obrigatória
         myIdDisplaySpan.textContent = myId;
+        chrome.storage.local.set({ savedId: myId });
+
+        // ⚠️  NOVO: Se servidor exigir autenticação, mostra campo e pede para autenticar
+        if (requiresAuth) {
+          const tokenContainer = document.getElementById("token-container");
+          if (tokenContainer) {
+            tokenContainer.style.display = "block";
+          }
+          displaySystemMessage(
+            "🔐 Autenticação obrigatória. Insira o token do servidor.",
+            "warning",
+          );
+        } else {
+          const tokenContainer = document.getElementById("token-container");
+          if (tokenContainer) {
+            tokenContainer.style.display = "none";
+          }
+          displaySystemMessage(
+            "✅ Conectado ao servidor (sem autenticação).",
+            "success",
+          );
+        }
+        break;
+
+      case "authenticated":
+        signalingSocket.authenticated = true; // ⚠️  NOVO: Marca socket como autenticado
+        displaySystemMessage(
+          "✅ Autenticado com sucesso! Agora você pode conectar a um par.",
+          "success",
+        );
+        break;
+
+      case "error":
+        if (msg.message && msg.message.includes("Autenticação")) {
+          displaySystemMessage(`❌ ${msg.message}`, "error");
+        } else {
+          displaySystemMessage(
+            `Erro: ${msg.message || "Desconhecido"}`,
+            "error",
+          );
+        }
         break;
 
       case "key-exchange":
@@ -238,7 +319,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const payload = JSON.parse(payloadString);
 
       if (payload.type === "text") {
-        displayMessage(payload.content, "received");
+        displayMessage(payload.content, "received", payload.timestamp);
+        notifyIfHidden("Nova Mensagem", payload.content);
+      } else if (payload.type === "typing") {
+        handleTypingIndicator();
       } else if (payload.type === "file" && payload.content) {
         const byteString = atob(payload.content);
         const ab = new ArrayBuffer(byteString.length);
@@ -247,7 +331,8 @@ document.addEventListener("DOMContentLoaded", () => {
           ia[i] = byteString.charCodeAt(i);
         }
         const blob = new Blob([ab], { type: payload.mimeType });
-        displayImage(URL.createObjectURL(blob), "received");
+        displayImage(URL.createObjectURL(blob), "received", payload.timestamp);
+        notifyIfHidden("Novo Arquivo", "Você recebeu uma imagem.");
       }
     } catch (e) {
       console.error("Erro ao processar payload recebido:", e);
@@ -255,6 +340,31 @@ document.addEventListener("DOMContentLoaded", () => {
         "Formato de mensagem desconhecido recebido.",
         "warning",
       );
+    }
+  }
+
+  function notifyIfHidden(title, message) {
+    // Se a janela estiver oculta ou minimizada, envia notificação
+    if (document.visibilityState === "hidden") {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon128.png",
+        title: title,
+        message: message,
+        priority: 2,
+      });
+    }
+  }
+
+  function handleTypingIndicator() {
+    const statusSpan = document.getElementById("peer-status");
+    const originalText = statusSpan.textContent;
+
+    if (!statusSpan.textContent.includes("digitando...")) {
+      statusSpan.textContent = "digitando...";
+      setTimeout(() => {
+        statusSpan.textContent = "Conectado (Seguro)";
+      }, 2000);
     }
   }
 
@@ -356,6 +466,41 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function startConnection() {
+    // ⚠️  NOVO: Se servidor exigir autenticação, autentica primeiro
+    if (requiresAuth && !signalingSocket.authenticated) {
+      const token = authTokenInput.value.trim();
+      if (!token) {
+        displaySystemMessage(
+          "❌ Token de autenticação obrigatório. Insira o token do servidor.",
+          "error",
+        );
+        authTokenInput.focus();
+        return;
+      }
+
+      // Envia mensagem de autenticação
+      if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+        signalingSocket.send(
+          JSON.stringify({
+            type: "authenticate",
+            token: token,
+          }),
+        );
+        // Aguarda resposta de autenticação antes de continuar
+        // A resposta virá via handleSignalingMessage
+        setTimeout(() => {
+          // Se não autenticou, tenta novamente
+          if (!signalingSocket.authenticated) {
+            displaySystemMessage(
+              "❌ Falha na autenticação. Tente novamente.",
+              "error",
+            );
+          }
+        }, 2000);
+        return;
+      }
+    }
+
     const id = peerIdInput.value.trim();
     if (!id) {
       displaySystemMessage("Insira o ID do usuário para conectar.", "error");
@@ -369,6 +514,22 @@ document.addEventListener("DOMContentLoaded", () => {
     sendSignalingMessage("key-exchange", { publicKey: myPublicKey });
   }
 
+  // Lógica de envio de "Digitando..."
+  let lastTypingSent = 0;
+  messageInput.addEventListener("input", async () => {
+    const now = Date.now();
+    if (now - lastTypingSent > 2000 && sharedSecretKey && rtcHandler) {
+      lastTypingSent = now;
+      try {
+        const payload = JSON.stringify({ type: "typing" });
+        const encrypted = await CryptoHandler.encrypt(sharedSecretKey, payload);
+        rtcHandler.send(encrypted);
+      } catch (e) {
+        console.error("Erro ao enviar typing indicator", e);
+      }
+    }
+  });
+
   async function sendMessage() {
     const text = messageInput.value;
     if (!text) return;
@@ -378,7 +539,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const payload = { type: "text", content: text };
+      const timestamp = new Date().toISOString();
+      const payload = { type: "text", content: text, timestamp: timestamp };
       const payloadString = JSON.stringify(payload);
       const encryptedMessage = await CryptoHandler.encrypt(
         sharedSecretKey,
@@ -386,7 +548,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       rtcHandler.send(encryptedMessage);
 
-      displayMessage(text, "sent");
+      displayMessage(text, "sent", timestamp);
       messageInput.value = "";
     } catch (error) {
       console.error("Falha ao enviar mensagem:", error);
@@ -405,19 +567,22 @@ document.addEventListener("DOMContentLoaded", () => {
     reader.onload = async (e) => {
       try {
         const base64Content = e.target.result.split(",")[1];
+        const timestamp = new Date().toISOString();
         const payload = {
           type: "file",
           content: base64Content,
           mimeType: file.type,
           name: file.name,
+          timestamp: timestamp,
         };
         const payloadString = JSON.stringify(payload);
         const encryptedFile = await CryptoHandler.encrypt(
           sharedSecretKey,
           payloadString,
         );
+
         rtcHandler.send(encryptedFile);
-        displayImage(URL.createObjectURL(file), "sent");
+        displayImage(URL.createObjectURL(file), "sent", timestamp);
       } catch (error) {
         console.error("Falha ao enviar arquivo:", error);
         displaySystemMessage("Não foi possível enviar o arquivo.", "error");
@@ -449,20 +614,45 @@ document.addEventListener("DOMContentLoaded", () => {
     peerStatus.className = className;
   }
 
-  function displayMessage(text, className) {
+  function displayMessage(text, className, timestamp) {
     const el = document.createElement("div");
     el.className = `message ${className}`;
-    el.textContent = text;
+
+    const contentDiv = document.createElement("div");
+    contentDiv.textContent = text;
+    el.appendChild(contentDiv);
+
+    const timeDiv = document.createElement("div");
+    timeDiv.style.cssText =
+      "font-size: 10px; text-align: right; margin-top: 4px; opacity: 0.7;";
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timeDiv.textContent = date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    el.appendChild(timeDiv);
+
     messagesDiv.appendChild(el);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
 
-  function displayImage(url, className) {
+  function displayImage(url, className, timestamp) {
     const el = document.createElement("div");
     el.className = `message ${className}`;
     const img = document.createElement("img");
     img.src = url;
     el.appendChild(img);
+
+    const timeDiv = document.createElement("div");
+    timeDiv.style.cssText =
+      "font-size: 10px; text-align: right; margin-top: 4px; opacity: 0.7;";
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timeDiv.textContent = date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    el.appendChild(timeDiv);
+
     messagesDiv.appendChild(el);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
@@ -497,71 +687,77 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Lógica de Aba Cheia (Melhoria de Formatação) ---
-  const isTab = window.location.search.includes("tab=true");
-  if (isTab) {
-    // Esconde botões de janela (pin/expandir) pois já estamos na aba
-    if (pinBtn) pinBtn.style.display = "none";
-    expandBtn.style.display = "none";
-
-    // Injeta CSS específico para melhorar a visualização em tela cheia
-    const style = document.createElement("style");
-    style.textContent = `
-        html, body {
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        #app {
-            width: 90%;
-            max-width: 1000px;
-            height: 90vh;
-            background: white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-        }
-        .app-header { padding: 15px 25px; }
-        .app-header h1 { font-size: 20px; }
-        #messages { font-size: 16px; padding: 20px; }
-        .message { max-width: 60%; padding: 10px 15px; }
-        #input-area { padding: 15px 25px; }
-        #message-input { padding: 12px; font-size: 15px; }
-        #setup-view { max-width: 500px; margin: 0 auto; padding: 40px; width: 100%; }
-      `;
-    document.head.appendChild(style);
-  }
-
   // --- Lógica de Fixar Janela (Pop-out) ---
   const isPinned = window.location.search.includes("pinned=true");
 
   if (isPinned) {
     pinBtn.textContent = "❌";
     pinBtn.title = "Desfixar (Fechar janela)";
-    // Tenta prevenir fechamento acidental
-    window.onbeforeunload = (e) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
+
+    // Desativa o ícone da extensão enquanto a janela pinada estiver aberta
+    if (chrome.action) {
+      chrome.action.disable();
+      const reenable = () => chrome.action.enable();
+      window.addEventListener("beforeunload", reenable);
+      window.addEventListener("unload", reenable);
+    }
+
+    // Remove restrições de tamanho do CSS para preencher a nova janela maior
+    document.documentElement.style.width = "100%";
+    document.documentElement.style.height = "100%";
+    document.body.style.width = "100%";
+    document.body.style.height = "100%";
   }
 
-  pinBtn.addEventListener("click", () => {
-    if (isPinned) {
-      window.close();
-    } else {
-      chrome.windows.create({
-        url: chrome.runtime.getURL("popup.html?pinned=true"),
-        type: "popup",
-        width: 380,
-        height: 600,
+  if (!pinBtn.dataset.listenerAttached) {
+    pinBtn.dataset.listenerAttached = "true";
+    pinBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (isPinned) {
+        window.close();
+      } else {
+        handleOpenUnique();
+      }
+    });
+  }
+
+  // --- Função Helper para Singleton (Janela Única) ---
+  function handleOpenUnique() {
+    const extensionUrl = chrome.runtime.getURL("popup.html");
+
+    if (pinBtn) pinBtn.disabled = true;
+
+    chrome.tabs.getCurrent((currentTab) => {
+      const currentTabId = currentTab ? currentTab.id : -1;
+
+      chrome.tabs.query({ url: extensionUrl + "*" }, (tabs) => {
+        // Encontra qualquer aba da extensão que NÃO seja a atual
+        const otherTab = tabs.find((t) => t.id !== currentTabId);
+
+        if (otherTab) {
+          // Foca na existente
+          chrome.tabs.update(otherTab.id, { active: true });
+          chrome.windows.update(otherTab.windowId, { focused: true });
+          window.close();
+        } else {
+          // Cria nova
+          chrome.windows.create(
+            {
+              url: extensionUrl + "?pinned=true",
+              type: "popup",
+              width: 500,
+              height: 700,
+            },
+            () => window.close(),
+          );
+        }
+
+        setTimeout(() => {
+          if (pinBtn) pinBtn.disabled = false;
+        }, 1000);
       });
-    }
-  });
+    });
+  }
 
   // Salva e reconecta quando o usuário altera a URL do servidor
   signalingUrlInput.addEventListener("change", () => {
@@ -572,73 +768,79 @@ document.addEventListener("DOMContentLoaded", () => {
   editIdBtn.addEventListener("click", (e) => {
     e.stopPropagation();
 
-    // Criação do Modal para substituir o prompt
-    const modalOverlay = document.createElement("div");
-    modalOverlay.style.cssText =
-      "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:2000;";
+    const container = document.getElementById("my-id-display");
+    if (!container) return;
 
-    const modalContent = document.createElement("div");
-    modalContent.style.cssText =
-      "background:white;padding:20px;border-radius:8px;width:85%;max-width:300px;box-shadow:0 4px 6px rgba(0,0,0,0.1);";
+    const currentId = myId || "";
 
-    const title = document.createElement("h3");
-    title.textContent = "Defina seu ID Personalizado";
-    title.style.cssText = "margin-top:0;font-size:16px;color:#333;";
+    // Esconde os elementos atuais (texto do ID e botão lápis)
+    const children = Array.from(container.children);
+    children.forEach((child) => (child.style.display = "none"));
 
-    const desc = document.createElement("p");
-    desc.textContent = "Deixe vazio para usar um ID aleatório.";
-    desc.style.cssText = "font-size:12px;color:#666;margin-bottom:10px;";
+    // Cria interface de edição inline
+    const wrapper = document.createElement("span");
+    wrapper.style.display = "inline-flex";
+    wrapper.style.alignItems = "center";
 
     const input = document.createElement("input");
     input.type = "text";
-    input.value = myId || "";
-    input.placeholder = "Ex: usuario123";
+    input.value = currentId;
+    input.placeholder = "Novo ID";
     input.style.cssText =
-      "width:100%;padding:8px;margin-bottom:15px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;";
-
-    const btnContainer = document.createElement("div");
-    btnContainer.style.cssText =
-      "display:flex;justify-content:flex-end;gap:10px;";
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancelar";
-    cancelBtn.style.cssText =
-      "background:#6c757d;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;";
-    cancelBtn.onclick = () => document.body.removeChild(modalOverlay);
+      "width: 80px; font-size: 11px; padding: 2px; margin-right: 4px; border: 1px solid #ccc; border-radius: 3px;";
 
     const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Salvar";
+    saveBtn.textContent = "OK";
     saveBtn.style.cssText =
-      "background:#007bff;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;";
+      "font-size: 10px; padding: 2px 6px; margin-right: 2px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "X";
+    cancelBtn.style.cssText =
+      "font-size: 10px; padding: 2px 6px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;";
+
+    function closeEdit() {
+      wrapper.remove();
+      children.forEach((child) => (child.style.display = ""));
+    }
 
     saveBtn.onclick = () => {
       const newId = input.value.trim();
-      document.body.removeChild(modalOverlay);
+      closeEdit();
+
+      if (newId === currentId) return;
 
       if (newId) {
-        chrome.storage.local.set({ customId: newId }, () => {
-          displaySystemMessage(
-            `ID personalizado definido. Reconectando...`,
-            "info",
-          );
-          if (signalingSocket) signalingSocket.close();
-        });
+        // ⚠️  NOVO: IDs customizados agora devem ser removidos, pois o servidor gera seguramente
+        displaySystemMessage(
+          "ℹ️  O servidor agora gera IDs seguros automaticamente. O ID customizado foi ignorado.",
+          "info",
+        );
+        // Desconecta e reconecta para obter novo ID do servidor
+        if (signalingSocket) {
+          signalingSocket.close();
+        }
+        setTimeout(connectToSignaling, 500);
       } else {
-        chrome.storage.local.remove("customId", () => {
-          displaySystemMessage("Restaurando ID aleatório...", "info");
-          if (signalingSocket) signalingSocket.close();
-        });
+        // Se tentar limpar, apenas reconecta
+        if (signalingSocket) {
+          signalingSocket.close();
+        }
+        setTimeout(connectToSignaling, 500);
       }
     };
 
-    btnContainer.appendChild(cancelBtn);
-    btnContainer.appendChild(saveBtn);
-    modalContent.appendChild(title);
-    modalContent.appendChild(desc);
-    modalContent.appendChild(input);
-    modalContent.appendChild(btnContainer);
-    modalOverlay.appendChild(modalContent);
-    document.body.appendChild(modalOverlay);
+    cancelBtn.onclick = closeEdit;
+
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") saveBtn.click();
+      if (ev.key === "Escape") cancelBtn.click();
+    });
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(saveBtn);
+    wrapper.appendChild(cancelBtn);
+    container.appendChild(wrapper);
     input.focus();
   });
 
@@ -664,13 +866,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // --- Inicialização da Aplicação ---
-  // Esconde o seletor de modo, já que agora é apenas automático
-  const modeSelector = document.getElementById("connection-mode");
-  if (modeSelector && modeSelector.parentElement) {
-      modeSelector.parentElement.style.display = "none";
+  // ⚠️  NOVO: Listener para botão de autenticação
+  const authBtn = document.getElementById("auth-btn");
+  if (authBtn) {
+    authBtn.addEventListener("click", authenticateWithServer);
   }
 
+  // --- Inicialização da Aplicação ---
   chrome.storage.local.get(["signalingUrl"], (result) => {
     // Carrega a URL salva, exceto se for o endereço STUN incorreto (correção de legado)
     if (

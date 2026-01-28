@@ -3,13 +3,8 @@
   "name": "P2P Secure Chat",
   "version": "1.0.0",
   "description": "Comunicação P2P com criptografia de ponta a ponta (E2EE).",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "ws://*/*",
-    "wss://*/*"
-  ],
+  "permissions": ["storage", "notifications"],
+  "host_permissions": ["ws://*/*", "wss://*/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

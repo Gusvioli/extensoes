@@ -91,77 +91,42 @@
       </header>
 
       <main id="setup-view">
-        <div style="text-align: center; margin-bottom: 15px">
-          <label style="font-size: 12px; margin-right: 10px"
-            >Modo de Conexão:</label
-          >
-          <select id="connection-mode" style="padding: 4px">
-            <option value="auto">Automático (Servidor)</option>
-            <option value="manual">Manual (Sem Servidor)</option>
-          </select>
-        </div>
-
         <div
           id="setup-messages"
           style="min-height: 20px; margin-bottom: 10px"
         ></div>
 
-        <!-- Modo Manual UI -->
-        <div id="manual-mode-ui" class="hidden">
-          <p style="font-size: 12px; color: #666; margin-bottom: 10px">
-            Troque os códigos abaixo com seu contato.
-          </p>
-          <button
-            id="create-manual-offer-btn"
-            style="width: 100%; margin-bottom: 10px"
-          >
-            Gerar Meu Código (Convite)
-          </button>
-          <textarea
-            id="manual-code-display"
-            readonly
-            placeholder="Seu código aparecerá aqui. Copie e envie para o contato."
-            style="
-              width: 100%;
-              height: 60px;
-              font-size: 11px;
-              margin-bottom: 10px;
-              display: none;
-            "
-          ></textarea>
-          <div class="input-group" style="flex-direction: column">
-            <textarea
-              id="manual-code-input"
-              placeholder="Cole o código recebido aqui..."
-              style="width: 100%; height: 60px; font-size: 11px; resize: none"
-            ></textarea>
-            <button
-              id="process-manual-code-btn"
-              style="width: 100%; margin-top: 5px"
-            >
-              Processar Código Recebido
-            </button>
-          </div>
+        <!-- Modo Auto UI -->
+        <div class="input-group" style="margin-bottom: 10px">
+          <input
+            type="text"
+            id="signaling-url-input"
+            placeholder="URL do Servidor (ws://...)"
+            value="ws://localhost:8080"
+          />
         </div>
 
-        <!-- Modo Auto UI -->
-        <div id="auto-mode-ui">
-          <div class="input-group" style="margin-bottom: 10px">
-            <input
-              type="text"
-              id="signaling-url-input"
-              placeholder="URL do Servidor (ws://...)"
-              value="ws://localhost:8080"
-            />
-          </div>
-          <div class="input-group">
-            <input
-              type="text"
-              id="peer-id-input"
-              placeholder="ID do outro usuário"
-            />
-            <button id="connect-btn">Conectar</button>
-          </div>
+        <!-- ⚠️  NOVO: Campo de Token de Autenticação -->
+        <div
+          id="token-container"
+          class="input-group"
+          style="margin-bottom: 10px; display: none"
+        >
+          <input
+            type="password"
+            id="auth-token-input"
+            placeholder="🔐 Token de Autenticação"
+          />
+          <button id="auth-btn" style="background: #28a745">Autenticar</button>
+        </div>
+
+        <div class="input-group">
+          <input
+            type="text"
+            id="peer-id-input"
+            placeholder="ID do outro usuário"
+          />
+          <button id="connect-btn">Conectar</button>
         </div>
 
         <div
