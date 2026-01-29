@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard de Servidores P2P</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <!-- Modal de Login -->
+    <div class="modal" id="login-modal">
+      <div class="modal-content" style="width: 400px">
+        <div class="modal-header">
+          <h2>🔐 Painel Administrativo</h2>
+          <span class="close" id="close-login-modal">&times;</span>
+        </div>
+        <form id="login-form">
+          <div class="form-group">
+            <label>Usuário:</label>
+            <input type="text" id="login-username" required />
+          </div>
+          <div class="form-group">
+            <label>Senha:</label>
+            <input type="password" id="login-password" required />
+          </div>
+          <div
+            id="login-error"
+            style="color: #e74c3c; margin: 10px 0; display: none"
+          ></div>
+          <button type="submit" class="btn">Entrar</button>
+          <p
+            style="
+              text-align: center;
+              margin-top: 15px;
+              font-size: 14px;
+              color: #7f8c8d;
+            "
+          >
+            Apenas administradores podem adicionar/editar servidores.
+            <br />
+            <a href="/view.html" style="color: #3498db; text-decoration: none"
+              >Ver servidores públicos →</a
+            >
+          </p>
+        </form>
+      </div>
+    </div>
+
+    <div class="container" id="dashboard-container" style="display: none">
+      <header>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+          "
+        >
+          <div>
+            <h1>
+              <span>🔐</span>
+              Dashboard de Servidores P2P
+            </h1>
+            <p class="header-subtitle" id="user-info">
+              Gerenciar e monitorar todos os seus servidores de sinalização
+              WebSocket
+            </p>
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 10px;
+              flex-direction: column;
+              align-items: flex-end;
+            "
+          >
+            <button
+              id="logout-btn"
+              class="btn"
+              style="background-color: #e74c3c"
+            >
+              Sair
+            </button>
+            <a
+              href="/view.html"
+              class="btn"
+              style="
+                background-color: #3498db;
+                text-decoration: none;
+                text-align: center;
+                padding: 10px 20px;
+                border-radius: 4px;
+              "
+            >
+              🌐 Ver Público
+            </a>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-number" id="total-servers">0</div>
+            <div class="stat-label">Total de Servidores</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="active-servers">0</div>
+            <div class="stat-label">Ativos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="inactive-servers">0</div>
+            <div class="stat-label">Inativos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="total-capacity">0</div>
+            <div class="stat-label">Capacidade Total</div>
+          </div>
+        </div>
+
+        <div class="filters">
+          <button class="filter-btn active" data-filter="all">Todos</button>
+          <button class="filter-btn" data-filter="active">Ativos</button>
+          <button class="filter-btn" data-filter="inactive">Inativos</button>
+          <button class="filter-btn" data-filter="standby">Em Standby</button>
+          <button class="filter-btn" id="add-new-btn">+ Novo Servidor</button>
+        </div>
+      </header>
+
+      <div class="servers-grid" id="servers-container">
+        <!-- Servidores serão carregados aqui -->
+      </div>
+
+      <div class="empty-state" id="empty-state" style="display: none">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 12h14M5 12a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v5a2 2 0 01-2 2M5 12a2 2 0 00-2 2v5a2 2 0 002 2h14a2 2 0 002-2v-5a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+          />
+        </svg>
+        <p>Nenhum servidor encontrado</p>
+      </div>
+    </div>
+
+    <!-- Modal para adicionar/editar servidor -->
+    <div class="modal" id="server-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span id="modal-title">Adicionar Novo Servidor</span>
+          <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+
+        <div class="success-message" id="success-msg">
+          ✓ Servidor salvo com sucesso!
+        </div>
+
+        <form id="server-form" onsubmit="saveServer(event)">
+          <div class="form-group">
+            <label for="server-name">Nome do Servidor *</label>
+            <input
+              type="text"
+              id="server-name"
+              required
+              placeholder="Ex: Servidor Principal"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-description">Descrição</label>
+            <textarea
+              id="server-description"
+              placeholder="Descrição do servidor..."
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="server-host">Host/IP *</label>
+            <input
+              type="text"
+              id="server-host"
+              required
+              placeholder="Ex: localhost ou 192.168.1.1"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-port">Porta *</label>
+            <input
+              type="number"
+              id="server-port"
+              required
+              min="1"
+              max="65535"
+              placeholder="Ex: 8080"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-protocol">Protocolo *</label>
+            <input
+              type="text"
+              id="server-protocol"
+              required
+              placeholder="ws ou wss"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-token">
+              Token de Autenticação
+              <span style="font-size: 0.85em; color: #7f8c8d"
+                >(deixe em branco para gerar automaticamente)</span
+              >
+            </label>
+            <div style="display: flex; gap: 10px">
+              <input
+                type="text"
+                id="server-token"
+                placeholder="Token único para autenticação (ou gere automaticamente)"
+                style="flex: 1"
+              />
+              <button
+                type="button"
+                class="btn"
+                style="background: #27ae60; white-space: nowrap"
+                onclick="
+                  document.getElementById('server-token').value =
+                    generateToken();
+                  document.getElementById('server-token').focus();
+                "
+              >
+                🔑 Gerar
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="server-region">Região</label>
+            <input
+              type="text"
+              id="server-region"
+              placeholder="Ex: Local, USA, Europa"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-max-clients">Máximo de Clientes</label>
+            <input
+              type="number"
+              id="server-max-clients"
+              value="10000"
+              min="1"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-status">Status</label>
+            <select id="server-status">
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+              <option value="standby">Em Standby</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="server-notes">Notas</label>
+            <textarea
+              id="server-notes"
+              placeholder="Notas adicionais..."
+            ></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              Salvar Servidor
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeModal()"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>

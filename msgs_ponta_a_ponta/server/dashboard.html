@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard de Servidores P2P</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      header {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 30px;
+        border-radius: 12px;
+        margin-bottom: 40px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(10px);
+      }
+
+      h1 {
+        font-size: 32px;
+        color: #333;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .header-subtitle {
+        color: #666;
+        font-size: 16px;
+        margin-top: 10px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .stat-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+      }
+
+      .stat-number {
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      .stat-label {
+        font-size: 14px;
+        opacity: 0.9;
+      }
+
+      .filters {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+
+      .filter-btn {
+        padding: 10px 20px;
+        border: 2px solid #667eea;
+        background: white;
+        color: #667eea;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .filter-btn.active {
+        background: #667eea;
+        color: white;
+      }
+
+      .filter-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .servers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+        margin-bottom: 40px;
+      }
+
+      .server-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        border-left: 4px solid #667eea;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .server-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      }
+
+      .server-card.inactive {
+        opacity: 0.7;
+        border-left-color: #999;
+      }
+
+      .server-card.active {
+        border-left-color: #10b981;
+      }
+
+      .server-card.standby {
+        border-left-color: #f59e0b;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .status-badge.active {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .status-badge.inactive {
+        background: #fee2e2;
+        color: #7f1d1d;
+      }
+
+      .status-badge.standby {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .server-name {
+        font-size: 22px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 8px;
+      }
+
+      .server-description {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+      }
+
+      .info-row:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        color: #666;
+        font-weight: 600;
+      }
+
+      .info-value {
+        color: #333;
+        font-family: "Courier New", monospace;
+        word-break: break-all;
+        text-align: right;
+        max-width: 60%;
+      }
+
+      .region-tag {
+        display: inline-block;
+        background: #e0e7ff;
+        color: #4c51bf;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: white;
+        color: #667eea;
+        border: 2px solid #667eea;
+      }
+
+      .btn-secondary:hover {
+        background: #f8f9ff;
+      }
+
+      .btn-copy {
+        background: #f3f4f6;
+        color: #333;
+        border: 1px solid #d1d5db;
+      }
+
+      .btn-copy:hover {
+        background: #e5e7eb;
+      }
+
+      .token-display {
+        background: #f9fafb;
+        padding: 12px;
+        border-radius: 6px;
+        margin: 12px 0;
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        word-break: break-all;
+        color: #333;
+        border: 1px solid #e5e7eb;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: white;
+        border-radius: 12px;
+        color: #999;
+      }
+
+      .empty-state svg {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 20px;
+        opacity: 0.5;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal.show {
+        display: flex;
+      }
+
+      .modal-content {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      .modal-header {
+        font-size: 24px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 28px;
+        cursor: pointer;
+        color: #999;
+      }
+
+      .close-btn:hover {
+        color: #333;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 14px;
+      }
+
+      .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+      }
+
+      .form-group input:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+      }
+
+      .success-message {
+        background: #d1fae5;
+        color: #065f46;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        display: none;
+      }
+
+      .success-message.show {
+        display: block;
+      }
+
+      @media (max-width: 768px) {
+        .servers-grid {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .heart-icon {
+        animation: heartbeat 1.5s infinite;
+      }
+
+      @keyframes heartbeat {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        25% {
+          transform: scale(1.1);
+        }
+        50% {
+          transform: scale(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>
+          <span>🔐</span>
+          Dashboard de Servidores P2P
+        </h1>
+        <p class="header-subtitle">
+          Gerenciar e monitorar todos os seus servidores de sinalização
+          WebSocket
+        </p>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-number" id="total-servers">0</div>
+            <div class="stat-label">Total de Servidores</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="active-servers">0</div>
+            <div class="stat-label">Ativos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="inactive-servers">0</div>
+            <div class="stat-label">Inativos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number" id="total-capacity">0</div>
+            <div class="stat-label">Capacidade Total</div>
+          </div>
+        </div>
+
+        <div class="filters">
+          <button class="filter-btn active" data-filter="all">Todos</button>
+          <button class="filter-btn" data-filter="active">Ativos</button>
+          <button class="filter-btn" data-filter="inactive">Inativos</button>
+          <button class="filter-btn" data-filter="standby">Em Standby</button>
+          <button class="filter-btn" id="add-new-btn">+ Novo Servidor</button>
+        </div>
+      </header>
+
+      <div class="servers-grid" id="servers-container">
+        <!-- Servidores serão carregados aqui -->
+      </div>
+
+      <div class="empty-state" id="empty-state" style="display: none">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 12h14M5 12a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v5a2 2 0 01-2 2M5 12a2 2 0 00-2 2v5a2 2 0 002 2h14a2 2 0 002-2v-5a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+          />
+        </svg>
+        <p>Nenhum servidor encontrado</p>
+      </div>
+    </div>
+
+    <!-- Modal para adicionar/editar servidor -->
+    <div class="modal" id="server-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span id="modal-title">Adicionar Novo Servidor</span>
+          <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+
+        <div class="success-message" id="success-msg">
+          ✓ Servidor salvo com sucesso!
+        </div>
+
+        <form id="server-form" onsubmit="saveServer(event)">
+          <div class="form-group">
+            <label for="server-name">Nome do Servidor *</label>
+            <input
+              type="text"
+              id="server-name"
+              required
+              placeholder="Ex: Servidor Principal"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-description">Descrição</label>
+            <textarea
+              id="server-description"
+              placeholder="Descrição do servidor..."
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="server-host">Host/IP *</label>
+            <input
+              type="text"
+              id="server-host"
+              required
+              placeholder="Ex: localhost ou 192.168.1.1"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-port">Porta *</label>
+            <input
+              type="number"
+              id="server-port"
+              required
+              min="1"
+              max="65535"
+              placeholder="Ex: 8080"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-protocol">Protocolo *</label>
+            <input
+              type="text"
+              id="server-protocol"
+              required
+              placeholder="ws ou wss"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-token">Token de Autenticação *</label>
+            <input
+              type="text"
+              id="server-token"
+              required
+              placeholder="Token único para autenticação"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-region">Região</label>
+            <input
+              type="text"
+              id="server-region"
+              placeholder="Ex: Local, USA, Europa"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-max-clients">Máximo de Clientes</label>
+            <input
+              type="number"
+              id="server-max-clients"
+              value="10000"
+              min="1"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="server-status">Status</label>
+            <select
+              id="server-status"
+              style="
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-family: inherit;
+                font-size: 14px;
+              "
+            >
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+              <option value="standby">Em Standby</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="server-notes">Notas</label>
+            <textarea
+              id="server-notes"
+              placeholder="Notas adicionais..."
+            ></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              Salvar Servidor
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeModal()"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let servers = [];
+      let currentFilter = "all";
+      let editingServerId = null;
+
+      // Carregar servidores ao iniciar
+      document.addEventListener("DOMContentLoaded", () => {
+        loadServers();
+        setupEventListeners();
+      });
+
+      function setupEventListeners() {
+        document
+          .querySelectorAll(".filter-btn:not(#add-new-btn)")
+          .forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+              document
+                .querySelectorAll(".filter-btn:not(#add-new-btn)")
+                .forEach((b) => b.classList.remove("active"));
+              e.target.classList.add("active");
+              currentFilter = e.target.dataset.filter;
+              renderServers();
+            });
+          });
+
+        document.getElementById("add-new-btn").addEventListener("click", () => {
+          editingServerId = null;
+          document.getElementById("server-form").reset();
+          document.getElementById("modal-title").textContent =
+            "Adicionar Novo Servidor";
+          document.getElementById("server-modal").classList.add("show");
+        });
+
+        // Fechar modal ao clicar fora
+        document
+          .getElementById("server-modal")
+          .addEventListener("click", (e) => {
+            if (e.target.id === "server-modal") {
+              closeModal();
+            }
+          });
+      }
+
+      async function loadServers() {
+        try {
+          const response = await fetch("/api/servers");
+          servers = await response.json();
+          renderServers();
+          updateStats();
+        } catch (error) {
+          console.error("Erro ao carregar servidores:", error);
+          // Usar dados padrão se houver erro
+          servers = [];
+        }
+      }
+
+      function renderServers() {
+        const container = document.getElementById("servers-container");
+        const emptyState = document.getElementById("empty-state");
+
+        let filteredServers = servers;
+        if (currentFilter !== "all") {
+          filteredServers = servers.filter((s) => s.status === currentFilter);
+        }
+
+        if (filteredServers.length === 0) {
+          container.style.display = "none";
+          emptyState.style.display = "block";
+          return;
+        }
+
+        container.style.display = "grid";
+        emptyState.style.display = "none";
+
+        container.innerHTML = filteredServers
+          .map(
+            (server) => `
+                <div class="server-card ${server.status}">
+                    <div class="status-badge ${server.status}">
+                        ${server.status === "active" ? "🟢 Ativo" : server.status === "standby" ? "🟡 Em Standby" : "🔴 Inativo"}
+                    </div>
+
+                    <div class="server-name">${server.name}</div>
+                    <p class="server-description">${server.description || "Sem descrição"}</p>
+
+                    <div class="info-row">
+                        <span class="info-label">Host:</span>
+                        <span class="info-value">${server.host}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Porta:</span>
+                        <span class="info-value">${server.port}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">URL:</span>
+                        <span class="info-value">${server.protocol}://${server.host}:${server.port}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Região:</span>
+                        <span class="region-tag">${server.region || "N/A"}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Capacidade:</span>
+                        <span class="info-value">${server.maxClients.toLocaleString()} clientes</span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Token:</span>
+                    </div>
+                    <div class="token-display">
+                        ${server.token}
+                        <button class="btn btn-copy" onclick="copyToken('${server.token}')" style="margin-top: 8px;">📋 Copiar</button>
+                    </div>
+
+                    ${server.notes ? `<div class="info-row"><span class="info-label">Notas:</span><span class="info-value">${server.notes}</span></div>` : ""}
+
+                    <div class="info-row">
+                        <span class="info-label">Criado em:</span>
+                        <span class="info-value">${new Date(server.createdAt).toLocaleDateString("pt-BR")}</span>
+                    </div>
+
+                    <div class="actions">
+                        <a href="${server.protocol}://${server.host}:${server.port}" target="_blank" class="btn btn-primary">
+                            🔗 Abrir Servidor
+                        </a>
+                        <button class="btn btn-secondary" onclick="editServer('${server.id}')">✏️ Editar</button>
+                        <button class="btn btn-secondary" onclick="deleteServer('${server.id}')">🗑️ Deletar</button>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+      }
+
+      function updateStats() {
+        const total = servers.length;
+        const active = servers.filter((s) => s.status === "active").length;
+        const inactive = servers.filter((s) => s.status === "inactive").length;
+        const capacity = servers.reduce((sum, s) => sum + s.maxClients, 0);
+
+        document.getElementById("total-servers").textContent = total;
+        document.getElementById("active-servers").textContent = active;
+        document.getElementById("inactive-servers").textContent = inactive;
+        document.getElementById("total-capacity").textContent =
+          capacity.toLocaleString();
+      }
+
+      function copyToken(token) {
+        navigator.clipboard.writeText(token).then(() => {
+          alert("✓ Token copiado para a área de transferência!");
+        });
+      }
+
+      function editServer(id) {
+        const server = servers.find((s) => s.id === id);
+        if (!server) return;
+
+        editingServerId = id;
+        document.getElementById("server-name").value = server.name;
+        document.getElementById("server-description").value =
+          server.description;
+        document.getElementById("server-host").value = server.host;
+        document.getElementById("server-port").value = server.port;
+        document.getElementById("server-protocol").value = server.protocol;
+        document.getElementById("server-token").value = server.token;
+        document.getElementById("server-region").value = server.region || "";
+        document.getElementById("server-max-clients").value = server.maxClients;
+        document.getElementById("server-status").value = server.status;
+        document.getElementById("server-notes").value = server.notes || "";
+
+        document.getElementById("modal-title").textContent = "Editar Servidor";
+        document.getElementById("server-modal").classList.add("show");
+      }
+
+      async function saveServer(event) {
+        event.preventDefault();
+
+        const serverData = {
+          id: editingServerId || `server-${Date.now()}`,
+          name: document.getElementById("server-name").value,
+          description: document.getElementById("server-description").value,
+          host: document.getElementById("server-host").value,
+          port: parseInt(document.getElementById("server-port").value),
+          protocol: document.getElementById("server-protocol").value,
+          token: document.getElementById("server-token").value,
+          region: document.getElementById("server-region").value,
+          maxClients: parseInt(
+            document.getElementById("server-max-clients").value,
+          ),
+          status: document.getElementById("server-status").value,
+          notes: document.getElementById("server-notes").value,
+          createdAt: editingServerId
+            ? servers.find((s) => s.id === editingServerId).createdAt
+            : new Date().toISOString(),
+        };
+
+        try {
+          const method = editingServerId ? "PUT" : "POST";
+          const response = await fetch("/api/servers", {
+            method: method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(serverData),
+          });
+
+          if (response.ok) {
+            // Atualizar lista local
+            if (editingServerId) {
+              servers = servers.map((s) =>
+                s.id === editingServerId ? serverData : s,
+              );
+            } else {
+              servers.push(serverData);
+            }
+
+            renderServers();
+            updateStats();
+
+            // Mostrar mensagem de sucesso
+            const msg = document.getElementById("success-msg");
+            msg.classList.add("show");
+            setTimeout(() => {
+              msg.classList.remove("show");
+              closeModal();
+            }, 1500);
+          }
+        } catch (error) {
+          console.error("Erro ao salvar servidor:", error);
+          alert("Erro ao salvar servidor");
+        }
+      }
+
+      async function deleteServer(id) {
+        if (!confirm("Tem certeza que deseja deletar este servidor?")) return;
+
+        try {
+          const response = await fetch("/api/servers", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+
+          if (response.ok) {
+            servers = servers.filter((s) => s.id !== id);
+            renderServers();
+            updateStats();
+          }
+        } catch (error) {
+          console.error("Erro ao deletar servidor:", error);
+          alert("Erro ao deletar servidor");
+        }
+      }
+
+      function closeModal() {
+        document.getElementById("server-modal").classList.remove("show");
+      }
+    </script>
+  </body>
+</html>

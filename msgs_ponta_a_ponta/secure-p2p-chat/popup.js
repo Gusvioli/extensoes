@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalSaveBtn = document.getElementById("modal-save-btn");
   const modalCancelBtn = document.getElementById("modal-cancel-btn");
   const peerStatus = document.getElementById("peer-status");
-  const setupView = document.getElementById("setup-view");
   const chatView = document.getElementById("chat-view");
   const peerIdInput = document.getElementById("peer-id-input");
   const connectBtn = document.getElementById("connect-btn");
@@ -34,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let typingTimeout = null;
 
   const signalingUrlInput = document.getElementById("signaling-url-input");
+  const setupView = document.getElementById("setup-view");
 
   // ============ NOVO: Suporte a Token de Autenticação ============
   let authTokenInput = document.getElementById("auth-token-input");
@@ -41,7 +41,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Se o elemento não existir no HTML, cria um dinamicamente
   if (!authTokenInput) {
-    const setupView = document.getElementById("setup-view");
     const tokenContainer = document.createElement("div");
     tokenContainer.id = "token-container";
     tokenContainer.style.cssText =
@@ -451,7 +450,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state === "connected") {
       updatePeerStatus("Conectado (Seguro)", "online");
       if (myId && peerId) {
-        let infoText = `${myId} <--> ${peerId}`;
+        // Usar nomes editados em vez de IDs
+        const myName = loadDisplayName(myId);
+        const peerName = loadDisplayName(peerId);
+        let infoText = `${myName} 💬 ${peerName}`;
         if (currentFingerprint) {
           infoText += `\n🔐 Safety Number: ${currentFingerprint}`;
         }
@@ -869,86 +871,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Salva e reconecta quando o usuário altera a URL do servidor
   signalingUrlInput.addEventListener("change", () => {
     connectToSignaling();
-  });
-
-  // --- Alterar ID Personalizado ---
-  editIdBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-
-    const container = document.getElementById("my-id-display");
-    if (!container) return;
-
-    const currentId = myId || "";
-
-    // Esconde os elementos atuais (texto do ID e botão lápis)
-    const children = Array.from(container.children);
-    children.forEach((child) => (child.style.display = "none"));
-
-    // Cria interface de edição inline
-    const wrapper = document.createElement("span");
-    wrapper.style.display = "inline-flex";
-    wrapper.style.alignItems = "center";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = currentId;
-    input.placeholder = "Novo ID";
-    input.style.cssText =
-      "width: 80px; font-size: 11px; padding: 2px; margin-right: 4px; border: 1px solid #ccc; border-radius: 3px;";
-
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = "OK";
-    saveBtn.style.cssText =
-      "font-size: 10px; padding: 2px 6px; margin-right: 2px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;";
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "X";
-    cancelBtn.style.cssText =
-      "font-size: 10px; padding: 2px 6px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;";
-
-    function closeEdit() {
-      wrapper.remove();
-      children.forEach((child) => (child.style.display = ""));
-    }
-
-    saveBtn.onclick = () => {
-      const newId = input.value.trim();
-      closeEdit();
-
-      if (newId === currentId) return;
-
-      if (newId) {
-        // ⚠️  NOVO: IDs customizados agora devem ser removidos, pois o servidor gera seguramente
-        displaySystemMessage(
-          "ℹ️  O servidor agora gera IDs seguros automaticamente. O ID customizado foi ignorado.",
-          "info",
-        );
-        // Desconecta e reconecta para obter novo ID do servidor
-        if (signalingSocket) {
-          signalingSocket.close();
-        }
-        setTimeout(connectToSignaling, 500);
-      } else {
-        // Se tentar limpar, apenas reconecta
-        if (signalingSocket) {
-          signalingSocket.close();
-        }
-        setTimeout(connectToSignaling, 500);
-      }
-    };
-
-    cancelBtn.onclick = closeEdit;
-
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") saveBtn.click();
-      if (ev.key === "Escape") cancelBtn.click();
-    });
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(saveBtn);
-    wrapper.appendChild(cancelBtn);
-    container.appendChild(wrapper);
-    input.focus();
   });
 
   // --- Event Listeners ---

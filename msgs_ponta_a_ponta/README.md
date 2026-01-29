@@ -1,54 +1,121 @@
-# 📱 P2P Secure Chat - Sistema de Nome de Exibição
+# � Mensagens Ponta a Ponta com WebSocket
 
-## 🎯 Visão Geral
+Sistema completo de chat criptografado P2P usando WebRTC + WebSocket + Criptografia
 
-Sistema que permite cada usuário ter:
+## ⚡ Início Rápido
 
-- **ID Único** (imutável): `a5123b48e8c109191b37444d` - Gerado pelo servidor
-- **Nome Amigável** (editável): `Alice` - Você escolhe e pode mudar
+```bash
+# Instalar dependências
+./start.sh install
+
+# Iniciar servidor + dashboard
+./start.sh start
+
+# Abrir dashboard
+./start.sh open
+```
+
+**URLs:**
+- 📊 Dashboard Administrativo: http://localhost:3000 (requer login)
+- 🌐 Visualização Pública: http://localhost:3000/view.html (sem autenticação)
+- 🔗 Token: http://localhost:9080
+- 📡 WebSocket: ws://localhost:8080
+
+## 📁 Estrutura do Projeto
 
 ```
-┌────────────────────────────────────┐
-│ Seu ID: a5123b... (Alice) ✏️       │
-│                                    │
-│ 📤 Você (Alice)                    │
-│ Oi Bob! Tudo bem?                  │
-│ 14:30                              │
-│                                    │
-│ 📥 Bob                             │
-│ Tudo certo! 😄                     │
-│ 14:31                              │
-└────────────────────────────────────┘
+msgs_ponta_a_ponta/
+├── secure-p2p-chat/              # Extensão Chrome
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   ├── crypto-handler.js         # Criptografia
+│   ├── webrtc-handler.js         # WebRTC
+│   └── icons/
+├── server/                        # Servidor WebSocket
+│   ├── server.js                 # Servidor principal
+│   ├── manage-ports.js
+│   ├── test-security.js
+│   ├── package.json
+│   └── TOKEN.txt
+├── dashboard/                     # Painel de controle
+│   ├── src/
+│   │   └── server.js             # API REST
+│   ├── public/
+│   │   ├── index.html            # Painel Administrativo (com login)
+│   │   ├── view.html             # Visualização Pública (sem login)
+│   │   ├── css/styles.css        # Estilos compartilhados
+│   │   └── js/
+│   │       ├── app.js            # Lógica Administrativa
+│   │       └── view-app.js       # Lógica Pública
+│   ├── data/
+│   │   ├── servers-config.json   # Dados de servidores
+│   │   └── users.json            # Usuários autorizados
+│   └── package.json
+├── start.sh                       # Script de controle
+├── README.md                      # Este arquivo
+└── CHANGELOG.md                   # Histórico
 ```
+
+## 🎯 Funcionalidades
+
+### Extensão Chrome (secure-p2p-chat/)
+- ✅ Chat criptografado ponta a ponta
+- ✅ Conexão WebRTC direto entre navegadores
+- ✅ Criptografia assimétrica (RSA)
+- ✅ Suporte a mídia (vídeo/áudio)
+- ✅ Interface simples e intuitiva
+
+### Servidor (server/)
+- ✅ Sinalização WebRTC via WebSocket
+- ✅ Gerenciamento de tokens
+- ✅ Escalabilidade horizontal
+- ✅ Sem dados de chat no servidor (E2E)
+- ✅ Teste de segurança integrado
+
+### Dashboard (dashboard/)
+- ✅ Duas interfaces separadas:
+  - 🔐 **Painel Administrativo** (index.html): Adicionar/editar/deletar servidores (requer login)
+  - 🌐 **Página Pública** (view.html): Visualizar servidores disponíveis (sem autenticação)
+- ✅ Gerenciar servidores WebSocket
+- ✅ Visualizar status e estatísticas
+- ✅ CRUD de servidores (apenas administradores)
+- ✅ Copiar tokens facilmente
+- ✅ Interface responsiva
+- ✅ API REST completa
+- ✅ Autenticação por sessão com tokens
+- ✅ Controle de acesso baseado em usuários
 
 ---
 
-## ✨ Funcionalidades
+## 🔐 Acesso ao Dashboard
 
-### Core Features
+### 🌐 Interface Pública (Qualquer um pode acessar)
+```
+http://localhost:3000/view.html
+```
+- Visualizar lista de servidores
+- Filtrar por status (Ativo, Inativo, Standby)
+- Ver detalhes de cada servidor
+- Sem necessidade de login
 
-- ✅ **Modal Editável** - Interface bonita para escolher nome
-- ✅ **ID Imutável** - Gerado pelo servidor, nunca muda
-- ✅ **Nome Editável** - Você escolhe e pode alterar
-- ✅ **Armazenamento Local** - localStorage para nomes
-- ✅ **Armazenamento Sincronizado** - Chrome Storage para ID
-- ✅ **Exibição em Header** - "Seu ID: abc... (Alice) ✏️"
-- ✅ **Exibição em Mensagens** - "📤 Você (Alice)" e "📥 Bob"
-- ✅ **Exibição em Imagens** - Mesmo padrão das mensagens
+### 🔐 Painel Administrativo (Apenas autorizados)
+```
+http://localhost:3000
+```
+- Requer login com credenciais
+- Criar novos servidores
+- Editar servidores existentes
+- Deletar servidores
+- Gerenciar lista de servidores
 
-### Características Avançadas
+**Credenciais Padrão:**
+| Usuário | Senha | Função |
+|---------|-------|--------|
+| admin | admin123 | Administrador |
+| gerente | gerente123 | Gerente |
 
-- ✅ Suporte a emoji e caracteres especiais
-- ✅ Diferentes nomes por computador (mesmo ID sincronizado)
-- ✅ Persistência entre sessões
-- ✅ Sem impacto na criptografia
-- ✅ Segurança garantida
-
----
-
-## 🚀 Quick Start (5 minutos)
-
-### Para Usar Imediatamente
+**Para Use Imediatamente**
 
 1. **Abra a extensão**
 2. **Clique em ✏️** ao lado do ID

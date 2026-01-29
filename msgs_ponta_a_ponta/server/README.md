@@ -202,7 +202,8 @@ DISABLE_DEFLATE=true npm start
 - **CPU**: Negligível (apenas retransmissão de mensagens)
 - **Banda**: ~1KB/cliente/segundo (heartbeat + signaling)
 
-### Para 10.000 clientes:
+### Para 10.000 clientes
+
 - Memória: ~1GB + 100MB para clientes
 - Recomendado: Servidor com 2GB RAM, 2 vCPUs
 

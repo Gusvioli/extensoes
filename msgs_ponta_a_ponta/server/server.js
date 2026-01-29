@@ -7,6 +7,9 @@ const fs = require("fs");
 const path = require("path");
 let WebSocket;
 
+// Importar módulo do dashboard (novo local)
+const { initDashboard } = require("../dashboard/src/server.js");
+
 try {
   WebSocket = require("ws");
 } catch (e) {
@@ -123,385 +126,206 @@ function createTokenServer(httpPort) {
       padding: 20px;
     }
     .container { 
-      max-width: 700px;
+      max-width: 500px;
       background: white; 
       padding: 40px; 
-      border-radius: 12px; 
+      border-radius: 16px; 
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       animation: slideIn 0.5s ease;
+      text-align: center;
     }
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    h1 { color: #333; margin-bottom: 10px; font-size: 32px; }
-    .status { color: #28a745; font-weight: bold; margin-bottom: 20px; }
-    .section { margin: 30px 0; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+    .emoji { font-size: 60px; margin-bottom: 20px; }
+    h1 { 
+      color: #333; 
+      margin-bottom: 10px; 
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .status { 
+      color: #28a745; 
+      font-weight: bold; 
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+    .section { 
+      margin: 30px 0; 
+      padding: 20px 0;
+      border-bottom: 1px solid #eee;
+    }
     .section:last-child { border-bottom: none; }
-    h2 { color: #667eea; font-size: 18px; margin: 15px 0; }
+    h2 { 
+      color: #667eea; 
+      font-size: 18px; 
+      margin: 15px 0;
+      font-weight: 600;
+    }
     .token-box { 
-      background: #f8f9fa; 
-      padding: 15px; 
-      border-radius: 8px; 
+      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+      padding: 20px; 
+      border-radius: 10px; 
       font-family: 'Courier New', monospace;
       word-break: break-all;
-      border-left: 4px solid #667eea;
-      margin: 10px 0;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .server-info {
-      background: #e7f3ff;
-      padding: 15px;
-      border-radius: 8px;
-      margin: 10px 0;
-      border-left: 4px solid #0066cc;
-      font-size: 14px;
-    }
-    .server-info code {
-      background: white;
-      padding: 2px 6px;
-      border-radius: 3px;
+      border: 2px dashed #667eea;
+      margin: 20px 0;
+      font-size: 16px;
+      line-height: 1.6;
       font-weight: bold;
-    }
-    .button-group {
-      display: flex;
-      gap: 10px;
-      margin: 15px 0;
-      flex-wrap: wrap;
+      color: #333;
     }
     button {
-      flex: 1;
-      min-width: 150px;
-      padding: 12px 20px;
+      width: 100%;
+      padding: 14px 20px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: bold;
       transition: all 0.3s;
+      margin: 10px 0;
     }
     .copy-btn { 
-      background: #28a745; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
     }
     .copy-btn:hover { 
-      background: #218838;
       transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
     }
-    .secondary-btn {
-      background: #6c757d;
-      color: white;
+    .copy-btn:active {
+      transform: translateY(0);
     }
-    .secondary-btn:hover {
-      background: #5a6268;
-    }
-    .instructions {
-      background: #fff3cd;
-      padding: 20px;
-      border-radius: 8px;
-      border-left: 4px solid #ffc107;
-      margin: 15px 0;
-    }
-    .instructions ol {
-      margin-left: 20px;
-      line-height: 1.8;
-    }
-    .instructions li {
-      margin-bottom: 8px;
-    }
-    .two-users {
-      background: #f0f7ff;
-      padding: 20px;
-      border-radius: 8px;
-      border: 2px dashed #0066cc;
-      margin: 20px 0;
-    }
-    .user-box {
-      display: inline-block;
-      width: 48%;
-      background: white;
-      padding: 15px;
+    .step {
+      background: #f8f9fa;
+      padding: 12px;
       border-radius: 6px;
-      margin: 5px 1%;
-      text-align: center;
-      border: 2px solid #667eea;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      text-align: left;
     }
-    .user-box h3 { color: #667eea; margin-bottom: 10px; }
-    .step { 
-      background: #f8f9fa; 
-      padding: 10px; 
-      border-radius: 4px;
-      margin: 5px 0;
-      font-size: 13px;
-    }
-    code {
-      background: #f5f5f5;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 13px;
+    .step strong {
+      color: #667eea;
     }
     .alert {
-      padding: 15px;
-      border-radius: 6px;
-      margin: 15px 0;
-    }
-    .alert-info {
       background: #cfe2ff;
       border-left: 4px solid #0066cc;
       color: #084298;
-    }
-    .alert-warning {
-      background: #fff3cd;
-      border-left: 4px solid #ffc107;
-      color: #664d03;
-    }
-    .badge {
-      display: inline-block;
-      background: #667eea;
-      color: white;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: bold;
-      margin: 5px 0;
-    }
-    .endpoint-table {
-      width: 100%;
-      border-collapse: collapse;
+      padding: 15px;
+      border-radius: 6px;
       margin: 15px 0;
-    }
-    .endpoint-table th, .endpoint-table td {
-      border: 1px solid #ddd;
-      padding: 10px;
       text-align: left;
+      font-size: 14px;
     }
-    .endpoint-table th {
-      background: #667eea;
-      color: white;
+    .faq {
+      text-align: left;
+      margin: 20px 0;
     }
-    .endpoint-table td code {
-      display: block;
+    .faq-item {
+      margin: 12px 0;
+      padding: 12px;
       background: #f8f9fa;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .faq-item:hover {
+      background: #e9ecef;
+    }
+    .faq-q {
+      font-weight: bold;
+      color: #333;
+      font-size: 14px;
+    }
+    .faq-a {
+      color: #666;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+    .faq-item.open .faq-a {
+      display: block;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🔐 P2P Secure Chat</h1>
-    <p class="status">✅ Servidor ativo e pronto para usar</p>
+    <div class="emoji">🔐</div>
+    <h1>Chat Seguro</h1>
+    <p class="status">✅ Pronto para usar!</p>
     
-    <!-- ===== SEÇÃO TOKEN ===== -->
+    <!-- TOKEN -->
     <div class="section">
-      <h2>🔑 Token de Autenticação</h2>
+      <h2>📝 Seu Código de Acesso</h2>
+      <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Compartilhe esse código com a pessoa que quer conversar com você:</p>
       <div class="token-box" id="token">${config.authToken}</div>
-      <div class="button-group">
-        <button class="copy-btn" onclick="copyToken()">📋 Copiar Token</button>
-        <button class="secondary-btn" onclick="copyAsJSON()">📄 Copiar JSON</button>
+      <button class="copy-btn" onclick="copyToken()">📋 Copiar Código</button>
+    </div>
+
+    <!-- INSTRUÇÕES SIMPLES -->
+    <div class="section">
+      <h2>⚡ Como Usar (4 passos)</h2>
+      <div class="step">
+        <strong>1️⃣ Você (pessoa que começou aqui)</strong><br>
+        Copie o código acima
+      </div>
+      <div class="step">
+        <strong>2️⃣ Envie para seu amigo</strong><br>
+        WhatsApp, email, telegram... como preferir
+      </div>
+      <div class="step">
+        <strong>3️⃣ Seu amigo abre a extensão Chrome</strong><br>
+        Instala a extensão "P2P Secure Chat"
+      </div>
+      <div class="step">
+        <strong>4️⃣ Seu amigo cola o código</strong><br>
+        Na extensão, coloca o código no campo "Token" e clica conectar
       </div>
     </div>
 
-    <!-- ===== INSTRUÇÕES RÁPIDAS ===== -->
-    <div class="section">
-      <h2>⚡ Guia Rápido (30 segundos)</h2>
-      <div class="instructions">
-        <ol>
-          <li><strong>Alice</strong> (aqui): Copie o token acima</li>
-          <li>Envie para <strong>Bob</strong> (WhatsApp, email, etc)</li>
-          <li><strong>Bob</strong> instala a extensão no Chrome</li>
-          <li><strong>Bob</strong> abre a extensão e vê "URL do Servidor"</li>
-          <li><strong>Bob</strong> muda para: <code>ws://${hostname.replace(":" + (config.port + 1000), "")}</code></li>
-          <li><strong>Bob</strong> cola o token no campo "Token de Autenticação"</li>
-          <li>Clica "Autenticar" e depois "Conectar"</li>
-          <li>Pronto! Vocês estão conectados 🎉</li>
-        </ol>
-      </div>
+    <!-- AVISO -->
+    <div class="alert">
+      <strong>💡 Dica:</strong> Deixe essa página aberta enquanto estiver usando o chat!
     </div>
 
-    <!-- ===== CENÁRIO DOIS USUÁRIOS ===== -->
+    <!-- FAQ SIMPLES -->
     <div class="section">
-      <h2>👥 Conectando Dois Usuários</h2>
-      <div class="two-users">
-        <div class="user-box">
-          <h3>👤 Usuário 1 (Alice)</h3>
-          <p>Inicia o servidor</p>
-          <div class="step">npm start</div>
-          <p>Obtém token</p>
-          <div class="step">${config.authToken}</div>
-          <p>Envia para Bob</p>
+      <h2>❓ Dúvidas?</h2>
+      <div class="faq">
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-q">É seguro?</div>
+          <div class="faq-a">Sim! Suas mensagens são criptografadas. Ninguém consegue ler.</div>
         </div>
-        <div class="user-box">
-          <h3>👤 Usuário 2 (Bob)</h3>
-          <p>Recebe token</p>
-          <div class="step">${config.authToken}</div>
-          <p>Instala extensão</p>
-          <div class="step">Chrome Web Store</div>
-          <p>Coloca URL + Token</p>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-q">Preciso criar conta?</div>
+          <div class="faq-a">Não! Instala a extensão e pronto. Sem cadastro, sem senhas.</div>
+        </div>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-q">Funciona em celular?</div>
+          <div class="faq-a">Só no Chrome de computador por enquanto.</div>
+        </div>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-q">O que é esse código?</div>
+          <div class="faq-a">É uma senha para conectar com segurança. Muda toda vez que você reinicia.</div>
         </div>
       </div>
-    </div>
-
-    <!-- ===== CONFIGURAÇÃO REMOTA ===== -->
-    <div class="section">
-      <h2>🌐 Usando em Computadores Diferentes</h2>
-      <div class="alert alert-info">
-        <strong>Situação:</strong> Alice está em casa rodando servidor em seu PC. Bob quer se conectar de outro lugar.
-      </div>
-      
-      <h3 style="margin-top: 15px; color: #333;">Passo 1: Alice (Servidor)</h3>
-      <div class="step">
-        <code>cd server && npm start</code><br>
-        Anota o IP de sua máquina (ex: 192.168.1.100)
-      </div>
-
-      <h3 style="color: #333;">Passo 2: Bob (Cliente)</h3>
-      <div class="step">
-        Abre a extensão Chrome
-      </div>
-      <div class="step">
-        Campo "URL do Servidor": <code>ws://192.168.1.100:8080</code><br>
-        (substitui 192.168.1.100 pelo IP de Alice)
-      </div>
-      <div class="step">
-        Campo "Token": <code>${config.authToken}</code>
-      </div>
-      <div class="step">
-        Clica "Autenticar" → "Conectar"
-      </div>
-
-      <div class="alert alert-warning">
-        <strong>⚠️ Importante:</strong> O servidor precisa estar acessível de fora. Se estiver atrás de firewall/NAT, pode precisar de port forwarding ou usar a nuvem.
-      </div>
-    </div>
-
-    <!-- ===== ENDPOINTS ===== -->
-    <div class="section">
-      <h2>📡 Endpoints do Servidor</h2>
-      <table class="endpoint-table">
-        <tr>
-          <th>Serviço</th>
-          <th>URL</th>
-          <th>Uso</th>
-        </tr>
-        <tr>
-          <td><strong>WebSocket</strong></td>
-          <td><code>ws://${hostname.replace(":" + (config.port + 1000), "")}</code></td>
-          <td>Sinalização P2P</td>
-        </tr>
-        <tr>
-          <td><strong>Página Token</strong></td>
-          <td><code>http://${hostname}</code></td>
-          <td>Esta página</td>
-        </tr>
-        <tr>
-          <td><strong>API JSON</strong></td>
-          <td><code>http://${hostname}/token</code></td>
-          <td>Dados em JSON</td>
-        </tr>
-      </table>
-    </div>
-
-    <!-- ===== COMPARTILHAMENTO ===== -->
-    <div class="section">
-      <h2>🔗 Compartilhar com Outros</h2>
-      <div class="alert alert-info">
-        <strong>Quer enviar o token para alguém?</strong> Use um dos formatos abaixo:
-      </div>
-      
-      <h3 style="color: #333;">Simples (recomendado)</h3>
-      <div class="step" style="cursor: pointer;" onclick="copySimple()">
-        <strong>Token:</strong> ${config.authToken}<br>
-        <small>Clique para copiar</small>
-      </div>
-
-      <h3 style="color: #333;">Com instruções</h3>
-      <div class="step" style="cursor: pointer;" onclick="copyWithInstructions()">
-        <strong>Cole isso em um email/WhatsApp:</strong><br>
-        <small>Clique para copiar</small>
-      </div>
-
-      <h3 style="color: #333;">Completo (URL + Token)</h3>
-      <div class="step" style="cursor: pointer;" onclick="copyComplete()">
-        <strong>URL do Servidor:</strong> ws://${hostname.replace(":" + (config.port + 1000), "")}<br>
-        <strong>Token:</strong> ${config.authToken}<br>
-        <small>Clique para copiar</small>
-      </div>
-    </div>
-
-    <!-- ===== FAQ ===== -->
-    <div class="section">
-      <h2>❓ Perguntas Frequentes</h2>
-      
-      <h3 style="color: #333; margin-top: 10px;">Posso usar de casa?</h3>
-      <p>Sim, mas ambos precisam estar na mesma rede WiFi ou usar o IP externo com port forwarding.</p>
-
-      <h3 style="color: #333; margin-top: 10px;">E se estiverem em redes diferentes?</h3>
-      <p>Use um servidor remoto (cloud/VPS) em vez de localhost. Deploy na nuvem!</p>
-
-      <h3 style="color: #333; margin-top: 10px;">O token é seguro?</h3>
-      <p>Sim! 128 bits de entropia. Mas não compartilhe em público (como tweets).</p>
-
-      <h3 style="color: #333; margin-top: 10px;">Preciso renovar o token?</h3>
-      <p>Novo token a cada reinicialização do servidor (automático). Para usar o mesmo, use .env</p>
     </div>
 
   </div>
 
   <script>
-    const token = document.getElementById('token').innerText;
-    const wsUrl = '${wsUrl}';
-    const serverUrl = 'ws://${hostname.replace(":" + (config.port + 1000), "")}';
-
     function copyToken() {
+      const token = document.getElementById('token').innerText;
       navigator.clipboard.writeText(token).then(() => {
-        showNotification('✅ Token copiado!');
+        showNotification('✅ Código copiado!');
       });
     }
 
-    function copyAsJSON() {
-      const json = JSON.stringify({
-        token: token,
-        wsUrl: wsUrl,
-        requiresAuth: true
-      }, null, 2);
-      navigator.clipboard.writeText(json).then(() => {
-        showNotification('✅ JSON copiado!');
-      });
-    }
-
-    function copySimple() {
-      navigator.clipboard.writeText(token).then(() => {
-        showNotification('✅ Copie e compartilhe o token!');
-      });
-    }
-
-    function copyWithInstructions() {
-      const text = \`🔐 P2P Secure Chat
-
-Token de Autenticação: \${token}
-
-URL do Servidor: \${serverUrl}
-
-Como usar:
-1. Instale a extensão Chrome
-2. Coloque URL: \${serverUrl}
-3. Coloque Token: \${token}
-4. Clique "Autenticar" e "Conectar"
-
-Pronto! Vocês estão conectados 🎉\`;
-      navigator.clipboard.writeText(text).then(() => {
-        showNotification('✅ Compartilhe no WhatsApp/Email!');
-      });
-    }
-
-    function copyComplete() {
-      const text = \`URL do Servidor: \${serverUrl}
-Token: \${token}\`;
-      navigator.clipboard.writeText(text).then(() => {
-        showNotification('✅ Dados do servidor copiados!');
-      });
+    function toggleFaq(element) {
+      element.classList.toggle('open');
     }
 
     function showNotification(msg) {
@@ -514,15 +338,15 @@ Token: \${token}\`;
         background: #28a745;
         color: white;
         padding: 12px 20px;
-        border-radius: 6px;
+        border-radius: 8px;
         animation: slideInRight 0.3s ease;
         z-index: 1000;
+        font-weight: bold;
       \`;
       document.body.appendChild(notif);
-      setTimeout(() => notif.remove(), 3000);
+      setTimeout(() => notif.remove(), 2000);
     }
 
-    // Adicionar estilos para animação
     const style = document.createElement('style');
     style.textContent = \`
       @keyframes slideInRight {
@@ -535,7 +359,7 @@ Token: \${token}\`;
 </body>
 </html>
       `;
-      res.writeHead(200);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
     } else {
       res.writeHead(404);
@@ -619,6 +443,10 @@ async function initServer() {
           "info",
         );
       });
+
+      // Inicia Dashboard de Servidores (comentado - inicie manualmente ou via start.sh)
+      // const dashboardPort = config.port + 2000; // Usa porta diferente (10080 para 8080)
+      // initDashboard(dashboardPort);
 
       // Setup dos handlers
       setupHandlers();

@@ -1,0 +1,25 @@
+{
+  "name": "p2p-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard para gerenciar servidores de sinalização WebSocket P2P",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "sync-token": "node scripts/sync-token.js",
+    "list-servers": "node scripts/list-servers.js",
+    "list-servers:admin": "node scripts/list-servers.js --role=admin",
+    "list-servers:json": "node scripts/list-servers.js --format=json",
+    "list-servers:csv": "node scripts/list-servers.js --format=csv",
+    "watch-token": "node scripts/watch-token.js"
+  },
+  "keywords": [
+    "p2p",
+    "webrtc",
+    "dashboard",
+    "servers",
+    "websocket"
+  ],
+  "author": "",
+  "license": "ISC"
+}

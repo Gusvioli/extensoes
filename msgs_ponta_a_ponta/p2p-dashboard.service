@@ -1,0 +1,30 @@
+[Unit]
+Description=P2P Chat Dashboard Server
+Documentation=file:///home/gusvioli/Documentos/extencoes_especiais/msgs_ponta_a_ponta/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=gusvioli
+WorkingDirectory=/home/gusvioli/Documentos/extencoes_especiais/msgs_ponta_a_ponta/dashboard
+Environment="NODE_ENV=production"
+
+# Script que executa: node src/server.js
+ExecStart=/usr/bin/node src/server.js
+
+# Reinicia automaticamente se cair
+Restart=on-failure
+RestartSec=10s
+
+# Limites de recursos
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=p2p-dashboard
+
+# Killing timeout
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
