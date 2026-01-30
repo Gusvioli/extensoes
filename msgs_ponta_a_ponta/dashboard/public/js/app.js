@@ -3,6 +3,7 @@
 let servers = [];
 let currentFilter = "all";
 let searchTerm = "";
+let currentViewMode = localStorage.getItem("adminViewMode") || "grid";
 let currentSort = "name";
 let editingServerId = null;
 let currentUser = null; // Armazenará o objeto do usuário: { name, username, role }
@@ -39,8 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <h2 id="confirmation-title">Confirmar Ação</h2>
         <p id="confirmation-message">Você tem certeza?</p>
         <div class="modal-actions">
-          <button id="confirm-btn" class="btn btn-danger">Confirmar</button>
-          <button id="cancel-btn" class="btn btn-secondary">Cancelar</button>
+          <button id="cancel-btn" class="btn-edit">Cancelar</button>
+          <button id="confirm-btn" class="btn-delete">Confirmar</button>
         </div>
       </div>
     </div>
@@ -53,16 +54,16 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="modal-content">
         <div class="modal-header">
             <h2>Configurações</h2>
-            <button class="close-btn" id="close-settings-btn" style="font-size: 24px; border: none; background: none; cursor: pointer;">&times;</button>
+            <button class="close-btn" id="close-settings-btn">&times;</button>
         </div>
         <form id="settings-form">
             <div class="form-group">
                 <label for="discovery-url">URL de Descoberta (JSON Token)</label>
-                <input type="text" id="discovery-url" placeholder="http://localhost:9080/token" required style="width: 100%; padding: 8px; margin-top: 5px;">
-                <small style="color: #666; display: block; margin-top: 5px;">URL para sincronização automática do token do servidor.</small>
+                <input type="text" id="discovery-url" placeholder="http://localhost:9080/token" required>
+                <small style="display: block; margin-top: 8px; font-size: 0.8em; color: var(--text-muted); font-weight: 500;">URL para sincronização automática do token do servidor.</small>
             </div>
-            <div class="form-actions" style="margin-top: 20px; text-align: right;">
-                <button type="submit" class="btn btn-primary">Salvar Configurações</button>
+            <div class="modal-actions">
+                <button type="submit" class="btn-main">Salvar Configurações</button>
             </div>
         </form>
       </div>
@@ -84,23 +85,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- FIX: Injetar Modal de Login se não existir ---
   if (!document.getElementById("login-modal")) {
     const loginModalHTML = `
-      <div id="login-modal" class="modal" style="background: rgba(0,0,0,0.85); z-index: 2000;">
-        <div class="modal-content" style="max-width: 350px;">
-          <div class="modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 0;">
-            <h2 style="color: #333;">🔐 Acesso Restrito</h2>
+      <div id="login-modal" class="modal" style="z-index: 10000;">
+        <div class="modal-content" style="max-width: 400px;">
+          <div class="modal-header" style="justify-content: center;">
+            <h2>🔐 Acesso Restrito</h2>
           </div>
-          <form id="login-form" style="margin-top: 20px;">
+          <form id="login-form" class="mt-2">
             <div class="form-group">
               <label for="login-username">Usuário</label>
-              <input type="text" id="login-username" required class="form-control" autocomplete="username">
+              <input type="text" id="login-username" required autocomplete="username">
             </div>
-            <div class="form-group">
+            <div class="form-group mt-2">
               <label for="login-password">Senha</label>
-              <input type="password" id="login-password" required class="form-control" autocomplete="current-password">
+              <input type="password" id="login-password" required autocomplete="current-password">
             </div>
-            <div id="login-error" style="color: #dc3545; display: none; margin-bottom: 15px; font-size: 0.9em; text-align: center; background: #ffe6e6; padding: 8px; border-radius: 4px;"></div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Entrar</button>
+            <div id="login-error" class="alert-box mt-2"></div>
+            <div class="modal-actions" style="justify-content: center;">
+              <button type="submit" class="btn-main" style="width: 100%; justify-content: center;">Entrar</button>
             </div>
           </form>
         </div>
@@ -134,8 +135,22 @@ document.addEventListener("DOMContentLoaded", () => {
             <option value="status">Status</option>
         </select>
       </div>
+      <div class="view-toggle-wrapper" style="margin-left: 10px;">
+        <button id="view-toggle-btn" class="filter-btn" title="Alternar Visualização">
+          ${currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista"}
+        </button>
+      </div>
     `;
     filtersContainer.insertAdjacentHTML("beforeend", searchHTML);
+
+    // Listener para toggle de visualização
+    document.getElementById("view-toggle-btn").addEventListener("click", () => {
+      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
+      localStorage.setItem("adminViewMode", currentViewMode);
+      document.getElementById("view-toggle-btn").innerHTML =
+        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
+      renderServers();
+    });
   }
 
   // --- FIX: Injetar Botão de Logout se não existir ---
@@ -143,10 +158,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const header = document.querySelector("header");
     if (header) {
       // Tenta inserir no header
-      const logoutBtnHTML = `<button id="logout-btn" class="btn btn-secondary" style="display: none; margin-left: 10px; font-size: 14px; padding: 6px 12px;">Sair</button>`;
-      const h1 = header.querySelector("h1");
+      const logoutBtnHTML = `<button id="logout-btn" class="btn-edit" style="display: none; margin-left: 15px; font-size: 14px; padding: 8px 16px;">Sair</button>`;
+      const h1 = header.querySelector("h1") || header;
       if (h1) h1.insertAdjacentHTML("afterend", logoutBtnHTML);
     }
+  }
+
+  // --- FIX: Injetar Footer se não existir ---
+  if (!document.querySelector("footer")) {
+    const footerHTML = `
+      <footer class="app-footer">
+        <div class="footer-content">
+          <div style="font-size: 1.5rem; font-weight: 900; letter-spacing: 0.1em;">P2P SECURE CHAT</div>
+          <div style="display: flex; gap: 15px; font-weight: bold; font-size: 0.9rem;">
+            <span>DASHBOARD</span>
+            <span>•</span>
+            <span>ADMIN</span>
+            <span>•</span>
+            <span>${new Date().getFullYear()}</span>
+          </div>
+          <div style="font-size: 0.8rem; font-weight: bold;">
+            SYSTEM: <span class="badge">ONLINE</span>
+          </div>
+        </div>
+      </footer>
+    `;
+    document.body.insertAdjacentHTML("beforeend", footerHTML);
   }
 
   // --- FIX: Injetar Modal de Servidor se não existir ---
@@ -156,73 +193,73 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="modal-content">
           <div class="modal-header">
             <h2 id="modal-title">Adicionar/Editar Servidor</h2>
-            <button class="close-btn" id="close-server-modal-btn" style="font-size: 24px; border: none; background: none; cursor: pointer;">&times;</button>
+            <button class="close-btn" id="close-server-modal-btn">&times;</button>
           </div>
           <form id="server-form">
             <div class="form-group">
               <label for="server-name">Nome do Servidor</label>
-              <input type="text" id="server-name" required style="width: 100%; padding: 8px; margin-bottom: 10px;">
+              <input type="text" id="server-name" required>
             </div>
-            <div class="form-group">
+            <div class="form-group mt-2">
               <label for="server-description">Descrição</label>
-              <textarea id="server-description" style="width: 100%; padding: 8px; margin-bottom: 10px;"></textarea>
+              <textarea id="server-description" rows="2"></textarea>
             </div>
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+            <div class="grid-cols-3">
               <div class="form-group">
                 <label for="server-host">Host (IP/Domínio)</label>
-                <input type="text" id="server-host" required style="width: 100%; padding: 8px;">
+                <input type="text" id="server-host" required>
               </div>
               <div class="form-group">
                 <label for="server-port">Porta</label>
-                <input type="number" id="server-port" required style="width: 100%; padding: 8px;">
+                <input type="number" id="server-port" required>
               </div>
               <div class="form-group">
                 <label for="server-protocol">Protocolo</label>
-                <select id="server-protocol" style="width: 100%; padding: 8px;">
+                <select id="server-protocol">
                   <option value="ws">WS</option>
                   <option value="wss">WSS</option>
                 </select>
               </div>
             </div>
-            <div class="form-group">
+            <div class="form-group mt-2">
               <label for="server-token">Token de Autenticação</label>
-              <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="text" id="server-token" style="flex-grow: 1; padding: 8px;" placeholder="Deixe vazio para gerar automaticamente">
-                <button type="button" id="generate-token-btn" class="btn btn-secondary" style="width: auto; padding: 0 10px;" title="Gerar Novo">🎲</button>
+              <div class="flex gap-2 mb-2">
+                <input type="text" id="server-token" style="flex-grow: 1;" placeholder="Deixe vazio para gerar automaticamente">
+                <button type="button" id="generate-token-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Gerar Novo">🎲</button>
               </div>
             </div>
-            <div class="form-group">
+            <div class="form-group mt-2">
               <label for="server-urltoken">URL do Token (JSON)</label>
-              <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="text" id="server-urltoken" style="flex-grow: 1; padding: 8px;" placeholder="http://localhost:9080/token">
-                <button type="button" id="test-url-btn" class="btn btn-secondary" style="width: auto; padding: 0 10px;" title="Testar Conexão">⚡</button>
+              <div class="flex gap-2 mb-2">
+                <input type="text" id="server-urltoken" style="flex-grow: 1;" placeholder="http://localhost:9080/token">
+                <button type="button" id="test-url-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Testar Conexão">⚡</button>
               </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+            <div class="grid-cols-3" style="grid-template-columns: 1fr 1fr 1fr;">
               <div class="form-group">
                 <label for="server-region">Região</label>
-                <input type="text" id="server-region" style="width: 100%; padding: 8px;">
+                <input type="text" id="server-region">
               </div>
               <div class="form-group">
                 <label for="server-max-clients">Max Clientes</label>
-                <input type="number" id="server-max-clients" value="10000" style="width: 100%; padding: 8px;">
+                <input type="number" id="server-max-clients" value="10000">
               </div>
               <div class="form-group">
                 <label for="server-status">Status</label>
-                <select id="server-status" style="width: 100%; padding: 8px;">
+                <select id="server-status">
                   <option value="active">Ativo</option>
                   <option value="inactive">Inativo</option>
                   <option value="standby">Standby</option>
                 </select>
               </div>
             </div>
-            <div class="form-group">
+            <div class="form-group mt-2">
               <label for="server-notes">Notas Internas</label>
-              <textarea id="server-notes" style="width: 100%; padding: 8px; margin-bottom: 10px;"></textarea>
+              <textarea id="server-notes" rows="2"></textarea>
             </div>
-            <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
-              <button type="button" class="btn btn-secondary" id="cancel-server-modal-btn">Cancelar</button>
-              <button type="submit" class="btn btn-primary">Salvar Servidor</button>
+            <div class="modal-actions">
+              <button type="button" class="btn-edit" id="cancel-server-modal-btn">Cancelar</button>
+              <button type="submit" class="btn-main">Salvar Servidor</button>
             </div>
           </form>
         </div>
@@ -238,10 +275,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tokenGroup) {
           const urlTokenHTML = `
                 <div class="form-group">
-                  <label for="server-urltoken">URL do Token (JSON)</label>
-                  <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                    <input type="text" id="server-urltoken" style="flex-grow: 1; padding: 8px;" placeholder="http://localhost:9080/token">
-                    <button type="button" id="test-url-btn" class="btn btn-secondary" style="width: auto; padding: 0 10px;" title="Testar Conexão">⚡</button>
+                  <label for="server-urltoken" class="mt-2">URL do Token (JSON)</label>
+                  <div class="flex gap-2 mb-2">
+                    <input type="text" id="server-urltoken" style="flex-grow: 1;" placeholder="http://localhost:9080/token">
+                    <button type="button" id="test-url-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Testar Conexão">⚡</button>
                   </div>
                 </div>`;
           tokenGroup.insertAdjacentHTML("afterend", urlTokenHTML);
@@ -323,7 +360,7 @@ function showLogin() {
   const loginModal = document.getElementById("login-modal");
   const dashboardContainer = document.getElementById("dashboard-container");
 
-  if (loginModal) loginModal.style.display = "flex"; // Flex para centralizar
+  if (loginModal) loginModal.classList.add("show");
   if (dashboardContainer) dashboardContainer.style.display = "none";
 
   const loginForm = document.getElementById("login-form");
@@ -337,7 +374,7 @@ function showLogin() {
 }
 
 function showDashboard() {
-  document.getElementById("login-modal").style.display = "none";
+  document.getElementById("login-modal").classList.remove("show");
   document.getElementById("dashboard-container").style.display = "block";
 
   if (currentUser) {
@@ -388,6 +425,7 @@ function handleLogin(e) {
       } else {
         document.getElementById("login-error").textContent = data.error;
         document.getElementById("login-error").style.display = "block";
+        // A classe .alert-box já cuida do estilo
       }
     });
 }
@@ -447,9 +485,9 @@ function setupEventListeners() {
   if (headerTitle && !document.getElementById("settings-btn")) {
     const settingsBtn = document.createElement("button");
     settingsBtn.id = "settings-btn";
-    settingsBtn.className = "btn btn-secondary";
+    settingsBtn.className = "btn-edit";
     settingsBtn.innerHTML = "⚙️ Configurar";
-    settingsBtn.style.cssText =
+    settingsBtn.style.cssText = // Mantendo apenas posicionamento específico do header
       "margin-left: auto; font-size: 14px; padding: 8px 12px; display: none; align-items: center; gap: 5px;";
     settingsBtn.onclick = openSettingsModal;
     headerTitle.appendChild(settingsBtn);
@@ -547,21 +585,66 @@ function renderServers() {
     return;
   }
 
-  container.style.display = "grid";
+  // Configurar container baseado no modo de visualização
+  if (currentViewMode === "list") {
+    container.className = "servers-list";
+    container.style.display = "flex";
+  } else {
+    container.className = "servers-grid";
+    container.style.display = "grid";
+  }
+
   emptyState.style.display = "none";
 
   container.innerHTML = filteredServers
     .map((server) => {
       const openUrl = getOpenUrl(server);
 
+      if (currentViewMode === "list") {
+        return `
+            <div class="server-list-item ${server.status}">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <span class="status-badge ${server.status}" style="margin:0; padding:4px 8px; font-size:0.8rem;">
+                        ${server.status === "active" ? "🟢" : server.status === "standby" ? "🟡" : "🔴"}
+                    </span>
+                    <div style="text-align:left;">
+                        <h3 class="server-name" style="font-size:1.1rem; margin:0;">${server.name}</h3>
+                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${server.host}:${server.port}</div>
+                    </div>
+                </div>
+
+                <div style="text-align:center;">
+                    <span class="protocol-value" style="font-size:0.9rem;">${server.protocol}</span>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">${server.region || "N/A"}</div>
+                </div>
+
+                <div style="text-align:center;">
+                    <span class="info-value" style="font-size:0.9rem;">
+                        <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
+                    </span>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">Clientes</div>
+                </div>
+
+                <div class="server-actions">
+                    <a href="${openUrl}" target="_blank" class="btn-main" title="Abrir URL Token">🔗</a>
+                    ${
+                      currentUser && currentUser.role === "admin"
+                        ? `<button class="btn-edit" onclick="editServer('${server.id}')" title="Editar">✏️</button>
+                           <button class="btn-delete" onclick="deleteServer('${server.id}')" title="Deletar">🗑️</button>`
+                        : ""
+                    }
+                </div>
+            </div>`;
+      }
+
       return `
         <div class="server-card ${server.status}">
-            <div class="status-badge ${server.status}">
+            <span class="status-badge ${server.status}">
                 ${server.status === "active" ? "🟢 Ativo" : server.status === "standby" ? "🟡 Em Standby" : "🔴 Inativo"}
-            </div>
+            </span>
 
-            <div class="server-name">${server.name}</div>
-            <p class="server-description">${server.description || "Sem descrição"}</p>
+            <h3 class="server-name">${server.name}</h3>
+            <p class="server-description">${server.description || "Sem descrição disponível."}</p>
 
             <div class="info-row">
                 <span class="info-label">Host:</span>
@@ -575,7 +658,7 @@ function renderServers() {
 
             <div class="info-row">
                 <span class="info-label">URL:</span>
-                <span class="info-value">${server.protocol}://${server.host}:${server.port}</span>
+                <span class="info-value protocol-value">${server.protocol}://${server.host}:${server.port}</span>
             </div>
 
             <div class="info-row">
@@ -612,9 +695,9 @@ function renderServers() {
               server.token !== "N/A" &&
               server.requiresAuth !== undefined &&
               server.requiresAuth !== null
-                ? `<div class="token-display">
-                ${server.token}
-                <button class="btn btn-copy" onclick="copyToken('${server.token}')" style="margin-top: 8px;">📋 Copiar</button>
+                ? `<div class="token-display mt-2">
+                <div class="mb-2">${server.token}</div>
+                <button class="btn-copy w-full" onclick="copyToken('${server.token}')">📋 Copiar Token</button>
             </div>`
                 : ""
             }

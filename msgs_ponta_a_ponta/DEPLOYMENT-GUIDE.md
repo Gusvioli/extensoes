@@ -3,6 +3,19 @@
 ## 🎯 Objetivo
 Você quer rodar o site/dashboard em uma máquina externa (VPS, servidor, domínio público).
 
+## ☁️ Opção Rápida: Render.com (PaaS)
+
+Se preferir não gerenciar um servidor VPS, você pode usar o Render.com:
+
+1. Faça fork do repositório no GitHub.
+2. No Render, crie um novo **Blueprint Instance**.
+3. Conecte seu repositório.
+4. O arquivo `render.yaml` configurará tudo automaticamente.
+
+*Nota: No Render, apenas o WebSocket funcionará. O Dashboard não será acessível externamente.*
+
+---
+
 ## 📋 Pré-requisitos
 
 - **VPS/Servidor** com Ubuntu 20.04+ (AWS, DigitalOcean, Linode, etc)

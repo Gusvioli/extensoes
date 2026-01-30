@@ -54,6 +54,7 @@ msgs_ponta_a_ponta/
 │   └── package.json
 ├── start.sh                       # Script de controle
 ├── README.md                      # Este arquivo
+├── render.yaml                    # Configuração de Deploy (Render.com)
 └── CHANGELOG.md                   # Histórico
 ```
 

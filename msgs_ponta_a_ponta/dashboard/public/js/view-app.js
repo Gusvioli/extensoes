@@ -4,6 +4,7 @@
 let servers = [];
 let currentFilter = "all";
 let searchTerm = "";
+let currentViewMode = localStorage.getItem("publicViewMode") || "grid";
 let currentSort = "name";
 
 // ===== INITIALIZATION =====
@@ -25,35 +26,37 @@ document.addEventListener("DOMContentLoaded", () => {
   // Injetar Modal de Conexão
   if (!document.getElementById("connect-modal")) {
     const modalHTML = `
-      <div id="connect-modal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
-        <div class="modal-content" style="background-color: #fefefe; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <span class="close-modal" style="position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer;">&times;</span>
-          <h2 style="margin-top: 0; color: #2c3e50;">🔗 Dados de Conexão</h2>
-          <p style="color: #666; margin-bottom: 15px;">Copie os dados abaixo para usar na sua extensão ou aplicação.</p>
+      <div id="connect-modal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>🔗 Dados de Conexão</h2>
+            <button class="close-modal-btn close-btn">&times;</button>
+          </div>
+          <p class="mb-4" style="font-weight: 500;">Copie os dados abaixo para usar na sua extensão ou aplicação.</p>
           
-          <div style="margin-bottom: 15px;">
-            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Nome do Servidor:</label>
-            <input type="text" id="modal-server-name" readonly style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+          <div class="form-group mb-4">
+            <label>Nome do Servidor:</label>
+            <input type="text" id="modal-server-name" readonly>
           </div>
 
-          <div style="margin-bottom: 15px;">
-            <label style="display: block; font-weight: bold; margin-bottom: 5px;">URL WebSocket:</label>
-            <div style="display: flex; gap: 5px;">
-              <input type="text" id="modal-ws-url" readonly style="flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-              <button onclick="copyInput('modal-ws-url', this)" style="padding: 8px 12px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Copiar</button>
+          <div class="form-group mb-4">
+            <label>URL WebSocket:</label>
+            <div class="flex gap-2">
+              <input type="text" id="modal-ws-url" readonly style="flex-grow: 1;">
+              <button onclick="copyInput('modal-ws-url', this)" class="btn-copy-connection" style="padding: 0 15px;">Copiar</button>
             </div>
           </div>
 
-          <div id="modal-token-group" style="margin-bottom: 20px;">
-            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Token de Autenticação:</label>
-            <div style="display: flex; gap: 5px;">
-              <input type="text" id="modal-token" readonly style="flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; font-family: monospace;">
-              <button onclick="copyInput('modal-token', this)" style="padding: 8px 12px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 4px;">Copiar</button>
+          <div id="modal-token-group" class="form-group mb-4">
+            <label>Token de Autenticação:</label>
+            <div class="flex gap-2">
+              <input type="text" id="modal-token" readonly style="flex-grow: 1; font-family: monospace;">
+              <button onclick="copyInput('modal-token', this)" class="btn-copy" style="padding: 0 15px;">Copiar</button>
             </div>
           </div>
 
-          <div style="text-align: right;">
-            <button class="close-modal-btn" style="padding: 8px 16px; cursor: pointer; background: #95a5a6; color: white; border: none; border-radius: 4px;">Fechar</button>
+          <div class="modal-actions">
+            <button class="close-modal-btn btn-main" style="width: 100%;">Fechar</button>
           </div>
         </div>
       </div>
@@ -67,12 +70,12 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     closeBtns.forEach((btn) => {
-      btn.onclick = () => (modal.style.display = "none");
+      btn.onclick = () => modal.classList.remove("show");
     });
 
     window.onclick = (event) => {
       if (event.target == modal) {
-        modal.style.display = "none";
+        modal.classList.remove("show");
       }
     };
   }
@@ -92,6 +95,11 @@ document.addEventListener("DOMContentLoaded", () => {
             <option value="port">Porta</option>
         </select>
       </div>
+      <div class="view-toggle-wrapper" style="margin-left: 10px;">
+        <button id="view-toggle-btn" class="filter-btn" title="Alternar Visualização">
+          ${currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista"}
+        </button>
+      </div>
     `;
     filtersContainer.insertAdjacentHTML("beforeend", controlsHTML);
 
@@ -104,6 +112,36 @@ document.addEventListener("DOMContentLoaded", () => {
       currentSort = e.target.value;
       renderServers();
     });
+
+    document.getElementById("view-toggle-btn").addEventListener("click", () => {
+      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
+      localStorage.setItem("publicViewMode", currentViewMode);
+      document.getElementById("view-toggle-btn").innerHTML =
+        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
+      renderServers();
+    });
+  }
+
+  // --- FIX: Injetar Footer se não existir ---
+  if (!document.querySelector("footer")) {
+    const footerHTML = `
+      <footer class="app-footer">
+        <div class="footer-content">
+          <div style="font-size: 1.5rem; font-weight: 900; letter-spacing: 0.1em;">P2P SECURE CHAT</div>
+          <div style="display: flex; gap: 15px; font-weight: bold; font-size: 0.9rem;">
+            <span>PUBLIC VIEW</span>
+            <span>•</span>
+            <span>MONITOR</span>
+            <span>•</span>
+            <span>${new Date().getFullYear()}</span>
+          </div>
+          <div style="font-size: 0.8rem; font-weight: bold;">
+            STATUS: <span class="badge">LIVE</span>
+          </div>
+        </div>
+      </footer>
+    `;
+    document.body.insertAdjacentHTML("beforeend", footerHTML);
   }
 });
 
@@ -122,7 +160,7 @@ function loadServers() {
     .catch((error) => {
       console.error("Erro ao carregar servidores:", error);
       document.getElementById("servers-grid").innerHTML =
-        '<div class="empty-state" style="grid-column: 1/-1;"><p style="font-size: 2em;">❌</p><h2>Erro ao carregar servidores</h2><p>Não foi possível conectar ao servidor. Tente novamente.</p></div>';
+        '<div class="empty-state"><p style="font-size: 2em;">❌</p><h2>Erro ao carregar servidores</h2><p>Não foi possível conectar ao servidor. Tente novamente.</p></div>';
     });
 }
 
@@ -174,7 +212,7 @@ function renderServers() {
   });
 
   if (displayServers.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;">
+    container.innerHTML = `<div class="empty-state">
         <p style="font-size: 2em;">📭</p>
         <h2>Nenhum servidor encontrado</h2>
         <p>Não há servidores com o filtro selecionado</p>
@@ -182,51 +220,93 @@ function renderServers() {
     return;
   }
 
+  // Configurar container baseado no modo de visualização
+  if (currentViewMode === "list") {
+    container.className = "servers-list";
+    container.style.display = "flex";
+  } else {
+    container.className = "servers-grid";
+    container.style.display = "grid";
+  }
+
   container.innerHTML = displayServers
-    .map(
-      (server) => `
+    .map((server) => {
+      if (currentViewMode === "list") {
+        return `
+            <div class="server-list-item ${server.status}">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <span class="status-badge ${server.status}" style="margin:0; padding:4px 8px; font-size:0.8rem;">
+                        ${getStatusEmoji(server.status)}
+                    </span>
+                    <div style="text-align:left;">
+                        <h3 class="server-name" style="font-size:1.1rem; margin:0;">${escapeHtml(server.name)}</h3>
+                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${escapeHtml(server.host)}:${server.port}</div>
+                    </div>
+                </div>
+
+                <div style="text-align:center;">
+                    <span class="protocol-value" style="font-size:0.9rem;">${server.protocol}</span>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(server.region || "N/A")}</div>
+                </div>
+
+                <div style="text-align:center;">
+                    <span class="info-value" style="font-size:0.9rem;">
+                        <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}
+                    </span>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">Clientes</div>
+                </div>
+
+                <div class="server-actions">
+                    <button class="btn-connect" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar">🔗</button>
+                    <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host">📍</button>
+                </div>
+            </div>`;
+      }
+
+      return `
     <div class="server-card ${server.status}">
-      <div class="server-header">
-        <div>
-          <h3>${escapeHtml(server.name)}</h3>
-          <p style="margin: 0; font-size: 0.85em; color: #7f8c8d;">${escapeHtml(server.description || "Sem descrição")}</p>
-        </div>
         <span class="status-badge ${server.status}">
           ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
         </span>
-      </div>
 
-      <div class="server-info">
-        <p>
-          <strong>📍 Host:</strong>
-          <span class="info-value"><code>${escapeHtml(server.host)}</code></span>
-        </p>
-        <p>
-          <strong>🔌 Porta:</strong>
+        <h3 class="server-name">${escapeHtml(server.name)}</h3>
+        <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
+
+        <div class="info-row">
+          <span class="info-label">Host:</span>
+          <span class="info-value">${escapeHtml(server.host)}</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-label">Porta:</span>
           <span class="info-value">${server.port}</span>
-        </p>
-        <p>
-          <strong>📡 Protocolo:</strong>
-          <span class="info-value"><code>${server.protocol}</code></span>
-        </p>
+        </div>
+
+        <div class="info-row">
+          <span class="info-label">Protocolo:</span>
+          <span class="info-value protocol-value">${server.protocol}</span>
+        </div>
+
         ${
           server.region
-            ? `<p>
-          <strong>🌍 Região:</strong>
+            ? `<div class="info-row">
+          <span class="info-label">Região:</span>
           <span class="info-value">${escapeHtml(server.region)}</span>
-        </p>`
+        </div>`
             : ""
         }
+
         ${
           server.maxClients
-            ? `<p>
-          <strong>👥 Clientes:</strong>
+            ? `<div class="info-row">
+          <span class="info-label">Clientes:</span>
           <span class="info-value"><strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}</span>
-        </p>`
+        </div>`
             : ""
         }
-        <p>
-          <strong>🔐 Autenticação:</strong>
+
+        <div class="info-row">
+          <span class="info-label">Autenticação:</span>
           <span class="info-value">${
             server.requiresAuth === true
               ? "🔒 Obrigatória"
@@ -234,27 +314,19 @@ function renderServers() {
                 ? "🔓 Opcional"
                 : "❓ Desconhecido"
           }</span>
-        </p>
-      </div>
+        </div>
 
       ${
         server.token &&
         server.requiresAuth !== undefined &&
         server.requiresAuth !== null
-          ? `<div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
-        <p style="margin: 0 0 8px 0; font-size: 0.9em; font-weight: bold; color: #2c3e50;">
-          🔑 Token de Acesso:
-        </p>
-        <div class="token-display" onclick="copyToClipboard('${escapeHtml(server.token)}', this)" title="Clique para copiar o token completo" style="cursor: pointer; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; word-break: break-all; font-size: 0.85em;">
-          <code>${escapeHtml(server.token)}</code>
-        </div>
-        <p style="margin: 8px 0 0 0; font-size: 0.8em; color: #7f8c8d;">
-          💡 Clique acima para copiar o token e usar na extensão
-        </p>
-      </div>`
+          ? `<div class="token-display mt-2">
+              <div class="mb-2">${escapeHtml(server.token)}</div>
+              <button class="btn-copy w-full" onclick="copyToClipboard('${escapeHtml(server.token)}', this)">📋 Copiar Token</button>
+            </div>`
           : server.requiresAuth !== undefined && server.requiresAuth !== null
-            ? `<div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f39c12;">
-        <p style="margin: 0; font-size: 0.9em; color: #856404;">
+            ? `<div style="background: #fff; padding: 15px; margin: 15px 0; border: 2px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);">
+        <p style="margin: 0; font-size: 0.9em; color: var(--text-main); font-weight: 600;">
           ⚠️ Token não configurado para este servidor
         </p>
       </div>`
@@ -281,8 +353,8 @@ function renderServers() {
         </button>
       </div>
     </div>
-  `,
-    )
+  `;
+    })
     .join("");
 }
 
@@ -345,7 +417,7 @@ function connectToServer(host, port, serverName, token) {
   }
 
   const modal = document.getElementById("connect-modal");
-  modal.style.display = "flex";
+  modal.classList.add("show");
 }
 
 // ===== COPY TO CLIPBOARD =====
@@ -353,7 +425,7 @@ function copyToClipboard(text, button) {
   navigator.clipboard.writeText(text).then(() => {
     const originalText = button.textContent;
     button.textContent = "✅ Copiado!";
-    button.style.background = "#27ae60";
+    button.style.background = "var(--success)";
 
     setTimeout(() => {
       button.textContent = originalText;
@@ -369,7 +441,7 @@ function copyConnection(host, port, token, button) {
   navigator.clipboard.writeText(payload).then(() => {
     const originalText = button.textContent;
     button.textContent = "✅ Copiado!";
-    button.style.background = "#3498db";
+    button.style.background = "var(--primary)";
 
     setTimeout(() => {
       button.textContent = originalText;

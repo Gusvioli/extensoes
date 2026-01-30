@@ -83,33 +83,44 @@ function log(message, level = "info") {
   console.log(`[${timestamp}] ${prefix} ${message}`);
 }
 
-// Servidor HTTP para servir o token (para fácil acesso)
-function createTokenServer(httpPort) {
-  const httpServer = http.createServer((req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "application/json");
+// Handler compartilhado para servir a página de token e API (funciona no Render e Local)
+const requestHandler = (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Type", "application/json");
 
-    if (req.url === "/token") {
-      // Endpoint para obter token (protegido em produção, aberto aqui para facilidade)
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          token: config.authToken,
-          wsUrl: `ws://localhost:${config.port}`,
-          requiresAuth: config.requireAuth,
-          status: "online",
-          clientsCount: clients.size,
-          maxClients: config.maxClients,
-          uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
-          startedAt: new Date(metrics.startTime).toISOString(),
-        }),
-      );
-    } else if (req.url === "/") {
-      // Página inicial com instruções melhorada para usuários remotos
-      const hostname = req.headers.host || `localhost:${config.port + 1000}`;
-      const wsUrl = `ws://${hostname.replace(/:\d+$/, "")}:${config.port}`;
+  // Determinar URL do WebSocket dinamicamente (compatível com Render e Local)
+  const isSecure = req.headers["x-forwarded-proto"] === "https";
+  const protocol = isSecure ? "wss" : "ws";
+  const hostHeader = req.headers.host || "localhost";
+  let wsUrl;
 
-      const html = `
+  if (process.env.RENDER || req.socket.localPort === config.port) {
+    // No Render ou porta principal: usa o host diretamente (porta 443 implícita no Render)
+    wsUrl = `${protocol}://${hostHeader}`;
+  } else {
+    // Porta secundária local: ajusta para a porta do WS
+    const hostname = hostHeader.replace(/:\d+$/, "");
+    wsUrl = `${protocol}://${hostname}:${config.port}`;
+  }
+
+  if (req.url === "/token") {
+    // Endpoint para obter token
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        token: config.authToken,
+        wsUrl: wsUrl,
+        requiresAuth: config.requireAuth,
+        status: "online",
+        clientsCount: clients.size,
+        maxClients: config.maxClients,
+        uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
+        startedAt: new Date(metrics.startTime).toISOString(),
+      }),
+    );
+  } else if (req.url === "/") {
+    // Página inicial com instruções
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -361,15 +372,17 @@ function createTokenServer(httpPort) {
 </body>
 </html>
       `;
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(html);
-    } else {
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: "Rota não encontrada" }));
-    }
-  });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
+  } else {
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: "Rota não encontrada" }));
+  }
+};
 
-  return httpServer;
+// Servidor HTTP para servir o token (para fácil acesso)
+function createTokenServer(httpPort) {
+  return http.createServer(requestHandler);
 }
 
 // Inicia o servidor WebSocket com suporte a fallback de portas
@@ -380,8 +393,11 @@ const portFallbacks = [config.port, 8081, 8082, 8083, 9090, 3000];
 function createServer(port) {
   return new Promise((resolve, reject) => {
     try {
+      // Cria servidor HTTP que lida com requisições (Token) E upgrade para WebSocket
+      const httpServer = http.createServer(requestHandler);
+
       const server = new WebSocket.Server({
-        port: port,
+        server: httpServer, // Anexa ao servidor HTTP
         perMessageDeflate: config.disableDeflate
           ? false // Desabilita compressão para prevenir CRIME
           : {
@@ -390,14 +406,16 @@ function createServer(port) {
             },
       });
 
-      server.on("listening", () => {
+      httpServer.on("listening", () => {
         actualPort = port;
         resolve(server);
       });
 
-      server.on("error", (err) => {
+      httpServer.on("error", (err) => {
         reject(err);
       });
+
+      httpServer.listen(port);
     } catch (err) {
       reject(err);
     }
