@@ -8,11 +8,11 @@ Gerenciador visual e intuitivo para todos os seus servidores de sinalização We
 # Instalar dependências (se necessário)
 npm install
 
-# Iniciar dashboard na porta 10080
+# Iniciar dashboard (padrão: porta 3000)
 node src/server.js
 
 # Abrir no navegador
-http://localhost:10080
+http://localhost:3000
 ```
 
 ## 📁 Estrutura de Arquivos

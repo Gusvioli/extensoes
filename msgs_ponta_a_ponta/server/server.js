@@ -7,9 +7,6 @@ const fs = require("fs");
 const path = require("path");
 let WebSocket;
 
-// Importar módulo do dashboard (novo local)
-const { initDashboard } = require("../dashboard/src/server.js");
-
 try {
   WebSocket = require("ws");
 } catch (e) {
@@ -28,7 +25,7 @@ try {
 
 // ============ CONFIGURAÇÕES VIA VARIÁVEIS DE AMBIENTE ============
 const config = {
-  port: process.env.PORT || 8080,
+  port: parseInt(process.env.PORT || "8080", 10),
   maxClients: parseInt(process.env.MAX_CLIENTS || "10000", 10),
   heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL || "30000", 10),
   heartbeatTimeout: parseInt(process.env.HEARTBEAT_TIMEOUT || "5000", 10),
@@ -100,6 +97,11 @@ function createTokenServer(httpPort) {
           token: config.authToken,
           wsUrl: `ws://localhost:${config.port}`,
           requiresAuth: config.requireAuth,
+          status: "online",
+          clientsCount: clients.size,
+          maxClients: config.maxClients,
+          uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
+          startedAt: new Date(metrics.startTime).toISOString(),
         }),
       );
     } else if (req.url === "/") {
@@ -413,12 +415,13 @@ async function initServer() {
           `⚠️  Porta ${config.port} estava ocupada, usando ${port} em seu lugar`,
           "warn",
         );
+        config.port = port; // Atualiza a porta na configuração para consistência
       }
 
       // Exibe configurações de segurança
       if (config.requireAuth) {
         log(
-          `⚠️  Autenticação ATIVADA. Token obrigatório: ${config.authToken}`,
+          `⚠️  Autenticação ATIVADA. Token obrigatório: ${config.authToken.substring(0, 8)}...`,
           "warn",
         );
       } else {
@@ -428,14 +431,14 @@ async function initServer() {
       if (!config.disableDeflate) {
         log("⚠️  Compressão ATIVADA (vulnerável a CRIME)", "warn");
       } else {
-        log("✅ 🔒 Compressão DESABILITADA (proteção contra CRIME)", "info");
+        log("🔒 Compressão DESABILITADA (proteção contra CRIME)", "info");
       }
 
       // Salva token em arquivo
       saveTokenToFile();
 
       // Inicia servidor HTTP para servir token
-      const httpPort = config.port + 1000; // Usa porta HTTP diferente (9080 para 8080)
+      const httpPort = port + 1000; // Usa a porta real que foi vinculada
       const httpServer = createTokenServer(httpPort);
       httpServer.listen(httpPort, () => {
         log(
@@ -444,17 +447,13 @@ async function initServer() {
         );
       });
 
-      // Inicia Dashboard de Servidores (comentado - inicie manualmente ou via start.sh)
-      // const dashboardPort = config.port + 2000; // Usa porta diferente (10080 para 8080)
-      // initDashboard(dashboardPort);
-
       // Setup dos handlers
       setupHandlers();
       return;
     } catch (err) {
       if (port === portFallbacks[portFallbacks.length - 1]) {
         log(
-          `❌ Falha ao iniciar servidor em qualquer porta: ${err.message}`,
+          `❌ Falha ao iniciar servidor em qualquer porta. Último erro: ${err.message}`,
           "error",
         );
         process.exit(1);
@@ -725,21 +724,6 @@ const clientRateLimits = new Map();
 
 // Map para rastrear clientes autenticados
 const authenticatedClients = new Set();
-
-log(`Servidor de sinalização iniciado na porta ${config.port}`, "info");
-if (config.requireAuth) {
-  log(
-    `⚠️  Autenticação ATIVADA. Token obrigatório: ${config.authToken.substring(0, 8)}...`,
-    "warn",
-  );
-}
-if (config.disableDeflate) {
-  log(`🔒 Compressão DESABILITADA (proteção contra CRIME)`, "info");
-}
-log(
-  `Configuração: ${JSON.stringify({ ...config, authToken: config.authToken ? "***" : undefined })}`,
-  "debug",
-);
 
 // ============ FUNÇÕES DE VALIDAÇÃO E RATE LIMITING ============
 

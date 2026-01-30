@@ -38,15 +38,13 @@ case "$1" in
         echo -e "${GREEN}✓ Servidor iniciado (PID: $SERVER_PID)${NC}"
         
         sleep 2
-        
+
         # Iniciar Dashboard
         echo -e "${BLUE}→ Dashboard${NC}"
         cd ../dashboard
         node src/server.js > /tmp/dashboard.log 2>&1 &
         DASHBOARD_PID=$!
         echo -e "${GREEN}✓ Dashboard iniciado (PID: $DASHBOARD_PID)${NC}"
-        
-        sleep 1
         
         # Sincronizar token automaticamente
         echo -e "${BLUE}→ Sincronizando token${NC}"
@@ -55,7 +53,7 @@ case "$1" in
         echo ""
         echo -e "${GREEN}=== SERVIÇOS INICIADOS ===${NC}"
         echo -e "  WebSocket:  ${BLUE}ws://localhost:8080${NC}"
-        echo -e "  Token:      ${BLUE}http://localhost:9080${NC}"
+        echo -e "  Token:      ${BLUE}http://localhost:9080${NC} (ou porta_ws + 1000)"
         echo -e "  Dashboard:  ${BLUE}http://localhost:3000${NC}"
         echo ""
         echo -e "${YELLOW}Logs:${NC}"
@@ -74,7 +72,6 @@ case "$1" in
     stop)
         echo -e "${YELLOW}Parando serviços...${NC}"
         pkill -f "node.*server.js" 2>/dev/null && echo -e "${GREEN}✓ Servidor parado${NC}" || echo -e "${YELLOW}ℹ Servidor não estava rodando${NC}"
-        pkill -f "node.*dashboard" 2>/dev/null && echo -e "${GREEN}✓ Dashboard parado${NC}" || echo -e "${YELLOW}ℹ Dashboard não estava rodando${NC}"
         sleep 1
         echo -e "${GREEN}✓ Todos os serviços foram parados${NC}"
         ;;
@@ -117,7 +114,7 @@ case "$1" in
         echo ""
         echo -e "  ${GREEN}./start.sh install${NC}        - Instalar dependências (uma vez)"
         echo -e "  ${GREEN}./start.sh start${NC}          - Iniciar servidor + dashboard"
-        echo -e "  ${GREEN}./start.sh stop${NC}           - Parar todos os serviços"
+        echo -e "  ${GREEN}./start.sh stop${NC}           - Parar todos os serviços iniciados com start"
         echo -e "  ${GREEN}./start.sh server${NC}         - Iniciar apenas servidor"
         echo -e "  ${GREEN}./start.sh dashboard${NC}      - Iniciar apenas dashboard"
         echo -e "  ${GREEN}./start.sh open${NC}          - Abrir dashboard no navegador"

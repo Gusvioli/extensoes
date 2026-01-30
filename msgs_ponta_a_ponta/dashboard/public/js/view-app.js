@@ -3,6 +3,8 @@
 
 let servers = [];
 let currentFilter = "all";
+let searchTerm = "";
+let currentSort = "name";
 
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
@@ -10,12 +12,105 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   updateLastUpdate();
   setInterval(updateLastUpdate, 60000); // Atualizar a cada minuto
+  setInterval(loadServers, 5000); // Atualizar lista a cada 5 segundos
+
+  // Carregar CSS de componentes (substitui injeção JS)
+  if (!document.querySelector('link[href="css/components.css"]')) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "css/components.css";
+    document.head.appendChild(link);
+  }
+
+  // Injetar Modal de Conexão
+  if (!document.getElementById("connect-modal")) {
+    const modalHTML = `
+      <div id="connect-modal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+        <div class="modal-content" style="background-color: #fefefe; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <span class="close-modal" style="position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer;">&times;</span>
+          <h2 style="margin-top: 0; color: #2c3e50;">🔗 Dados de Conexão</h2>
+          <p style="color: #666; margin-bottom: 15px;">Copie os dados abaixo para usar na sua extensão ou aplicação.</p>
+          
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Nome do Servidor:</label>
+            <input type="text" id="modal-server-name" readonly style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 5px;">URL WebSocket:</label>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="modal-ws-url" readonly style="flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+              <button onclick="copyInput('modal-ws-url', this)" style="padding: 8px 12px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Copiar</button>
+            </div>
+          </div>
+
+          <div id="modal-token-group" style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Token de Autenticação:</label>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="modal-token" readonly style="flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; font-family: monospace;">
+              <button onclick="copyInput('modal-token', this)" style="padding: 8px 12px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 4px;">Copiar</button>
+            </div>
+          </div>
+
+          <div style="text-align: right;">
+            <button class="close-modal-btn" style="padding: 8px 16px; cursor: pointer; background: #95a5a6; color: white; border: none; border-radius: 4px;">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+    // Event Listeners do Modal
+    const modal = document.getElementById("connect-modal");
+    const closeBtns = document.querySelectorAll(
+      ".close-modal, .close-modal-btn",
+    );
+
+    closeBtns.forEach((btn) => {
+      btn.onclick = () => (modal.style.display = "none");
+    });
+
+    window.onclick = (event) => {
+      if (event.target == modal) {
+        modal.style.display = "none";
+      }
+    };
+  }
+
+  // Injetar Barra de Pesquisa e Ordenação se não existirem
+  const filtersContainer = document.querySelector(".filters");
+  if (filtersContainer && !document.getElementById("view-search")) {
+    const controlsHTML = `
+      <div class="filters-divider"></div>
+      <div class="search-wrapper">
+        <input type="text" id="view-search" class="search-input" placeholder="Buscar...">
+      </div>
+      <div class="sort-wrapper">
+        <select id="view-sort" class="sort-select">
+            <option value="name">Nome</option>
+            <option value="clients">Clientes</option>
+            <option value="port">Porta</option>
+        </select>
+      </div>
+    `;
+    filtersContainer.insertAdjacentHTML("beforeend", controlsHTML);
+
+    document.getElementById("view-search").addEventListener("input", (e) => {
+      searchTerm = e.target.value.toLowerCase();
+      renderServers();
+    });
+
+    document.getElementById("view-sort").addEventListener("change", (e) => {
+      currentSort = e.target.value;
+      renderServers();
+    });
+  }
 });
 
 // ===== LOAD SERVERS =====
 function loadServers() {
-  // Solicita servidores públicos ativos (com tokens para copiar)
-  const apiUrl = `${window.APP_CONFIG.API_BASE}/api/public-servers?status=active`;
+  // Solicita todos os servidores públicos para calcular contadores corretamente
+  const apiUrl = `${window.APP_CONFIG.API_BASE}/api/public-servers?status=all`;
   fetch(apiUrl)
     .then((res) => res.json())
     .then((data) => {
@@ -53,7 +148,32 @@ function renderServers() {
     return server.status === currentFilter;
   });
 
-  if (filtered.length === 0) {
+  // Filtro de pesquisa
+  let displayServers = filtered;
+  if (searchTerm) {
+    displayServers = displayServers.filter(
+      (s) =>
+        s.name.toLowerCase().includes(searchTerm) ||
+        s.host.toLowerCase().includes(searchTerm) ||
+        (s.region && s.region.toLowerCase().includes(searchTerm)),
+    );
+  }
+
+  // Ordenação
+  displayServers.sort((a, b) => {
+    switch (currentSort) {
+      case "name":
+        return a.name.localeCompare(b.name);
+      case "clients":
+        return (b.clientsCount || 0) - (a.clientsCount || 0);
+      case "port":
+        return a.port - b.port;
+      default:
+        return 0;
+    }
+  });
+
+  if (displayServers.length === 0) {
     container.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;">
         <p style="font-size: 2em;">📭</p>
         <h2>Nenhum servidor encontrado</h2>
@@ -62,7 +182,7 @@ function renderServers() {
     return;
   }
 
-  container.innerHTML = filtered
+  container.innerHTML = displayServers
     .map(
       (server) => `
     <div class="server-card ${server.status}">
@@ -100,15 +220,27 @@ function renderServers() {
         ${
           server.maxClients
             ? `<p>
-          <strong>👥 Max Clientes:</strong>
-          <span class="info-value">${server.maxClients}</span>
+          <strong>👥 Clientes:</strong>
+          <span class="info-value"><strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}</span>
         </p>`
             : ""
         }
+        <p>
+          <strong>🔐 Autenticação:</strong>
+          <span class="info-value">${
+            server.requiresAuth === true
+              ? "🔒 Obrigatória"
+              : server.requiresAuth === false
+                ? "🔓 Opcional"
+                : "❓ Desconhecido"
+          }</span>
+        </p>
       </div>
 
       ${
-        server.token
+        server.token &&
+        server.requiresAuth !== undefined &&
+        server.requiresAuth !== null
           ? `<div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
         <p style="margin: 0 0 8px 0; font-size: 0.9em; font-weight: bold; color: #2c3e50;">
           🔑 Token de Acesso:
@@ -120,11 +252,13 @@ function renderServers() {
           💡 Clique acima para copiar o token e usar na extensão
         </p>
       </div>`
-          : `<div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f39c12;">
+          : server.requiresAuth !== undefined && server.requiresAuth !== null
+            ? `<div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f39c12;">
         <p style="margin: 0; font-size: 0.9em; color: #856404;">
           ⚠️ Token não configurado para este servidor
         </p>
       </div>`
+            : ""
       }
 
       <div class="server-actions">
@@ -145,78 +279,11 @@ function renderServers() {
         )}', ${server.port}, '${escapeHtml(server.token || "")}', this)" title="Copiar ws://host:porta + token">
           🔐 Conexão
         </button>
-        <button class="btn-copy btn-edit" onclick="editServer('${escapeHtml(
-          server.id,
-        )}')" title="Editar servidor (requer token admin)">
-          ✏️ Editar
-        </button>
       </div>
     </div>
   `,
     )
     .join("");
-}
-
-// ===== EDIT SERVER (via prompt + token admin) =====
-function editServer(id) {
-  const server = servers.find((s) => s.id === id);
-  if (!server) return alert("Servidor não encontrado");
-
-  const adminToken = prompt(
-    "Token de admin para editar este servidor (cancelar para sair):",
-  );
-  if (!adminToken) return;
-
-  // Solicita campos (simples, via prompt para evitar UI complexa)
-  const name = prompt("Nome do servidor:", server.name) || server.name;
-  const host = prompt("Host:", server.host) || server.host;
-  const portRaw = prompt("Porta:", server.port);
-  const port = parseInt(portRaw, 10) || server.port;
-  const protocol =
-    prompt("Protocolo (ws/wss):", server.protocol) || server.protocol;
-  const region =
-    prompt("Região (opcional):", server.region || "") || server.region;
-  const maxClientsRaw = prompt(
-    "Max clientes (opcional):",
-    server.maxClients || "",
-  );
-  const maxClients = maxClientsRaw
-    ? parseInt(maxClientsRaw, 10)
-    : server.maxClients;
-  const status =
-    prompt("Status (active/inactive/standby):", server.status) || server.status;
-
-  const updated = {
-    ...server,
-    name,
-    host,
-    port,
-    protocol,
-    region,
-    maxClients,
-    status,
-  };
-
-  if (!updated.id) return alert("Servidor sem ID, impossível editar");
-
-  const editUrl = `${window.APP_CONFIG.API_BASE}/api/servers?token=${encodeURIComponent(adminToken)}`;
-  fetch(editUrl, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updated),
-  })
-    .then((res) => {
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      return res.json();
-    })
-    .then((json) => {
-      alert("Servidor atualizado com sucesso");
-      loadServers();
-    })
-    .catch((err) => {
-      console.error("Erro ao atualizar servidor:", err);
-      alert("Falha ao atualizar servidor. Verifique token e permissões.");
-    });
 }
 
 // ===== UPDATE COUNTS =====
@@ -256,11 +323,29 @@ function setupEventListeners() {
 
 // ===== CONNECT TO SERVER =====
 function connectToServer(host, port, serverName, token) {
-  const wsUrl = `${window.APP_CONFIG.WS_BASE}`;
-  const tokenText = token ? `\n\n🔑 Token: ${token}` : "";
-  alert(
-    `🔗 Endereço de Conexão: ${wsUrl}${tokenText}\n\nNome do Servidor: ${serverName}\n\nCopie esse endereço e use em sua aplicação/na extensão para conectar a este servidor de sinalização.`,
-  );
+  // Usar a URL base configurada ou construir baseada no host do servidor clicado
+  // Se o servidor clicado for diferente do atual, talvez devêssemos usar o host dele?
+  // Por enquanto, mantendo a lógica original que usa WS_BASE global,
+  // mas idealmente deveria ser `ws://${host}:${port}` se não estiver usando proxy reverso.
+
+  const wsUrl = window.APP_CONFIG.WS_BASE;
+
+  document.getElementById("modal-server-name").value = serverName;
+  document.getElementById("modal-ws-url").value = wsUrl;
+
+  const tokenGroup = document.getElementById("modal-token-group");
+  const tokenInput = document.getElementById("modal-token");
+
+  if (token) {
+    tokenGroup.style.display = "block";
+    tokenInput.value = token;
+  } else {
+    tokenGroup.style.display = "none";
+    tokenInput.value = "";
+  }
+
+  const modal = document.getElementById("connect-modal");
+  modal.style.display = "flex";
 }
 
 // ===== COPY TO CLIPBOARD =====
@@ -292,6 +377,18 @@ function copyConnection(host, port, token, button) {
     }, 2000);
   });
 }
+
+// Helper para o modal
+window.copyInput = function (elementId, button) {
+  const copyText = document.getElementById(elementId);
+  copyText.select();
+  copyText.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(copyText.value).then(() => {
+    const originalText = button.innerText;
+    button.innerText = "Copiado!";
+    setTimeout(() => (button.innerText = originalText), 1500);
+  });
+};
 
 // ===== UPDATE LAST UPDATE TIME =====
 function updateLastUpdate() {
