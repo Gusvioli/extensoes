@@ -240,7 +240,7 @@ function renderServers() {
                     </span>
                     <div style="text-align:left;">
                         <h3 class="server-name" style="font-size:1.1rem; margin:0;">${escapeHtml(server.name)}</h3>
-                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${escapeHtml(server.host)}:${server.port}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${escapeHtml(server.host)}${server.port ? ":" + server.port : ""}</div>
                     </div>
                 </div>
 
@@ -257,7 +257,7 @@ function renderServers() {
                 </div>
 
                 <div class="server-actions">
-                    <button class="btn-connect" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar">🔗</button>
+                    <button class="btn-connect" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar">🔗</button>
                     <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host">📍</button>
                 </div>
             </div>`;
@@ -279,7 +279,7 @@ function renderServers() {
 
         <div class="info-row">
           <span class="info-label">Porta:</span>
-          <span class="info-value">${server.port}</span>
+          <span class="info-value">${server.port || "N/A"}</span>
         </div>
 
         <div class="info-row">
@@ -336,7 +336,7 @@ function renderServers() {
       <div class="server-actions">
         <button class="btn-connect" onclick="connectToServer('${escapeHtml(
           server.host,
-        )}', ${server.port}, '${escapeHtml(server.name)}', '${escapeHtml(
+        )}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(
           server.token || "",
         )}')">
           🔗 Conectar
@@ -348,7 +348,7 @@ function renderServers() {
         </button>
         <button class="btn-copy btn-copy-connection" onclick="copyConnection('${escapeHtml(
           server.host,
-        )}', ${server.port}, '${escapeHtml(server.token || "")}', this)" title="Copiar ws://host:porta + token">
+        )}', ${server.port}, '${server.protocol}', '${escapeHtml(server.token || "")}', this)" title="Copiar ws://host:porta + token">
           🔐 Conexão
         </button>
       </div>
@@ -373,7 +373,7 @@ function updateCounts() {
 
     const countElement = document.getElementById(`count-${status}`);
     if (countElement) {
-      countElement.textContent = count;
+      countElement.textContent = `(${count})`;
     }
   });
 }
@@ -394,13 +394,9 @@ function setupEventListeners() {
 }
 
 // ===== CONNECT TO SERVER =====
-function connectToServer(host, port, serverName, token) {
-  // Usar a URL base configurada ou construir baseada no host do servidor clicado
-  // Se o servidor clicado for diferente do atual, talvez devêssemos usar o host dele?
-  // Por enquanto, mantendo a lógica original que usa WS_BASE global,
-  // mas idealmente deveria ser `ws://${host}:${port}` se não estiver usando proxy reverso.
-
-  const wsUrl = window.APP_CONFIG.WS_BASE;
+function connectToServer(host, port, protocol, serverName, token) {
+  // Constrói a URL baseada nos dados do servidor clicado
+  const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
 
   document.getElementById("modal-server-name").value = serverName;
   document.getElementById("modal-ws-url").value = wsUrl;
@@ -434,8 +430,8 @@ function copyToClipboard(text, button) {
   });
 }
 
-function copyConnection(host, port, token, button) {
-  const wsUrl = `${window.APP_CONFIG.WS_BASE}`;
+function copyConnection(host, port, protocol, token, button) {
+  const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
   const payload = token ? `${wsUrl}\nToken: ${token}` : wsUrl;
 
   navigator.clipboard.writeText(payload).then(() => {

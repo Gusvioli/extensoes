@@ -1,10 +1,27 @@
 // server/server.js
 
+const fs = require("fs");
+const path = require("path");
+
+// Carregar variáveis de ambiente do arquivo .env
+const envPath = path.join(__dirname, ".env");
+try {
+  if (fs.existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+    console.log("✅ Variáveis de ambiente carregadas de .env");
+  }
+} catch (e) {
+  console.warn(
+    "\n⚠️  Aviso: Arquivo .env detectado, mas o módulo 'dotenv' não está instalado.",
+  );
+  console.warn(
+    "👉 Execute 'npm install dotenv' na pasta server para carregar as variáveis.\n",
+  );
+}
+
 const url = require("url");
 const crypto = require("crypto");
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 let WebSocket;
 
 try {
@@ -404,6 +421,11 @@ function createServer(port) {
               serverNoContextTakeover: true,
               clientNoContextTakeover: true,
             },
+      });
+
+      // Adicionar listener de erro no WebSocket Server para evitar crash por evento não tratado
+      server.on("error", (err) => {
+        reject(err);
       });
 
       httpServer.on("listening", () => {

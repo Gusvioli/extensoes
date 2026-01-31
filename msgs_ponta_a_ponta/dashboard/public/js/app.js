@@ -211,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
               <div class="form-group">
                 <label for="server-port">Porta</label>
-                <input type="number" id="server-port" required>
+                <input type="number" id="server-port">
               </div>
               <div class="form-group">
                 <label for="server-protocol">Protocolo</label>
@@ -609,7 +609,7 @@ function renderServers() {
                     </span>
                     <div style="text-align:left;">
                         <h3 class="server-name" style="font-size:1.1rem; margin:0;">${server.name}</h3>
-                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${server.host}:${server.port}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${server.host}${server.port ? ":" + server.port : ""}</div>
                     </div>
                 </div>
 
@@ -653,12 +653,12 @@ function renderServers() {
 
             <div class="info-row">
                 <span class="info-label">Porta:</span>
-                <span class="info-value">${server.port}</span>
+                <span class="info-value">${server.port || "N/A"}</span>
             </div>
 
             <div class="info-row">
                 <span class="info-label">URL:</span>
-                <span class="info-value protocol-value">${server.protocol}://${server.host}:${server.port}</span>
+                <span class="info-value protocol-value">${server.protocol}://${server.host}${server.port ? ":" + server.port : ""}</span>
             </div>
 
             <div class="info-row">
@@ -750,7 +750,7 @@ function getOpenUrl(server) {
     }
     return openUrl;
   }
-  return `${server.protocol}://${server.host}:${server.port}`;
+  return `${server.protocol}://${server.host}${server.port ? ":" + server.port : ""}`;
 }
 
 function updateStats() {

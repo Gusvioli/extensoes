@@ -158,6 +158,8 @@ function validateServerData(data, isUpdate = false) {
     } else {
       data.port = portNum;
     }
+  } else {
+    data.port = null;
   }
   if (!["ws", "wss"].includes(data.protocol)) {
     errors.push('O protocolo deve ser "ws" ou "wss".');
@@ -459,6 +461,8 @@ function createDashboardServer(httpPort) {
         try {
           const serverData = JSON.parse(body);
 
+          let isManualToken = true;
+
           // Gerar token automaticamente se estiver vazio
           if (
             !serverData.token ||
@@ -466,12 +470,13 @@ function createDashboardServer(httpPort) {
             serverData.token.trim() === ""
           ) {
             serverData.token = crypto.randomBytes(16).toString("hex");
+            isManualToken = false;
           }
 
           // Garantir que requiresAuth seja true para exibir o token no frontend
           serverData.requiresAuth = true;
           // Marcar como manual para impedir que o auto-sync sobrescreva o token
-          serverData.manualToken = true;
+          serverData.manualToken = isManualToken;
 
           const validationErrors = validateServerData(serverData);
           if (validationErrors.length > 0) {
@@ -521,6 +526,8 @@ function createDashboardServer(httpPort) {
         try {
           const serverData = JSON.parse(body);
 
+          let isManualToken = true;
+
           // Gerar token automaticamente se estiver vazio
           if (
             !serverData.token ||
@@ -528,12 +535,13 @@ function createDashboardServer(httpPort) {
             serverData.token.trim() === ""
           ) {
             serverData.token = crypto.randomBytes(16).toString("hex");
+            isManualToken = false;
           }
 
           // Garantir que requiresAuth seja true para exibir o token no frontend
           serverData.requiresAuth = true;
           // Marcar como manual para impedir que o auto-sync sobrescreva o token
-          serverData.manualToken = true;
+          serverData.manualToken = isManualToken;
 
           const validationErrors = validateServerData(serverData, true);
           if (validationErrors.length > 0) {
@@ -798,6 +806,7 @@ function startAutoSync() {
 
       // Se não houver URL configurada, tenta a convenção padrão (porta + 1000)
       if (!targetUrlStr) {
+        if (!server.port) return; // Se não tem porta nem URL, não há como sincronizar
         targetUrlStr = `http://${server.host}:${server.port + 1000}/token`;
       }
 
@@ -837,6 +846,11 @@ function startAutoSync() {
       // Helper para verificação inteligente via TCP (Fallback)
       // Se a API HTTP falhar, verificamos se a porta principal do serviço (WebSocket) está aberta
       const checkTcpAndFallback = (reason) => {
+        if (!server.port || typeof server.port !== "number") {
+          // Se não há porta definida, não marcamos como inativo automaticamente
+          // pois não temos como realizar o fallback via TCP.
+          return;
+        }
         const socket = new net.Socket();
         socket.setTimeout(2500);
 
@@ -1018,6 +1032,17 @@ function initDashboard(dashboardPort) {
   startAutoSync();
 
   const dashboardServer = createDashboardServer(dashboardPort);
+
+  dashboardServer.on("error", (e) => {
+    if (e.code === "EADDRINUSE") {
+      console.error(`\n❌ Erro: A porta ${dashboardPort} já está em uso.`);
+      console.error(
+        `Provavelmente o dashboard já está rodando em outra aba ou terminal.`,
+      );
+      console.error(`Para corrigir, feche o outro processo ou use outra porta: PORT=${Number(dashboardPort) + 1} npm start\n`);
+      process.exit(1);
+    }
+  });
 
   dashboardServer.listen(dashboardPort, () => {
     const timestamp = new Date().toISOString();
