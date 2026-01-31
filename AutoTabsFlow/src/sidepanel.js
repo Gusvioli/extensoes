@@ -34,7 +34,7 @@ class GroupCard extends HTMLElement {
       ${style}
       <div class="card" style="border-left-color: ${this.group.color}">
         <h3>
-          <span class="group-title-text" id="group-title">${this.group.title || "Sem Nome"}</span>
+          <span class="group-title-text" id="group-title"></span>
           <span class="badge">${this.tabs.length} abas</span>
         </h3>
         <span class="time-badge">⏱️ Foco: ${timeStr}</span>
@@ -43,6 +43,10 @@ class GroupCard extends HTMLElement {
         <div class="summary" id="summary-content"></div>
       </div>
     `;
+
+    // Segurança: Usar textContent para evitar injeção de HTML
+    this.shadowRoot.getElementById("group-title").textContent =
+      this.group.title || "Sem Nome";
 
     this.shadowRoot
       .getElementById("btn-focus")
@@ -296,6 +300,7 @@ async function toggleGroups() {
 
     setButtonLoading(btn, true);
 
+    // Nota: Este loop sequencial pode ser lento com muitas abas.
     for (const tab of tabs) {
       if (!tab.url || tab.url.startsWith("chrome://")) continue;
 
@@ -309,7 +314,9 @@ async function toggleGroups() {
           try {
             const urlObj = new URL(tab.url);
             const domain = urlObj.hostname.replace("www.", "").split(".")[0];
-            contextCategory = domain.charAt(0).toUpperCase() + domain.slice(1);
+            if (domain)
+              contextCategory =
+                domain.charAt(0).toUpperCase() + domain.slice(1);
           } catch (e) {}
         }
 

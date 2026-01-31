@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gerador de Assets - AutoTabsFlow</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        padding: 40px;
+        background: #f4f7f6;
+        color: #333;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      h1 {
+        margin-bottom: 10px;
+        color: #2c3e50;
+      }
+      p {
+        margin-bottom: 30px;
+        color: #7f8c8d;
+      }
+      .controls {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+      button {
+        padding: 12px 24px;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.2s;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      button:hover {
+        background: #2980b9;
+        transform: translateY(-1px);
+      }
+      canvas {
+        border: 1px solid #ddd;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        background: white;
+        max-width: 100%;
+        height: auto;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #95a5a6;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎨 Gerador de Imagens AutoTabsFlow</h1>
+    <p>Gere as imagens promocionais exigidas pela Chrome Web Store.</p>
+
+    <div class="controls">
+      <button onclick="generate('marquee')">1. Marquee (1400x560)</button>
+      <button onclick="generate('small')">2. Small Tile (440x280)</button>
+      <button onclick="generate('icon')">3. Ícone (128x128)</button>
+      <button onclick="generate('icon48')">4. Ícone (48x48)</button>
+      <button onclick="generate('icon16')">5. Ícone (16x16)</button>
+      <button onclick="generate('screenshot')">6. Screenshot (1280x800)</button>
+      <button onclick="downloadImage()" style="background-color: #27ae60">
+        ⬇️ Baixar PNG
+      </button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <div class="hint">
+      👉 Clique com o botão direito na imagem abaixo e selecione "Salvar imagem
+      como..."
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      let currentType = "marquee";
+
+      function drawBackground(w, h, isIcon = false) {
+        // Gradiente Profissional (Azul Tech)
+        const grd = ctx.createLinearGradient(0, 0, w, h);
+        if (isIcon) {
+          grd.addColorStop(0, "#3498db");
+          grd.addColorStop(1, "#2980b9");
+        } else {
+          grd.addColorStop(0, "#2c3e50"); // Dark Blue
+          grd.addColorStop(1, "#3498db"); // Light Blue
+        }
+        ctx.fillStyle = grd;
+
+        if (isIcon) {
+          // Borda arredondada para o ícone
+          ctx.beginPath();
+          ctx.roundRect(0, 0, w, h, w * 0.2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(0, 0, w, h);
+          // Elementos de fundo sutis (círculos)
+          ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+          ctx.beginPath();
+          ctx.arc(w * 0.85, h * 0.2, h * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(w * 0.1, h * 0.9, h * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawLogo(x, y, size) {
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Sombra suave
+        ctx.shadowColor = "rgba(0,0,0,0.2)";
+        ctx.shadowBlur = size * 0.2;
+        ctx.shadowOffsetY = size * 0.1;
+
+        // Aba de trás (translúcida)
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.beginPath();
+        ctx.roundRect(
+          -size * 0.4,
+          -size * 0.5,
+          size * 0.8,
+          size * 0.6,
+          size * 0.1,
+        );
+        ctx.fill();
+
+        // Aba da frente (branca sólida)
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.roundRect(-size * 0.5, -size * 0.3, size, size * 0.7, size * 0.1);
+        ctx.fill();
+
+        // Símbolo de "Flow" / Raio (Azul)
+        ctx.fillStyle = "#3498db";
+        ctx.beginPath();
+        const s = size * 0.35;
+        ctx.moveTo(s * 0.2, -s * 0.6);
+        ctx.lineTo(s * 0.6, -s * 0.1);
+        ctx.lineTo(0, s * 0.6);
+        ctx.lineTo(-s * 0.5, s * 0.1);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function generate(type) {
+        currentType = type;
+        let w, h, fontSize, logoSize, logoY, textY;
+
+        if (type === "marquee") {
+          w = 1400;
+          h = 560;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h);
+          drawLogo(w / 2, h / 2 - 60, 180);
+
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.font = "bold 90px 'Segoe UI', sans-serif";
+          ctx.fillText("AutoTabsFlow", w / 2, h / 2 + 120);
+
+          ctx.font = "300 40px 'Segoe UI', sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillText("Organize suas abas com IA Local", w / 2, h / 2 + 190);
+        } else if (type === "screenshot") {
+          w = 1280;
+          h = 800;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h);
+          drawLogo(w / 2, h / 2 - 60, 200);
+
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.font = "bold 100px 'Segoe UI', sans-serif";
+          ctx.fillText("AutoTabsFlow", w / 2, h / 2 + 140);
+
+          ctx.font = "300 45px 'Segoe UI', sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillText("Organize suas abas com IA Local", w / 2, h / 2 + 220);
+        } else if (type === "small") {
+          w = 440;
+          h = 280;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h);
+          drawLogo(w / 2, h / 2 - 20, 80);
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.font = "bold 32px 'Segoe UI', sans-serif";
+          ctx.fillText("AutoTabsFlow", w / 2, h / 2 + 70);
+        } else if (type === "icon") {
+          w = 128;
+          h = 128;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h, true);
+          drawLogo(w / 2, w / 2, 70);
+        } else if (type === "icon48") {
+          w = 48;
+          h = 48;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h, true);
+          drawLogo(w / 2, w / 2, 26);
+        } else if (type === "icon16") {
+          w = 16;
+          h = 16;
+          canvas.width = w;
+          canvas.height = h;
+          drawBackground(w, h, true);
+          drawLogo(w / 2, w / 2, 8);
+        }
+      }
+
+      function downloadImage() {
+        const link = document.createElement("a");
+        link.download = `autotabsflow_${currentType}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      }
+
+      // Inicia gerando o Marquee
+      generate("marquee");
+    </script>
+  </body>
+</html>
