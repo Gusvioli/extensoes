@@ -5,16 +5,19 @@
       "name": "servers-w3fc.onrender.com",
       "description": "Servidor hospedado no Render",
       "host": "servers-w3fc.onrender.com",
-      "port": 80,
+      "port": 8080,
       "protocol": "wss",
-      "token": "cd2f5fb392e0b685951a2bc741126b6f",
-      "urltoken": "servers-w3fc.onrender.com/token",
+      "token": "cbe0ff489e4daa699c733b7a4e553c14",
       "region": "USA",
       "maxClients": 10000,
       "status": "active",
       "notes": "",
       "createdAt": "2026-01-30T01:26:41.886Z",
-      "lastSeen": "2026-01-30T12:28:52.109Z"
+      "urltoken": "servers-w3fc.onrender.com/token",
+      "requiresAuth": true,
+      "manualToken": true,
+      "clientsCount": 0,
+      "lastSeen": "2026-01-31T12:02:41.540Z"
     },
     {
       "id": "server-1769736828652",
@@ -23,16 +26,17 @@
       "host": "localhost",
       "port": 8080,
       "protocol": "ws",
-      "token": "0cceb8b0dca945305d676585c7f85ae4",
-      "urltoken": "localhost:9080/token",
+      "token": "0307a7d2e206410407cefa34944cb629",
       "region": "Local",
       "maxClients": 10000,
       "status": "active",
       "notes": "Sincronizado automaticamente via rede",
       "createdAt": "2026-01-30T01:33:48.652Z",
+      "urltoken": "localhost:9080/token",
       "requiresAuth": true,
+      "manualToken": true,
       "clientsCount": 0,
-      "lastSeen": "2026-01-30T12:28:51.818Z"
+      "lastSeen": "2026-01-31T12:02:41.254Z"
     }
   ],
   "settings": {

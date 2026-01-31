@@ -141,14 +141,23 @@ function validateServerData(data, isUpdate = false) {
     errors.push("O host do servidor é inválido.");
   }
   if (
-    typeof data.port !== "number" ||
-    !Number.isInteger(data.port) ||
-    data.port < 1 ||
-    data.port > 65535
+    data.port !== undefined &&
+    data.port !== null &&
+    String(data.port).trim() !== ""
   ) {
-    errors.push(
-      "A porta do servidor deve ser um número inteiro entre 1 e 65535.",
-    );
+    const portNum = Number(data.port);
+    if (
+      isNaN(portNum) ||
+      !Number.isInteger(portNum) ||
+      portNum < 1 ||
+      portNum > 65535
+    ) {
+      errors.push(
+        "A porta do servidor deve ser um número inteiro entre 1 e 65535.",
+      );
+    } else {
+      data.port = portNum;
+    }
   }
   if (!["ws", "wss"].includes(data.protocol)) {
     errors.push('O protocolo deve ser "ws" ou "wss".');
@@ -449,6 +458,21 @@ function createDashboardServer(httpPort) {
       req.on("end", () => {
         try {
           const serverData = JSON.parse(body);
+
+          // Gerar token automaticamente se estiver vazio
+          if (
+            !serverData.token ||
+            typeof serverData.token !== "string" ||
+            serverData.token.trim() === ""
+          ) {
+            serverData.token = crypto.randomBytes(16).toString("hex");
+          }
+
+          // Garantir que requiresAuth seja true para exibir o token no frontend
+          serverData.requiresAuth = true;
+          // Marcar como manual para impedir que o auto-sync sobrescreva o token
+          serverData.manualToken = true;
+
           const validationErrors = validateServerData(serverData);
           if (validationErrors.length > 0) {
             res.writeHead(400, { "Content-Type": "application/json" });
@@ -467,7 +491,11 @@ function createDashboardServer(httpPort) {
 
           res.writeHead(201, { "Content-Type": "application/json" });
           res.end(
-            JSON.stringify({ success: true, message: "Servidor adicionado" }),
+            JSON.stringify({
+              success: true,
+              message: "Servidor adicionado",
+              server: serverData,
+            }),
           );
         } catch (err) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -493,6 +521,20 @@ function createDashboardServer(httpPort) {
         try {
           const serverData = JSON.parse(body);
 
+          // Gerar token automaticamente se estiver vazio
+          if (
+            !serverData.token ||
+            typeof serverData.token !== "string" ||
+            serverData.token.trim() === ""
+          ) {
+            serverData.token = crypto.randomBytes(16).toString("hex");
+          }
+
+          // Garantir que requiresAuth seja true para exibir o token no frontend
+          serverData.requiresAuth = true;
+          // Marcar como manual para impedir que o auto-sync sobrescreva o token
+          serverData.manualToken = true;
+
           const validationErrors = validateServerData(serverData, true);
           if (validationErrors.length > 0) {
             res.writeHead(400, { "Content-Type": "application/json" });
@@ -513,7 +555,11 @@ function createDashboardServer(httpPort) {
             saveServersConfig();
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(
-              JSON.stringify({ success: true, message: "Servidor atualizado" }),
+              JSON.stringify({
+                success: true,
+                message: "Servidor atualizado",
+                server: serverData,
+              }),
             );
           } else {
             res.writeHead(404, { "Content-Type": "application/json" });
@@ -639,20 +685,35 @@ function startAutoSync() {
 
                 if (server) {
                   // Atualizar token se mudou ou se estava inativo
-                  if (
-                    server.token !== info.token ||
-                    server.status !== "active" ||
-                    (info.requiresAuth !== undefined &&
-                      server.requiresAuth !== info.requiresAuth) ||
-                    (info.clientsCount !== undefined &&
-                      server.clientsCount !== info.clientsCount)
-                  ) {
+                  let shouldUpdate = false;
+
+                  // Atualizar token APENAS se não for manual
+                  if (server.token !== info.token && !server.manualToken) {
                     server.token = info.token;
+                    shouldUpdate = true;
+                  }
+
+                  // Atualizar outros campos independentemente do token ser manual
+                  if (server.status !== "active") {
                     server.status = "active";
-                    if (info.requiresAuth !== undefined)
-                      server.requiresAuth = info.requiresAuth;
-                    if (info.clientsCount !== undefined)
-                      server.clientsCount = info.clientsCount;
+                    shouldUpdate = true;
+                  }
+                  if (
+                    info.requiresAuth !== undefined &&
+                    server.requiresAuth !== info.requiresAuth
+                  ) {
+                    server.requiresAuth = info.requiresAuth;
+                    shouldUpdate = true;
+                  }
+                  if (
+                    info.clientsCount !== undefined &&
+                    server.clientsCount !== info.clientsCount
+                  ) {
+                    server.clientsCount = info.clientsCount;
+                    shouldUpdate = true;
+                  }
+
+                  if (shouldUpdate) {
                     updated = true;
                     server.lastSeen = new Date().toISOString();
                     const ts = new Date().toISOString();
@@ -855,11 +916,17 @@ function startAutoSync() {
 
               // Atualizar Token
               if (info.token) {
-                if (currentServer.token !== info.token) {
+                if (
+                  currentServer.token !== info.token &&
+                  !currentServer.manualToken
+                ) {
                   currentServer.token = info.token;
                   updated = true;
                 }
-              } else if (currentServer.token !== "N/A") {
+              } else if (
+                currentServer.token !== "N/A" &&
+                !currentServer.manualToken
+              ) {
                 currentServer.token = "N/A";
                 updated = true;
               }

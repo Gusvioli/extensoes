@@ -222,10 +222,10 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
             </div>
             <div class="form-group mt-2">
-              <label for="server-token">Token de Autenticação</label>
+              <label for="server-token">Token de Autenticação (deixe em branco para gerar automaticamente)</label>
               <div class="flex gap-2 mb-2">
                 <input type="text" id="server-token" style="flex-grow: 1;" placeholder="Deixe vazio para gerar automaticamente">
-                <button type="button" id="generate-token-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Gerar Novo">🎲</button>
+                <button type="button" id="generate-token-btn" class="btn-edit" style="width: auto; padding: 0 15px; display: none;" title="Gerar Novo" disabled>🎲</button>
               </div>
             </div>
             <div class="form-group mt-2">
@@ -841,8 +841,9 @@ async function testUrlToken() {
 
     const data = await response.json();
     if (data && data.token) {
+      document.getElementById("server-token").value = data.token;
       showToast(
-        `✅ Sucesso! Token encontrado: ${data.token.substring(0, 8)}...`,
+        `✅ Sucesso! Token atualizado: ${data.token.substring(0, 8)}...`,
       );
     } else {
       showToast("⚠️ JSON válido, mas campo 'token' não encontrado.", "error");
@@ -863,40 +864,46 @@ async function saveServer(event) {
     submitBtn.textContent = "Salvando...";
   }
 
-  const token = document.getElementById("server-token").value;
-  const urlTokenInput = document.getElementById("server-urltoken");
-
-  let processedUrlToken = urlTokenInput ? urlTokenInput.value.trim() : "";
-  processedUrlToken = processedUrlToken.replace(/\/+$/, ""); // Remove barra final antes de verificar
-  if (processedUrlToken && !processedUrlToken.endsWith("/token")) {
-    processedUrlToken += "/token";
-  }
-
-  const serverData = {
-    id: editingServerId || `server-${Date.now()}`,
-    name: document.getElementById("server-name").value,
-    description: document.getElementById("server-description").value,
-    host: document.getElementById("server-host").value,
-    port: parseInt(document.getElementById("server-port").value),
-    protocol: document.getElementById("server-protocol").value,
-    token: token || "N/A", // Define como N/A se vazio, não gera token automaticamente
-    urltoken: processedUrlToken,
-    region: document.getElementById("server-region").value,
-    maxClients: parseInt(document.getElementById("server-max-clients").value),
-    status: document.getElementById("server-status").value,
-    notes: document.getElementById("server-notes").value,
-    createdAt: editingServerId
-      ? servers.find((s) => s.id === editingServerId).createdAt
-      : new Date().toISOString(),
-    requiresAuth: editingServerId
-      ? servers.find((s) => s.id === editingServerId).requiresAuth
-      : undefined,
-  };
-
   try {
+    const token = document.getElementById("server-token").value;
+    const urlTokenInput = document.getElementById("server-urltoken");
+
+    let processedUrlToken = urlTokenInput ? urlTokenInput.value.trim() : "";
+    processedUrlToken = processedUrlToken.replace(/\/+$/, ""); // Remove barra final antes de verificar
+    if (processedUrlToken && !processedUrlToken.endsWith("/token")) {
+      processedUrlToken += "/token";
+    }
+
+    const existingServer = editingServerId
+      ? servers.find((s) => s.id === editingServerId)
+      : null;
+
+    const serverData = {
+      id: editingServerId || `server-${Date.now()}`,
+      name: document.getElementById("server-name").value,
+      description: document.getElementById("server-description").value,
+      host: document.getElementById("server-host").value,
+      port: document.getElementById("server-port").value
+        ? parseInt(document.getElementById("server-port").value, 10)
+        : null,
+      protocol: document.getElementById("server-protocol").value,
+      token: token,
+      region: document.getElementById("server-region").value,
+      maxClients:
+        parseInt(document.getElementById("server-max-clients").value) || 10000,
+      status: document.getElementById("server-status").value,
+      notes: document.getElementById("server-notes").value,
+      createdAt: existingServer
+        ? existingServer.createdAt
+        : new Date().toISOString(),
+      urltoken: processedUrlToken,
+      // O backend irá definir 'requiresAuth' e outras propriedades
+    };
+
     const method = editingServerId ? "PUT" : "POST";
     const response = await fetch(`/api/servers`, {
       method: method,
+
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(serverData),
     });
@@ -904,16 +911,20 @@ async function saveServer(event) {
     if (response.status === 401) {
       showToast("Sessão expirada. Faça login novamente.", "error");
       showLogin();
+
       return;
     }
 
     if (response.ok) {
+      const result = await response.json();
+      const savedServer = result.server;
+
       if (editingServerId) {
         servers = servers.map((s) =>
-          s.id === editingServerId ? serverData : s,
+          s.id === editingServerId ? savedServer : s,
         );
       } else {
-        servers.push(serverData);
+        servers.push(savedServer);
       }
 
       renderServers();
@@ -921,6 +932,12 @@ async function saveServer(event) {
 
       showToast("Servidor salvo com sucesso!");
       closeModal();
+    } else {
+      const errorData = await response.json();
+      const errorMessage = errorData.details
+        ? errorData.details.join(", ")
+        : errorData.error;
+      showToast(`Erro: ${errorMessage}`, "error");
     }
   } catch (error) {
     console.error("Erro ao salvar servidor:", error);
