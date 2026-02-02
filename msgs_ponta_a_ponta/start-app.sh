@@ -96,11 +96,17 @@ case "$1" in
         
         if [ -f "docker-compose.db.yml" ]; then
             echo -e "${YELLOW}🐳 Iniciando Banco de Dados (docker-compose.db.yml)...${NC}"
-            run_compose -f docker-compose.db.yml up -d
+            if ! run_compose -f docker-compose.db.yml up -d; then
+                echo -e "${RED}❌ Falha ao iniciar o banco de dados. Verifique se a porta 5432 está livre.${NC}"
+                exit 1
+            fi
         elif [ -f "docker-compose.yml" ]; then
             echo -e "${YELLOW}🐳 Iniciando Banco de Dados (apenas Postgres)...${NC}"
             # Inicia apenas o serviço postgres para evitar conflito com npm start
-            run_compose up -d postgres
+            if ! run_compose up -d postgres; then
+                echo -e "${RED}❌ Falha ao iniciar o banco de dados. Verifique se a porta 5432 está livre.${NC}"
+                exit 1
+            fi
         fi
 
         start_server
@@ -125,6 +131,11 @@ case "$1" in
     "dashboard")
         check_node
         print_header
+        # Verifica se a porta 5432 está aberta (bash feature)
+        if ! (echo > /dev/tcp/localhost/5432) >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠️  AVISO: Não foi possível detectar o Banco de Dados na porta 5432.${NC}"
+            echo -e "${YELLOW}   Certifique-se de que ele está rodando (ou use './start-app.sh all').${NC}"
+        fi
         start_dashboard
         trap "stop_all; exit" SIGINT SIGTERM
         wait
@@ -140,6 +151,38 @@ case "$1" in
             exit 1
         fi
         ;;
+    "reset-db")
+        print_header
+        echo -e "${RED}⚠️  ATENÇÃO: Isso apagará TODO o banco de dados e resetará a senha!${NC}"
+        echo -e "${YELLOW}   Use isso se a senha do banco não estiver batendo.${NC}"
+        read -p "Tem certeza? (s/N): " confirm
+        if [[ "$confirm" == "s" || "$confirm" == "S" ]]; then
+            echo -e "${YELLOW}🗑️  Removendo volumes do banco de dados...${NC}"
+            if [ -f "docker-compose.db.yml" ]; then
+                run_compose -f docker-compose.db.yml down -v
+            fi
+            if [ -f "docker-compose.yml" ]; then
+                run_compose down -v
+            fi
+            echo -e "${GREEN}✅ Banco de dados resetado. Agora as novas senhas funcionarão.${NC}"
+        else
+            echo "Operação cancelada."
+        fi
+        ;;
+    "users")
+        check_node
+        print_header
+        
+        # Verifica se o banco está acessível antes de rodar o script
+        if ! (echo > /dev/tcp/localhost/5432) >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠️  AVISO: Banco de dados não detectado na porta 5432.${NC}"
+            echo -e "${YELLOW}   Inicie o banco primeiro com './start-app.sh all' ou via docker.${NC}"
+        fi
+
+        shift # Remove "users" dos argumentos
+        cd "$DASHBOARD_DIR" || exit 1
+        node scripts/manage-users.js "$@"
+        ;;
     *)
         print_header
         echo "Uso: ./start-app.sh [comando]"
@@ -149,6 +192,8 @@ case "$1" in
         echo "  server     - Inicia apenas o Servidor WebSocket"
         echo "  dashboard  - Inicia apenas o Dashboard Web"
         echo "  docker     - Inicia a aplicação via Docker Compose"
+        echo "  reset-db   - Reseta o banco de dados (Corrige erro de senha)"
+        echo "  users      - Gerencia usuários (CRUD via CLI)"
         echo ""
         echo "Exemplo: ./start-app.sh all"
         ;;

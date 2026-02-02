@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gerenciar Usuários - P2P Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <style>
+      /* Estilos específicos para a tabela de usuários */
+      .user-role-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        font-weight: bold;
+      }
+      .role-admin {
+        background-color: #e74c3c;
+        color: white;
+      }
+      .role-user {
+        background-color: #3498db;
+        color: white;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 400px;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+      }
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>👥 Gerenciamento de Usuários</h1>
+        <div class="header-actions">
+          <a href="/" class="btn btn-secondary">⬅️ Voltar ao Dashboard</a>
+          <button onclick="openModal()" class="btn btn-primary">
+            ➕ Novo Usuário
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <div class="card">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Usuário</th>
+                <th>Função</th>
+                <th>Criado em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Preenchido via JS -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modal de Edição/Criação -->
+    <div id="userModal" class="modal">
+      <div class="modal-content">
+        <h2 id="modalTitle">Novo Usuário</h2>
+        <form id="userForm">
+          <input type="hidden" id="userId" />
+          <div class="form-group">
+            <label>Nome Completo</label>
+            <input type="text" id="userName" required />
+          </div>
+          <div class="form-group">
+            <label>Nome de Usuário (Login)</label>
+            <input type="text" id="userLogin" required />
+          </div>
+          <div class="form-group">
+            <label>Senha</label>
+            <input
+              type="password"
+              id="userPass"
+              placeholder="Deixe em branco para manter a atual (edição)"
+            />
+          </div>
+          <div class="form-group">
+            <label>Função</label>
+            <select id="userRole">
+              <option value="user">Usuário Comum</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button
+              type="button"
+              onclick="closeModal()"
+              class="btn btn-secondary"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="js/users.js"></script>
+    
+    <footer class="app-footer" style="margin-top: 40px; text-align: center; padding: 20px; color: #7f8c8d; border-top: 1px solid #eee;">
+        <div class="footer-content">
+          <div style="font-size: 1.2rem; font-weight: bold;">P2P SECURE CHAT</div>
+          <div style="font-size: 0.8rem;">GERENCIAMENTO DE USUÁRIOS</div>
+        </div>
+    </footer>
+  </body>
+</html>

@@ -1,6 +1,22 @@
 const { Pool } = require("pg");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
+
+// Funções de Criptografia
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedPassword) {
+  if (!storedPassword) return false;
+  const [salt, key] = storedPassword.split(":");
+  if (!salt || !key) return password === storedPassword; // Fallback para senhas antigas (texto plano)
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return key === hash;
+}
 
 // Configuração do banco de dados
 // Você deve definir a variável de ambiente DATABASE_URL
@@ -25,7 +41,7 @@ function query(text, params) {
 
 async function init() {
   // Tentar conectar ao banco com retries (útil para Docker/Startup)
-  let retries = 5;
+  let retries = 20;
   while (retries > 0) {
     try {
       await query("SELECT 1");
@@ -124,23 +140,48 @@ async function init() {
     const resUsers = await query("SELECT count(*) as count FROM users");
     const countUsers = parseInt(resUsers.rows[0].count);
 
-    if (countUsers === 0 && fs.existsSync(jsonUsersPath)) {
-      console.log("📂 Migrando dados de users.json para PostgreSQL...");
-      try {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const config = JSON.parse(content);
+    if (countUsers === 0) {
+      if (fs.existsSync(jsonUsersPath)) {
+        console.log("📂 Migrando dados de users.json para PostgreSQL...");
+        try {
+          const content = fs.readFileSync(jsonUsersPath, "utf-8");
+          const config = JSON.parse(content);
 
-        if (config.users && Array.isArray(config.users)) {
-          for (const u of config.users) {
-            await query(
-              `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-              [u.id, u.username, u.password, u.name, u.role, u.createdAt]
-            );
+          if (config.users && Array.isArray(config.users)) {
+            for (const u of config.users) {
+              await query(
+                `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+                [u.id, u.username, u.password, u.name, u.role, u.createdAt],
+              );
+            }
           }
+          console.log("✅ Migração de usuários concluída com sucesso.");
+        } catch (e) {
+          console.error("❌ Erro na migração de usuários:", e);
         }
-        console.log("✅ Migração de usuários concluída com sucesso.");
-      } catch (e) {
-        console.error("❌ Erro na migração de usuários:", e);
+      } else {
+        console.log("👤 Criando usuários padrão (admin/gerente)...");
+        const now = new Date().toISOString();
+        try {
+          // Admin (Acesso Total)
+          await query(
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            ["user-admin", "admin", hashPassword("admin123"), "Administrador", "admin", now],
+          );
+          // Gerente (Gerencia Servidores)
+          await query(
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            ["user-gerente", "gerente", hashPassword("gerente123"), "Gerente", "gerente", now],
+          );
+          // Usuário Comum (Apenas Visualiza)
+          await query(
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            ["user-comum", "usuario", hashPassword("user123"), "Funcionário", "user", now],
+          );
+          console.log("✅ Usuários padrão criados.");
+        } catch (e) {
+          console.error("❌ Erro ao criar usuários padrão:", e);
+        }
       }
     }
   } catch (err) {
@@ -298,7 +339,7 @@ async function authenticateUser(username, password) {
         if (data.users) {
           return (
             data.users.find(
-              (u) => u.username === username && u.password === password,
+              (u) => u.username === username && verifyPassword(password, u.password),
             ) || null
           );
         }
@@ -309,10 +350,108 @@ async function authenticateUser(username, password) {
     return null;
   }
   const res = await query(
-    'SELECT * FROM users WHERE "username" = $1 AND "password" = $2',
-    [username, password],
+    'SELECT * FROM users WHERE "username" = $1',
+    [username],
   );
-  return res.rows[0] || null;
+  const user = res.rows[0];
+  if (user && verifyPassword(password, user.password)) return user;
+  return null;
+}
+
+async function getAllUsers() {
+  if (!isConnected) {
+    try {
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        const data = JSON.parse(content);
+        return data.users || [];
+      }
+    } catch (e) {
+      console.error("Erro ao ler users.json:", e);
+    }
+    return [];
+  }
+  const res = await query("SELECT * FROM users");
+  return res.rows;
+}
+
+async function saveUser(user) {
+  // Criptografar senha se fornecida
+  if (user.password) {
+    // Evitar criptografar novamente se já estiver criptografada (migrações/updates)
+    if (!user.password.includes(":") || user.password.length < 100) {
+        user.password = hashPassword(user.password);
+    }
+  } else {
+    // Se não forneceu senha, tentar manter a atual (apenas para DB conectado)
+    if (isConnected && user.id) {
+        const res = await query('SELECT password FROM users WHERE id = $1', [user.id]);
+        if (res.rows.length > 0) {
+            user.password = res.rows[0].password;
+        }
+    }
+  }
+
+  if (!isConnected) {
+    try {
+      let data = { users: [] };
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        data = JSON.parse(content);
+      }
+      if (!data.users) data.users = [];
+
+      const index = data.users.findIndex((u) => u.id === user.id);
+      if (index !== -1) {
+        data.users[index] = { ...data.users[index], ...user };
+      } else {
+        data.users.push(user);
+      }
+      fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error("Erro ao salvar users.json:", e);
+    }
+    return;
+  }
+
+  const sql = `
+        INSERT INTO users ("id", "username", "password", "name", "role", "createdAt")
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT ("id") DO UPDATE SET
+            "username" = EXCLUDED."username",
+            "password" = EXCLUDED."password",
+            "name" = EXCLUDED."name",
+            "role" = EXCLUDED."role",
+            "createdAt" = EXCLUDED."createdAt"
+    `;
+
+  await query(sql, [
+    user.id,
+    user.username,
+    user.password,
+    user.name,
+    user.role,
+    user.createdAt,
+  ]);
+}
+
+async function deleteUser(id) {
+  if (!isConnected) {
+    try {
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        const data = JSON.parse(content);
+        if (data.users) {
+          data.users = data.users.filter((u) => u.id !== id);
+          fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao deletar de users.json:", e);
+    }
+    return;
+  }
+  await query('DELETE FROM users WHERE "id" = $1', [id]);
 }
 
 module.exports = {
@@ -323,4 +462,7 @@ module.exports = {
   getSettings,
   saveSetting,
   authenticateUser,
+  getAllUsers,
+  saveUser,
+  deleteUser,
 };

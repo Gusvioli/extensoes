@@ -387,6 +387,20 @@ function showDashboard() {
     if (currentUser.role === "admin") {
       const settingsBtn = document.getElementById("settings-btn");
       if (settingsBtn) settingsBtn.style.display = "inline-flex";
+
+      // Injetar botão de Usuários se não existir
+      if (!document.getElementById("users-btn")) {
+        const usersBtn = document.createElement("a");
+        usersBtn.id = "users-btn";
+        usersBtn.className = "btn-secondary";
+        usersBtn.innerHTML = "👥 Usuários";
+        usersBtn.href = "/users.html";
+        usersBtn.style.cssText =
+          "margin-left: 10px; font-size: 14px; padding: 8px 12px; display: inline-flex; align-items: center; text-decoration: none; color: white;";
+
+        const headerTitle = document.querySelector("header h1");
+        if (headerTitle) headerTitle.appendChild(usersBtn);
+      }
     }
   }
 
@@ -455,7 +469,10 @@ function setupEventListeners() {
   });
 
   const addNewBtn = document.getElementById("add-new-btn");
-  if (currentUser && currentUser.role === "admin") {
+  if (
+    currentUser &&
+    (currentUser.role === "admin" || currentUser.role === "gerente")
+  ) {
     addNewBtn.style.display = "inline-block";
 
     const newAddNewBtn = addNewBtn.cloneNode(true);
@@ -628,7 +645,9 @@ function renderServers() {
                 <div class="server-actions">
                     <a href="${openUrl}" target="_blank" class="btn-main" title="Abrir URL Token">🔗</a>
                     ${
-                      currentUser && currentUser.role === "admin"
+                      currentUser &&
+                      (currentUser.role === "admin" ||
+                        currentUser.role === "gerente")
                         ? `<button class="btn-edit" onclick="editServer('${server.id}')" title="Editar">✏️</button>
                            <button class="btn-delete" onclick="deleteServer('${server.id}')" title="Deletar">🗑️</button>`
                         : ""
@@ -722,7 +741,9 @@ function renderServers() {
                     🔗 Abrir url token
                 </a>
                 ${
-                  currentUser && currentUser.role === "admin"
+                  currentUser &&
+                  (currentUser.role === "admin" ||
+                    currentUser.role === "gerente")
                     ? `
                 <button class="btn-edit" onclick="editServer('${server.id}')">✏️ Editar</button>
                 <button class="btn-delete" onclick="deleteServer('${server.id}')">🗑️ Deletar</button>

@@ -10,12 +10,10 @@ const crypto = require("crypto");
 const net = require("net");
 const db = require("./database");
 
-let usersData = [];
 let settingsData = { discoveryUrl: "http://localhost:9080/token" };
 let sessionsData = {}; // Armazenar sessões ativas
 let lastDiscoveryError = null; // Controle para evitar spam de logs
 
-const usersFile = path.join(__dirname, "../data/users.json");
 const publicDir = path.join(__dirname, "../public");
 
 /**
@@ -42,22 +40,6 @@ function parseCookies(req) {
     list[name] = decodeURIComponent(value);
   });
   return list;
-}
-
-/**
- * Carregar usuários autorizados
- */
-function loadUsers() {
-  try {
-    if (fs.existsSync(usersFile)) {
-      const content = fs.readFileSync(usersFile, "utf-8");
-      const data = JSON.parse(content);
-      usersData = data.users || [];
-    }
-  } catch (err) {
-    console.error("Erro ao carregar usuários:", err);
-    usersData = [];
-  }
 }
 
 /**
@@ -243,6 +225,22 @@ function createDashboardServer(httpPort) {
       return;
     }
 
+    // GET /users.html → Página de Gerenciamento de Usuários
+    if (
+      (pathname === "/users.html" || pathname === "/users") &&
+      req.method === "GET"
+    ) {
+      const usersPath = path.join(publicDir, "users.html");
+      serveStaticFile(usersPath, res);
+      return;
+    }
+
+    // GET /users.html → Apenas Admin
+    if ((pathname === "/users.html" || pathname === "/users") && req.method === "GET") {
+        // A verificação real é feita na API, mas podemos bloquear a página estática também se quisermos.
+        // Por enquanto, deixamos carregar, e o JS vai falhar ao buscar dados se não for admin.
+    }
+
     // GET /css/* → Servir CSS
     if (pathname.startsWith("/css/") && req.method === "GET") {
       const cssPath = path.join(publicDir, pathname);
@@ -275,12 +273,11 @@ function createDashboardServer(httpPort) {
       req.on("end", () => {
         try {
           const { username, password } = JSON.parse(body);
-          const user = usersData.find(
-            (u) => u.username === username && u.password === password,
-          );
-
-          if (user) {
-            const token = createSession(username);
+          
+          // Usar autenticação do banco de dados
+          db.authenticateUser(username, password).then(user => {
+            if (user) {
+              const token = createSession(username);
             // Usar HttpOnly cookie para segurança
             res.setHeader(
               "Set-Cookie",
@@ -301,6 +298,7 @@ function createDashboardServer(httpPort) {
             res.writeHead(401, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Usuário ou senha inválidos" }));
           }
+          });
         } catch (err) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "Dados inválidos" }));
@@ -330,14 +328,20 @@ function createDashboardServer(httpPort) {
     if (pathname === "/auth/verify" && req.method === "GET") {
       const session = getValidSession(req);
       if (session) {
-        const user = usersData.find((u) => u.username === session.username);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            valid: true,
-            user: { name: user.name, username: user.username, role: user.role },
-          }),
-        );
+        // Buscar dados atualizados do usuário (para checar role, etc)
+        // Como não temos getUser(username) direto, vamos assumir os dados da sessão ou buscar todos
+        // Para simplificar e performance, vamos confiar na sessão por enquanto ou implementar getUser
+        // Aqui vamos buscar todos para encontrar o usuário (idealmente teria um getOne)
+        db.getAllUsers().then(users => {
+            const user = users.find(u => u.username === session.username);
+            if (user) {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ valid: true, user: { name: user.name, username: user.username, role: user.role } }));
+            } else {
+                res.writeHead(401, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ valid: false }));
+            }
+        });
       } else {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ valid: false }));
@@ -430,10 +434,13 @@ function createDashboardServer(httpPort) {
 
     // POST /api/servers → Criar novo servidor (PROTEGIDO)
     if (pathname === "/api/servers" && req.method === "POST") {
-      if (!getValidSession(req)) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Não autenticado" }));
-        return;
+      const session = getValidSession(req);
+      if (!session) return send401(res);
+      
+      // Apenas Admin e Gerente podem criar
+      const user = await getUserFromSession(session);
+      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
+          return send403(res);
       }
 
       let body = "";
@@ -502,10 +509,13 @@ function createDashboardServer(httpPort) {
 
     // PUT /api/servers → Atualizar servidor (PROTEGIDO)
     if (pathname === "/api/servers" && req.method === "PUT") {
-      if (!getValidSession(req)) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Não autenticado" }));
-        return;
+      const session = getValidSession(req);
+      if (!session) return send401(res);
+
+      // Apenas Admin e Gerente podem editar
+      const user = await getUserFromSession(session);
+      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
+          return send403(res);
       }
 
       let body = "";
@@ -573,10 +583,13 @@ function createDashboardServer(httpPort) {
 
     // DELETE /api/servers → Deletar servidor (PROTEGIDO)
     if (pathname === "/api/servers" && req.method === "DELETE") {
-      if (!getValidSession(req)) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Não autenticado" }));
-        return;
+      const session = getValidSession(req);
+      if (!session) return send401(res);
+
+      // Apenas Admin e Gerente podem deletar
+      const user = await getUserFromSession(session);
+      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
+          return send403(res);
       }
 
       let body = "";
@@ -624,6 +637,78 @@ function createDashboardServer(httpPort) {
         res.end(JSON.stringify({ error: "Erro interno no banco de dados" }));
       }
       return;
+    }
+
+    // ===== API DE USUÁRIOS (PROTEGIDA) =====
+
+    // GET /api/users
+    if (pathname === "/api/users" && req.method === "GET") {
+        const session = getValidSession(req);
+        if (!session) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Não autenticado" }));
+            return;
+        }
+        
+        try {
+            const users = await db.getAllUsers();
+            // Verificar se é admin
+            const currentUser = users.find(u => u.username === session.username);
+            if (!currentUser || currentUser.role !== 'admin') {
+                res.writeHead(403, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Acesso negado" }));
+                return;
+            }
+
+            const safeUsers = users.map(u => ({ ...u, password: '' }));
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(safeUsers));
+        } catch (e) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // POST /api/users (Criar/Editar)
+    if (pathname === "/api/users" && req.method === "POST") {
+        if (!getValidSession(req)) return send401(res);
+        
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const user = JSON.parse(body);
+                if (!user.id) {
+                    user.id = 'user-' + Date.now();
+                    user.createdAt = new Date().toISOString();
+                }
+                await db.saveUser(user);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // DELETE /api/users
+    if (pathname === "/api/users" && req.method === "DELETE") {
+        if (!getValidSession(req)) return send401(res);
+        
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { id } = JSON.parse(body);
+                await db.deleteUser(id);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (e) { res.writeHead(500); res.end(JSON.stringify({error: e.message})); }
+        });
+        return;
     }
 
     // ===== 404 =====
@@ -1035,12 +1120,25 @@ function startAutoSync() {
   setInterval(sync, 15000);
 }
 
+function send401(res) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Não autenticado" }));
+}
+
+function send403(res) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Acesso negado: Permissão insuficiente" }));
+}
+
+async function getUserFromSession(session) {
+    const users = await db.getAllUsers();
+    return users.find(u => u.username === session.username);
+}
+
 /**
  * Inicializar dashboard
  */
 async function initDashboard(dashboardPort) {
-  loadUsers();
-
   try {
     await db.init();
     const dbSettings = await db.getSettings();
