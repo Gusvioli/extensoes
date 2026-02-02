@@ -7,6 +7,7 @@ Gerenciador visual e intuitivo para todos os seus servidores de sinalização We
 ```bash
 # Instalar dependências (se necessário)
 npm install
+npm install pg
 
 # Iniciar dashboard (padrão: porta 3000)
 node src/server.js
@@ -30,6 +31,7 @@ dashboard/
 │   └── server.js             # Servidor HTTP + API
 │
 ├── data/                      # Dados persistentes
+│   ├── dashboard.db          # Banco de Dados SQLite
 │   ├── servers-config.json               # Configuração atual
 │   └── servers-config.example.json       # Exemplo com 11 servidores
 │
@@ -155,21 +157,23 @@ Use os botões de filtro para:
 
 ## 💾 Dados Persistentes
 
-Os servidores são salvos em `data/servers-config.json`:
+Os dados são armazenados de forma robusta e segura no banco de dados **PostgreSQL**.
 
-```json
-{
-  "servers": [
-    { "id": "...", "name": "...", ... }
-  ]
-}
-```
+O arquivo `data/servers-config.json` é mantido apenas para:
+- Importação inicial (migração automática na primeira execução)
+- Backup manual legível
 
 Você pode:
 - ✅ Editar manualmente
 - ✅ Fazer backup facilmente
 - ✅ Versionar no Git
 - ✅ Compartilhar com o time
+
+### Configuração do Banco de Dados
+
+Defina a variável de ambiente `DATABASE_URL` antes de iniciar:
+
+`DATABASE_URL=postgresql://usuario:senha@localhost:5432/nome_do_banco`
 
 ## 📦 Estrutura de Diretórios Recomendada
 

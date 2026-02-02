@@ -25,7 +25,7 @@ Todas as opções usam o formato `--chave=valor`:
 #### `--mode`
 - `internal`: Apenas arquivo local (`servers-config.json`)
 - `external`: Apenas via API HTTP
-- `all` **(padrão)**: Ambos (remove duplicatas)
+- `all` **(padrão)**: Ambos (combina e remove duplicatas)
 
 ```bash
 # Apenas config local
@@ -65,7 +65,7 @@ Define o host e porta para buscar dados da API externa.
 
 ```bash
 # API em outro servidor
-node dashboard/scripts/list-servers.js --host=192.168.1.100 --port=3000
+node dashboard/scripts/list-servers.js --host=192.168.1.100 --port=10080
 ```
 
 ## Exemplos de Uso

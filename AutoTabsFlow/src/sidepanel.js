@@ -275,7 +275,7 @@ async function clearDistractions() {
 }
 
 async function toggleGroups() {
-  const tabs = await chrome.tabs.query({});
+  const tabs = await chrome.tabs.query({ windowType: "normal" });
   const groups = await chrome.tabGroups.query({});
   const hasGroups = groups.length > 0;
   const btn = document.getElementById("toggle-groups");
@@ -334,7 +334,12 @@ async function toggleGroups() {
           });
         }
       } catch (error) {
-        console.error("Erro ao reagrupar:", error);
+        if (
+          !error.message ||
+          !error.message.includes("Grouping is not supported")
+        ) {
+          console.error("Erro ao reagrupar:", error);
+        }
       }
     }
   }

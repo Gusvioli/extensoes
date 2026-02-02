@@ -18,11 +18,11 @@
 │   └─ DELETE /api/servers                │
 └──────────────┬──────────────────────────┘
                │
-               │ File System
+               │ SQLite Database
                │
 ┌──────────────▼──────────────────────────┐
-│   servers-config.json                   │
-│   (Armazenamento de dados)              │
+│   dashboard.db                          │
+│   (Armazenamento persistente)           │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
@@ -34,6 +34,7 @@
 ## 📚 Componentes Principais
 
 ### 1. **dashboard.html**
+
 - Arquivo HTML único com CSS e JavaScript embutidos
 - Interface responsiva e moderna
 - Operações CRUD de servidores
@@ -41,17 +42,19 @@
 - Estatísticas em tempo real
 
 ### 2. **dashboard-server.js**
+
 - Servidor HTTP para servir o dashboard
 - API REST para CRUD de servidores
 - Carregamento/salvamento de `servers-config.json`
 - CORS habilitado para integração futura
 
 ### 3. **servers-config.json**
-- Armazenamento persistente de dados
-- Formato JSON padronizado
-- Pode ser sincronizado com banco de dados no futuro
+
+- Usado apenas para migração/importação inicial
+- Dados reais residem em `dashboard.db`
 
 ### 4. **server.js** (modificado)
+
 - Inicializa `dashboard-server.js` na porta `config.port + 2000`
 - Mantém compatibilidade com código existente
 - Integração transparente
@@ -59,6 +62,7 @@
 ## 🚀 Plano de Expansão Futura
 
 ### Fase 1: Melhorias Imediatas (v1.1)
+
 - [ ] Busca/filtro por nome de servidor
 - [ ] Exportar configuração como JSON
 - [ ] Importar configuração de arquivo
@@ -66,29 +70,14 @@
 - [ ] Responsividade mobile melhorada
 - [ ] Validação mais robusta de tokens
 
-### Fase 2: Banco de Dados (v1.2)
-```javascript
-// Migrar de JSON para PostgreSQL/MongoDB
-// Estrutura exemplo:
-{
-  id: UUID,
-  name: string,
-  description: string,
-  host: string,
-  port: number,
-  protocol: enum('ws', 'wss'),
-  token: string,
-  status: enum('active', 'inactive', 'standby'),
-  region: string,
-  maxClients: number,
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  notes: text,
-  metadata: json
-}
-```
+### Fase 2: Banco de Dados (v1.2) - ✅ CONCLUÍDO
+
+- Migração para SQLite implementada
+- Tabelas `servers` e `settings` criadas
+- Migração automática de JSON para SQLite
 
 ### Fase 3: Monitoramento em Tempo Real (v1.3)
+
 ```javascript
 // Dashboard com:
 - Clientes conectados por servidor
@@ -99,6 +88,7 @@
 ```
 
 ### Fase 4: Autenticação e Autorização (v1.4)
+
 ```javascript
 // Adicionar:
 - Login de usuários
@@ -109,6 +99,7 @@
 ```
 
 ### Fase 5: Escalabilidade (v1.5)
+
 ```javascript
 // Implementar:
 - Load balancing entre servidores
@@ -162,6 +153,7 @@ server/
 ## 🔌 API Expandida (Futuro)
 
 ### Servidores
+
 ```
 GET    /api/servers           # Lista com paginação
 POST   /api/servers           # Criar
@@ -172,6 +164,7 @@ PATCH  /api/servers/:id/status # Mudar status
 ```
 
 ### Monitoramento
+
 ```
 GET    /api/servers/:id/status     # Status atual
 GET    /api/servers/:id/metrics    # Métricas
@@ -179,6 +172,7 @@ GET    /api/servers/:id/logs       # Logs
 ```
 
 ### Autenticação
+
 ```
 POST   /api/auth/login         # Login
 POST   /api/auth/register      # Registrar (futuro)
@@ -187,6 +181,7 @@ GET    /api/auth/me            # Informações do usuário
 ```
 
 ### Health Check
+
 ```
 GET    /api/health             # Status global
 GET    /api/health/servers     # Health de todos
@@ -195,6 +190,7 @@ GET    /api/health/servers     # Health de todos
 ## 💾 Exemplo de Migração para Banco de Dados
 
 ### PostgreSQL Schema
+
 ```sql
 CREATE TABLE servers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,6 +231,7 @@ CREATE TABLE server_metrics (
 ```
 
 ### Código Node.js para Migração
+
 ```javascript
 // lib/database.js
 const { Pool } = require('pg');

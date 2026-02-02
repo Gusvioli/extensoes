@@ -8,14 +8,13 @@ const https = require("https");
 const url = require("url");
 const crypto = require("crypto");
 const net = require("net");
+const db = require("./database");
 
-let serversData = [];
 let usersData = [];
 let settingsData = { discoveryUrl: "http://localhost:9080/token" };
 let sessionsData = {}; // Armazenar sessões ativas
 let lastDiscoveryError = null; // Controle para evitar spam de logs
 
-const configFile = path.join(__dirname, "../data/servers-config.json");
 const usersFile = path.join(__dirname, "../data/users.json");
 const publicDir = path.join(__dirname, "../public");
 
@@ -82,43 +81,6 @@ function createSession(username) {
   const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 horas
   sessionsData[token] = { username, expiresAt };
   return token;
-}
-
-/**
- * Carregar configuração de servidores
- */
-function loadServersConfig() {
-  try {
-    if (fs.existsSync(configFile)) {
-      const content = fs.readFileSync(configFile, "utf-8");
-      const config = JSON.parse(content);
-      serversData = config.servers || [];
-      if (config.settings) {
-        settingsData = { ...settingsData, ...config.settings };
-      }
-    }
-  } catch (err) {
-    console.error("Erro ao carregar configuração de servidores:", err);
-    serversData = [];
-  }
-}
-
-/**
- * Salvar configuração de servidores
- */
-function saveServersConfig() {
-  try {
-    // Criar diretório se não existir
-    const dataDir = path.dirname(configFile);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    const config = { servers: serversData, settings: settingsData };
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-  } catch (err) {
-    console.error("Erro ao salvar configuração de servidores:", err);
-  }
 }
 
 /**
@@ -235,7 +197,7 @@ function serveStaticFile(filePath, res) {
  * Criar servidor HTTP para dashboard
  */
 function createDashboardServer(httpPort) {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname;
 
@@ -404,11 +366,16 @@ function createDashboardServer(httpPort) {
       }
       let body = "";
       req.on("data", (chunk) => (body += chunk));
-      req.on("end", () => {
+      req.on("end", async () => {
         try {
           const newSettings = JSON.parse(body);
           settingsData = { ...settingsData, ...newSettings };
-          saveServersConfig();
+
+          // Salvar cada configuração no DB
+          for (const [key, value] of Object.entries(settingsData)) {
+            await db.saveSetting(key, value);
+          }
+
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true }));
         } catch (err) {
@@ -423,25 +390,41 @@ function createDashboardServer(httpPort) {
 
     // GET /api/servers → Obter todos os servidores
     if (pathname === "/api/servers" && req.method === "GET") {
-      loadServersConfig();
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ servers: serversData }));
+      try {
+        const serversData = await db.getAllServers();
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+        });
+        res.end(JSON.stringify({ servers: serversData }));
+      } catch (err) {
+        console.error("Erro ao obter servidores:", err.message);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Erro interno no banco de dados" }));
+      }
       return;
     }
 
     // GET /api/public-servers → Obter informações públicas dos servidores (COM TOKENS)
     if (pathname === "/api/public-servers" && req.method === "GET") {
-      loadServersConfig();
-      const statusFilter = parsedUrl.query.status || "active"; // 'active'|'inactive'|'standby'|'all' (padrão: apenas ativos)
+      try {
+        const serversData = await db.getAllServers();
+        const statusFilter = parsedUrl.query.status || "active"; // 'active'|'inactive'|'standby'|'all' (padrão: apenas ativos)
 
-      let list = serversData;
-      if (statusFilter !== "all") {
-        list = serversData.filter((s) => s.status === statusFilter);
+        let list = serversData;
+        if (statusFilter !== "all") {
+          list = serversData.filter((s) => s.status === statusFilter);
+        }
+
+        // Incluir tokens para que usuários possam copiar e usar na extensão
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+        });
+        res.end(JSON.stringify({ servers: list }));
+      } catch (err) {
+        console.error("Erro ao obter servidores públicos:", err.message);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Erro interno no banco de dados" }));
       }
-
-      // Incluir tokens para que usuários possam copiar e usar na extensão
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ servers: list }));
       return;
     }
 
@@ -457,9 +440,14 @@ function createDashboardServer(httpPort) {
       req.on("data", (chunk) => {
         body += chunk.toString();
       });
-      req.on("end", () => {
+      req.on("end", async () => {
         try {
           const serverData = JSON.parse(body);
+
+          // Gerar ID se não existir
+          if (!serverData.id) {
+            serverData.id = `server-${Date.now()}`;
+          }
 
           let isManualToken = true;
 
@@ -478,6 +466,10 @@ function createDashboardServer(httpPort) {
           // Marcar como manual para impedir que o auto-sync sobrescreva o token
           serverData.manualToken = isManualToken;
 
+          // Definir data de criação
+          serverData.createdAt = new Date().toISOString();
+          serverData.status = serverData.status || "active";
+
           const validationErrors = validateServerData(serverData);
           if (validationErrors.length > 0) {
             res.writeHead(400, { "Content-Type": "application/json" });
@@ -490,15 +482,13 @@ function createDashboardServer(httpPort) {
             return;
           }
 
-          loadServersConfig();
-          serversData.push(serverData);
-          saveServersConfig();
+          await db.saveServer(serverData);
 
           res.writeHead(201, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
               success: true,
-              message: "Servidor adicionado",
+              message: "Servidor criado com sucesso",
               server: serverData,
             }),
           );
@@ -522,7 +512,7 @@ function createDashboardServer(httpPort) {
       req.on("data", (chunk) => {
         body += chunk.toString();
       });
-      req.on("end", () => {
+      req.on("end", async () => {
         try {
           const serverData = JSON.parse(body);
 
@@ -555,12 +545,12 @@ function createDashboardServer(httpPort) {
             return;
           }
 
-          loadServersConfig();
-
+          // Verificar se existe
+          const serversData = await db.getAllServers();
           const index = serversData.findIndex((s) => s.id === serverData.id);
+
           if (index !== -1) {
-            serversData[index] = serverData;
-            saveServersConfig();
+            await db.saveServer(serverData);
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(
               JSON.stringify({
@@ -593,7 +583,7 @@ function createDashboardServer(httpPort) {
       req.on("data", (chunk) => {
         body += chunk.toString();
       });
-      req.on("end", () => {
+      req.on("end", async () => {
         try {
           const { id } = JSON.parse(body);
           if (!id || typeof id !== "string") {
@@ -602,9 +592,7 @@ function createDashboardServer(httpPort) {
             return;
           }
 
-          loadServersConfig();
-          serversData = serversData.filter((s) => s.id !== id);
-          saveServersConfig();
+          await db.deleteServer(id);
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(
@@ -620,15 +608,21 @@ function createDashboardServer(httpPort) {
 
     // GET /api/stats → Estatísticas
     if (pathname === "/api/stats" && req.method === "GET") {
-      loadServersConfig();
-      const stats = {
-        total: serversData.length,
-        active: serversData.filter((s) => s.status === "active").length,
-        inactive: serversData.filter((s) => s.status === "inactive").length,
-        standby: serversData.filter((s) => s.status === "standby").length,
-      };
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(stats));
+      try {
+        const serversData = await db.getAllServers();
+        const stats = {
+          total: serversData.length,
+          active: serversData.filter((s) => s.status === "active").length,
+          inactive: serversData.filter((s) => s.status === "inactive").length,
+          standby: serversData.filter((s) => s.status === "standby").length,
+        };
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(stats));
+      } catch (err) {
+        console.error("Erro ao obter estatísticas:", err.message);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Erro interno no banco de dados" }));
+      }
       return;
     }
 
@@ -645,7 +639,7 @@ function createDashboardServer(httpPort) {
  * Monitora a porta HTTP do servidor (9080) para atualizar tokens automaticamente via rede
  */
 function startAutoSync() {
-  const sync = () => {
+  const sync = async () => {
     // 1. Sincronização Global (Discovery URL) - Apenas se configurada e válida
     if (settingsData.discoveryUrl) {
       let targetUrl;
@@ -666,7 +660,7 @@ function startAutoSync() {
 
             let data = "";
             res.on("data", (chunk) => (data += chunk));
-            res.on("end", () => {
+            res.on("end", async () => {
               try {
                 const info = JSON.parse(data);
                 // info: { token, wsUrl, requiresAuth }
@@ -686,7 +680,7 @@ function startAutoSync() {
                   return;
                 }
 
-                loadServersConfig(); // Recarregar para garantir dados frescos
+                const serversData = await db.getAllServers();
 
                 let server = serversData.find((s) => s.port === port);
                 let updated = false;
@@ -757,7 +751,7 @@ function startAutoSync() {
                 }
 
                 if (updated) {
-                  saveServersConfig();
+                  await db.saveServer(server || newServer);
                 }
               } catch (e) {
                 // Ignorar erros de parse
@@ -766,32 +760,36 @@ function startAutoSync() {
           },
         );
 
-        req.on("error", () => {
+        req.on("error", async () => {
           // Servidor offline ou porta fechada
-          loadServersConfig();
+          try {
+            const serversData = await db.getAllServers();
 
-          // Tenta inferir a porta WS (convenção: porta descoberta - 1000)
-          const discoveryPort = parseInt(
-            targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
-          );
-          const wsPort = discoveryPort > 1024 ? discoveryPort - 1000 : 8080;
-          const host = targetUrl.hostname;
-
-          const server = serversData.find(
-            (s) =>
-              (s.host === host ||
-                s.host === "127.0.0.1" ||
-                s.host === "localhost") &&
-              s.port === wsPort,
-          );
-
-          if (server && server.status !== "inactive") {
-            server.status = "inactive";
-            saveServersConfig();
-            const ts = new Date().toISOString();
-            console.log(
-              `[${ts}] 📉 Auto-Sync: Servidor ${host}:${wsPort} detectado como OFFLINE (Global Discovery).`,
+            // Tenta inferir a porta WS (convenção: porta descoberta - 1000)
+            const discoveryPort = parseInt(
+              targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
             );
+            const wsPort = discoveryPort > 1024 ? discoveryPort - 1000 : 8080;
+            const host = targetUrl.hostname;
+
+            const server = serversData.find(
+              (s) =>
+                (s.host === host ||
+                  s.host === "127.0.0.1" ||
+                  s.host === "localhost") &&
+                s.port === wsPort,
+            );
+
+            if (server && server.status !== "inactive") {
+              server.status = "inactive";
+              await db.saveServer(server);
+              const ts = new Date().toISOString();
+              console.log(
+                `[${ts}] 📉 Auto-Sync: Servidor ${host}:${wsPort} detectado como OFFLINE (Global Discovery).`,
+              );
+            }
+          } catch (e) {
+            // Ignorar erro de DB
           }
         });
       } catch (e) {
@@ -801,6 +799,13 @@ function startAutoSync() {
     }
 
     // 2. Sincronização Individual (URL Token por Servidor)
+    let serversData;
+    try {
+      serversData = await db.getAllServers();
+    } catch (e) {
+      return;
+    }
+
     serversData.forEach((server) => {
       let targetUrlStr = server.urltoken;
 
@@ -830,12 +835,12 @@ function startAutoSync() {
       const requestModule = targetUrl.protocol === "https:" ? https : http;
 
       // Helper para marcar servidor como inativo
-      const markAsInactive = (reason) => {
-        loadServersConfig();
+      const markAsInactive = async (reason) => {
+        const serversData = await db.getAllServers();
         const currentServer = serversData.find((s) => s.id === server.id);
         if (currentServer && currentServer.status !== "inactive") {
           currentServer.status = "inactive";
-          saveServersConfig();
+          await db.saveServer(currentServer);
           const ts = new Date().toISOString();
           console.log(
             `[${ts}] 📉 Auto-Sync: Servidor ${currentServer.name} offline (${reason}).`,
@@ -845,7 +850,7 @@ function startAutoSync() {
 
       // Helper para verificação inteligente via TCP (Fallback)
       // Se a API HTTP falhar, verificamos se a porta principal do serviço (WebSocket) está aberta
-      const checkTcpAndFallback = (reason) => {
+      const checkTcpAndFallback = async (reason) => {
         if (!server.port || typeof server.port !== "number") {
           // Se não há porta definida, não marcamos como inativo automaticamente
           // pois não temos como realizar o fallback via TCP.
@@ -858,28 +863,32 @@ function startAutoSync() {
           if (!socket.destroyed) socket.destroy();
         };
 
-        socket.on("connect", () => {
+        socket.on("connect", async () => {
           cleanup();
           // SUCESSO TCP: O servidor está online na porta principal, mesmo que a API de token tenha falhado
-          loadServersConfig();
-          const currentServer = serversData.find((s) => s.id === server.id);
-          if (currentServer) {
-            let updated = false;
-            if (currentServer.status !== "active") {
-              currentServer.status = "active";
-              updated = true;
-            }
-            currentServer.lastSeen = new Date().toISOString();
+          try {
+            const serversData = await db.getAllServers();
+            const currentServer = serversData.find((s) => s.id === server.id);
+            if (currentServer) {
+              let updated = false;
+              if (currentServer.status !== "active") {
+                currentServer.status = "active";
+                updated = true;
+              }
+              currentServer.lastSeen = new Date().toISOString();
 
-            if (updated) {
-              saveServersConfig();
-              const ts = new Date().toISOString();
-              console.log(
-                `[${ts}] ⚠️ Auto-Sync: Servidor ${currentServer.name} online via TCP (API Token falhou: ${reason}).`,
-              );
-            } else {
-              saveServersConfig(); // Apenas atualiza lastSeen
+              if (updated) {
+                await db.saveServer(currentServer);
+                const ts = new Date().toISOString();
+                console.log(
+                  `[${ts}] ⚠️ Auto-Sync: Servidor ${currentServer.name} online via TCP (API Token falhou: ${reason}).`,
+                );
+              } else {
+                await db.saveServer(currentServer); // Apenas atualiza lastSeen
+              }
             }
+          } catch (e) {
+            // Ignorar erro de DB
           }
         });
 
@@ -911,7 +920,7 @@ function startAutoSync() {
 
           let data = "";
           res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
+          res.on("end", async () => {
             try {
               const info = JSON.parse(data);
 
@@ -920,7 +929,7 @@ function startAutoSync() {
                 throw new Error("JSON inválido");
               }
 
-              loadServersConfig();
+              const serversData = await db.getAllServers();
 
               // Reencontrar servidor após reload
               const currentServer = serversData.find((s) => s.id === server.id);
@@ -987,7 +996,7 @@ function startAutoSync() {
               }
 
               if (updated) {
-                saveServersConfig();
+                await db.saveServer(currentServer);
                 const ts = new Date().toISOString();
                 console.log(
                   `[${ts}] 🔄 Auto-Sync: Servidor ${currentServer.name} atualizado via URL Token.`,
@@ -995,16 +1004,21 @@ function startAutoSync() {
               }
             } catch (e) {
               // Se respondeu 200 OK mas o JSON é inválido, o servidor está ONLINE (apenas a API retornou lixo)
-              loadServersConfig();
-              const currentServer = serversData.find((s) => s.id === server.id);
-              if (currentServer) {
-                currentServer.lastSeen = new Date().toISOString();
-                if (currentServer.status !== "active") {
-                  currentServer.status = "active";
-                }
-                saveServersConfig();
-                // Não marcamos como inativo, pois a rede está funcionando
-              }
+              db.getAllServers()
+                .then((serversData) => {
+                  const currentServer = serversData.find(
+                    (s) => s.id === server.id,
+                  );
+                  if (currentServer) {
+                    currentServer.lastSeen = new Date().toISOString();
+                    if (currentServer.status !== "active") {
+                      currentServer.status = "active";
+                    }
+                    db.saveServer(currentServer);
+                    // Não marcamos como inativo, pois a rede está funcionando
+                  }
+                })
+                .catch(() => {});
             }
           });
         },
@@ -1024,9 +1038,16 @@ function startAutoSync() {
 /**
  * Inicializar dashboard
  */
-function initDashboard(dashboardPort) {
+async function initDashboard(dashboardPort) {
   loadUsers();
-  loadServersConfig();
+
+  try {
+    await db.init();
+    const dbSettings = await db.getSettings();
+    settingsData = { ...settingsData, ...dbSettings };
+  } catch (e) {
+    console.error("Erro ao inicializar banco de dados:", e);
+  }
 
   // Iniciar sincronização automática via HTTP
   startAutoSync();
@@ -1039,7 +1060,9 @@ function initDashboard(dashboardPort) {
       console.error(
         `Provavelmente o dashboard já está rodando em outra aba ou terminal.`,
       );
-      console.error(`Para corrigir, feche o outro processo ou use outra porta: PORT=${Number(dashboardPort) + 1} npm start\n`);
+      console.error(
+        `Para corrigir, feche o outro processo ou use outra porta: PORT=${Number(dashboardPort) + 1} npm start\n`,
+      );
       process.exit(1);
     }
   });
@@ -1057,8 +1080,6 @@ function initDashboard(dashboardPort) {
 module.exports = {
   initDashboard,
   createDashboardServer,
-  loadServersConfig,
-  saveServersConfig,
 };
 
 // Se executado diretamente

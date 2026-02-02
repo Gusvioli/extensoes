@@ -52,6 +52,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) return; // Permite reagrupamento dinâmico
 
     try {
+      // Verifica se a janela suporta agrupamento (apenas janelas 'normal')
+      const win = await chrome.windows.get(tab.windowId);
+      if (win.type !== "normal") return;
+
       let contextCategory = await classifyTabContext(tab.title || "", tab.url);
       console.log(
         `[AutoTabsFlow] Classificado: "${tab.title}" -> ${contextCategory}`,
@@ -101,7 +105,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         currentGroupId = groupId;
       }
     } catch (error) {
-      console.error("Erro no AutoTabsFlow:", error);
+      if (
+        !error.message ||
+        !error.message.includes("Grouping is not supported")
+      ) {
+        console.error("Erro no AutoTabsFlow:", error);
+      }
     }
   }
 });

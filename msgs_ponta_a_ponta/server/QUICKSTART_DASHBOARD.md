@@ -5,18 +5,23 @@ Comece em 2 minutos!
 ## ⚡ Início Rápido
 
 ### 1. Instale as dependências
+
 ```bash
 cd server
 npm install
+cd ../dashboard && npm install pg && cd ../server
 ```
 
 ### 2. Inicie o servidor
+
 ```bash
 npm start
 ```
 
 ### 3. Abra o dashboard
+
 Acesse em seu navegador:
+
 ```
 http://localhost:10080
 ```
@@ -28,7 +33,9 @@ http://localhost:10080
 ## 📚 Primeiros Passos
 
 ### Ver servidores de exemplo
+
 Copie o arquivo de exemplo:
+
 ```bash
 cp servers-config.example.json servers-config.json
 ```
@@ -36,6 +43,7 @@ cp servers-config.example.json servers-config.json
 Recarregue o dashboard no navegador - você verá 11 servidores de exemplo (dev, produção, backup, etc).
 
 ### Adicionar seu primeiro servidor
+
 1. Clique em **"+ Novo Servidor"**
 2. Preencha os campos:
    - Nome: "Meu Servidor"
@@ -46,10 +54,12 @@ Recarregue o dashboard no navegador - você verá 11 servidores de exemplo (dev,
 3. Clique em **"Salvar Servidor"**
 
 ### Acessar o servidor
+
 1. Na tela do dashboard, clique no botão **"🔗 Abrir Servidor"**
 2. O servidor abre em uma nova aba!
 
 ### Copiar token
+
 Clique em **"📋 Copiar"** dentro da caixa do token para copiar para a área de transferência.
 
 ---
@@ -63,10 +73,13 @@ Clique em **"📋 Copiar"** dentro da caixa do token para copiar para a área de
 | Dashboard | **10080** | Gerenciar todos os servidores |
 
 Exemplo com porta diferente:
+
 ```bash
 PORT=3000 npm start
 ```
+
 Neste caso:
+
 - WebSocket: 3000
 - Token: 4000
 - **Dashboard: 5000**
@@ -76,9 +89,11 @@ Neste caso:
 ## 📊 Visualizar Informações
 
 ### Via Dashboard (recomendado)
+
 Acesse `http://localhost:10080` - tudo visual e intuitivo!
 
 ### Via API/cURL
+
 ```bash
 # Ver todos os servidores
 curl http://localhost:10080/api/servers
@@ -114,6 +129,7 @@ Os servidores são salvos automaticamente em `servers-config.json`:
 ```
 
 Você pode:
+
 - ✅ Editar manualmente este arquivo
 - ✅ Fazer backup facilmente
 - ✅ Compartilhar com seu time
@@ -159,6 +175,7 @@ Você pode:
 ## 🆘 Troubleshooting
 
 ### "Dashboard não carrega"
+
 ```bash
 # Verifique se o servidor está rodando
 ./manage-servers.sh info
@@ -168,6 +185,7 @@ npm start
 ```
 
 ### "Porta já em uso"
+
 ```bash
 # Use outra porta
 PORT=9000 npm start
@@ -177,13 +195,16 @@ lsof -i :8080
 ```
 
 ### "Arquivo servers-config.json vazio"
+
 - Adicione um servidor via dashboard
 - Ou copie o arquivo de exemplo:
+
 ```bash
 cp servers-config.example.json servers-config.json
 ```
 
 ### "Não consigo acessar um servidor remoto"
+
 - Verifique se host e porta estão corretos
 - Confirme firewall/acesso de rede
 - Teste: `ping seu-servidor.com`

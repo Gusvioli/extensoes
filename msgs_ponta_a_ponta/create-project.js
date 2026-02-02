@@ -20,7 +20,8 @@ const projectStructure = {
   "description": "Minimal signaling server for WebRTC P2P Chat Extension",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test-security.js"
   },
   "author": "",
   "license": "ISC",
@@ -30,7 +31,7 @@ const projectStructure = {
 }`,
       "server.js": `// server/server.js
 
-const url = require('url');
+const crypto = require('crypto'); // Módulo nativo para criptografia segura
 let WebSocket;
 
 try {
@@ -43,9 +44,26 @@ try {
     process.exit(1);
 }
 
+// Configuração de Segurança
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH !== 'false'; // Padrão é true se não especificado como false
+
+if (REQUIRE_AUTH && !AUTH_TOKEN) {
+    console.warn("⚠️  AVISO: Autenticação habilitada (REQUIRE_AUTH=true) mas nenhum AUTH_TOKEN definido.");
+    console.warn("⚠️  Defina a variável de ambiente AUTH_TOKEN para proteger seu servidor.");
+} else if (REQUIRE_AUTH) {
+    console.log(\`🔒 Servidor protegido. Token de autenticação configurado.\`);
+}
+
 // Inicia o servidor WebSocket na porta 8080.
 const port = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: port });
+// Permite habilitar compressão via variável de ambiente (padrão: desabilitada para segurança)
+const perMessageDeflate = process.env.DISABLE_DEFLATE === 'false' ? true : false;
+
+const wss = new WebSocket.Server({ 
+    port: port,
+    perMessageDeflate: perMessageDeflate 
+});
 
 // Um Map para armazenar os clientes conectados, associando um ID único a cada socket.
 const clients = new Map();
@@ -53,18 +71,21 @@ const clients = new Map();
 console.log(\`✅ Servidor de sinalização iniciado na porta \${port}...\`);
 
 wss.on('connection', (ws, req) => {
-    // Verifica se um ID foi solicitado via query string (?id=...)
-    const parameters = url.parse(req.url, true);
-    let id = parameters.query.id;
+    // Gera um ID criptograficamente seguro (96 bits de entropia)
+    // Nota: ID via query string foi removido por segurança (conforme Changelog)
+    const id = crypto.randomBytes(12).toString('hex');
 
-    if (!id || clients.has(id)) {
-        id = Math.random().toString(36).substring(2, 9);
-    }
     clients.set(id, ws);
+    ws.isAuthenticated = !REQUIRE_AUTH; // Se auth não for requerida, já nasce autenticado
+
     console.log(\`🔌 Cliente conectado com ID: \${id}\`);
 
     // Envia o ID gerado de volta para o cliente para que ele saiba quem é.
-    ws.send(JSON.stringify({ type: 'your-id', id }));
+    ws.send(JSON.stringify({ 
+        type: 'your-id', 
+        id, 
+        requiresAuth: REQUIRE_AUTH && !ws.isAuthenticated 
+    }));
 
     ws.on('message', (messageAsString) => {
         let data;
@@ -72,6 +93,24 @@ wss.on('connection', (ws, req) => {
             data = JSON.parse(messageAsString);
         } catch (e) {
             console.error('❌ Mensagem JSON inválida recebida:', messageAsString);
+            return;
+        }
+
+        // Lógica de Autenticação
+        if (data.type === 'authenticate') {
+            if (data.token === AUTH_TOKEN) {
+                ws.isAuthenticated = true;
+                ws.send(JSON.stringify({ type: 'authenticated' }));
+                console.log(\`✅ Cliente \${id} autenticado com sucesso.\`);
+            } else {
+                ws.send(JSON.stringify({ type: 'error', message: 'Token de autenticação inválido.' }));
+                console.warn(\`❌ Falha de autenticação para o cliente \${id}.\`);
+            }
+            return;
+        }
+
+        if (REQUIRE_AUTH && !ws.isAuthenticated) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Autenticação necessária. Envie o token.' }));
             return;
         }
 
@@ -101,6 +140,453 @@ wss.on('connection', (ws, req) => {
         console.error(\`❌ Erro no WebSocket do cliente \${id}:\`, error);
     });
 });`,
+      "test-security.js": `#!/usr/bin/env node
+
+/**
+ * 🧪 Teste de Segurança - P2P Secure Chat
+ *
+ * Este script valida se o servidor está implementando corretamente
+ * as medidas de segurança necessárias.
+ *
+ * Uso: node test-security.js [url] [token]
+ * Exemplo: node test-security.js ws://localhost:8080 seu-token-aqui
+ */
+
+const WebSocket = require("ws");
+const readline = require("readline");
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+function question(prompt) {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
+
+class SecurityTester {
+  constructor(url, token) {
+    this.url = url;
+    this.token = token;
+    this.results = {
+      passed: 0,
+      failed: 0,
+      tests: [],
+    };
+  }
+
+  log(message, type = "info") {
+    const icons = {
+      info: "📌",
+      success: "✅",
+      error: "❌",
+      warning: "⚠️",
+    };
+    console.log(\`\${icons[type]} \${message}\`);
+  }
+
+  async test(name, fn) {
+    try {
+      process.stdout.write(\`🔍 Testando: \${name}... \`);
+      await fn();
+      this.log("Passou", "success");
+      this.results.passed++;
+      this.results.tests.push({ name, status: "passed" });
+    } catch (error) {
+      this.log(\`Falhou: \${error.message}\`, "error");
+      this.results.failed++;
+      this.results.tests.push({ name, status: "failed", error: error.message });
+    }
+  }
+
+  async testConnectionWithoutAuth() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+
+      ws.on("open", () => {
+        // Se conectar, aguarda a mensagem "your-id"
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+          if (msg.type === "your-id") {
+            // Tenta enviar mensagem sem autenticar
+            ws.send(
+              JSON.stringify({
+                target: "test",
+                type: "key-exchange",
+                payload: { test: "data" },
+              }),
+            );
+
+            let authRequired = false;
+            const timeout = setTimeout(() => {
+              ws.close();
+              if (authRequired) {
+                resolve();
+              } else {
+                reject(new Error("Servidor não exigiu autenticação"));
+              }
+            }, 1000);
+
+            ws.on("message", (data) => {
+              const msg = JSON.parse(data);
+              if (
+                msg.type === "error" &&
+                msg.message?.includes("Autenticação")
+              ) {
+                authRequired = true;
+              }
+            });
+          }
+        });
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async testAuthenticationRequired() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+      let receivedId = false;
+      let authPrompted = false;
+
+      ws.on("open", () => {
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+
+          if (msg.type === "your-id") {
+            receivedId = true;
+            if (msg.requiresAuth === true) {
+              authPrompted = true;
+            }
+          }
+        });
+
+        setTimeout(() => {
+          ws.close();
+          if (receivedId && authPrompted) {
+            resolve();
+          } else {
+            reject(new Error("Servidor não indicou autenticação obrigatória"));
+          }
+        }, 500);
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async testInvalidToken() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+      let authFailed = false;
+
+      ws.on("open", () => {
+        ws.send(
+          JSON.stringify({
+            type: "authenticate",
+            token: "token-invalido-12345",
+          }),
+        );
+
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+          if (msg.type === "error" && msg.message?.includes("inválido")) {
+            authFailed = true;
+          }
+        });
+
+        setTimeout(() => {
+          ws.close();
+          if (authFailed) {
+            resolve();
+          } else {
+            reject(new Error("Servidor aceitou token inválido"));
+          }
+        }, 500);
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async testValidToken() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+      let authSuccess = false;
+
+      ws.on("open", () => {
+        ws.send(
+          JSON.stringify({
+            type: "authenticate",
+            token: this.token,
+          }),
+        );
+
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+          if (msg.type === "authenticated") {
+            authSuccess = true;
+          }
+        });
+
+        setTimeout(() => {
+          ws.close();
+          if (authSuccess) {
+            resolve();
+          } else {
+            reject(new Error("Token válido foi rejeitado"));
+          }
+        }, 500);
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async testIDFormat() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.url);
+      let idFormat = null;
+
+      ws.on("open", () => {
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+          if (msg.type === "your-id") {
+            idFormat = msg.id;
+          }
+        });
+
+        setTimeout(() => {
+          ws.close();
+
+          // Verifica se é hexadecimal (formato seguro)
+          if (idFormat && /^[a-f0-9]{24,}$/.test(idFormat)) {
+            resolve();
+          } else {
+            reject(new Error(\`ID em formato inseguro: \${idFormat}\`));
+          }
+        }, 500);
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async testNoQueryStringID() {
+    return new Promise((resolve, reject) => {
+      // Tenta conectar com ID na query string (não deve funcionar)
+      const url = this.url + "?id=custom-id";
+      const ws = new WebSocket(url);
+      let receivedId = null;
+
+      ws.on("open", () => {
+        ws.on("message", (data) => {
+          const msg = JSON.parse(data);
+          if (msg.type === "your-id") {
+            receivedId = msg.id;
+          }
+        });
+
+        setTimeout(() => {
+          ws.close();
+
+          // ID não deve ser 'custom-id'
+          if (receivedId !== "custom-id") {
+            resolve();
+          } else {
+            reject(new Error("Servidor aceitou ID via query string"));
+          }
+        }, 500);
+      });
+
+      ws.on("error", reject);
+    });
+  }
+
+  async runAllTests() {
+    console.log("\\n" + "=".repeat(60));
+    console.log("🔐 Teste de Segurança - P2P Secure Chat");
+    console.log("=".repeat(60) + "\\n");
+
+    console.log(\`🌐 Servidor: \${this.url}\`);
+    console.log(
+      \`🔑 Token: \${this.token.substring(0, 8)}...\${this.token.slice(-4)}\\n\`,
+    );
+
+    await this.test("Autenticação é obrigatória", () =>
+      this.testAuthenticationRequired(),
+    );
+
+    await this.test("Token inválido é rejeitado", () =>
+      this.testInvalidToken(),
+    );
+
+    await this.test("Token válido é aceito", () => this.testValidToken());
+
+    await this.test("ID está em formato seguro (hexadecimal)", () =>
+      this.testIDFormat(),
+    );
+
+    await this.test("ID via query string é ignorado", () =>
+      this.testNoQueryStringID(),
+    );
+
+    await this.test("Mensagens sem autenticação são rejeitadas", () =>
+      this.testConnectionWithoutAuth(),
+    );
+
+    console.log("\\n" + "=".repeat(60));
+    console.log("📊 Resultados");
+    console.log("=".repeat(60));
+    console.log(\`✅ Passou: \${this.results.passed}\`);
+    console.log(\`❌ Falhou: \${this.results.failed}\`);
+    console.log("");
+
+    if (this.results.failed === 0) {
+      this.log("Todos os testes passaram! 🎉", "success");
+    } else {
+      this.log(
+        \`\${this.results.failed} teste(s) falharam. Revise a configuração.\`,
+        "warning",
+      );
+    }
+
+    console.log("=".repeat(60) + "\\n");
+
+    rl.close();
+    process.exit(this.results.failed > 0 ? 1 : 0);
+  }
+}
+
+async function main() {
+  let url = process.argv[2];
+  let token = process.argv[3];
+
+  if (!url) {
+    url = await question("📍 URL do servidor (ex: ws://localhost:8080): ");
+  }
+
+  if (!token) {
+    token = await question("🔐 Token de autenticação: ");
+  }
+
+  const tester = new SecurityTester(url, token);
+  await tester.runAllTests();
+}
+
+main().catch((error) => {
+  console.error("❌ Erro:", error.message);
+  rl.close();
+  process.exit(1);
+});`,
+      "start.sh": `#!/bin/bash
+
+# ============================================================================
+# Script de Inicialização do Servidor P2P Seguro
+# ============================================================================
+# Este script inicia o servidor com configurações de segurança recomendadas
+
+# Cores para output
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+BLUE='\\033[0;34m'
+NC='\\033[0m' # No Color
+
+echo -e "\${BLUE}═════════════════════════════════════════════════════════\${NC}"
+echo -e "\${BLUE}   🔐 P2P Secure Chat - Servidor de Sinalização\${NC}"
+echo -e "\${BLUE}═════════════════════════════════════════════════════════\${NC}"
+echo ""
+
+# Verifica se estamos na pasta correta
+if [ ! -f "server.js" ]; then
+    echo -e "\${RED}❌ Erro: server.js não encontrado na pasta atual\${NC}"
+    echo -e "\${YELLOW}Execute este script de dentro da pasta 'server/'\${NC}"
+    exit 1
+fi
+
+# Verifica se node_modules existe
+if [ ! -d "node_modules" ]; then
+    echo -e "\${YELLOW}📦 Instalando dependências...\${NC}"
+    npm install
+    if [ $? -ne 0 ]; then
+        echo -e "\${RED}❌ Erro ao instalar dependências\${NC}"
+        exit 1
+    fi
+    echo -e "\${GREEN}✅ Dependências instaladas\${NC}"
+fi
+
+# Verifica e libera portas se necessário
+echo -e "\${YELLOW}🔍 Verificando disponibilidade de portas...\${NC}"
+if [ -f "manage-ports.js" ]; then
+    # Tenta liberar porta 8080 se estiver ocupada
+    if ! timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/8080" 2>/dev/null; then
+        echo -e "\${GREEN}✅ Porta 8080 disponível\${NC}"
+    else
+        echo -e "\${YELLOW}⚠️  Porta 8080 ocupada. Liberando...\${NC}"
+        node manage-ports.js kill 8080 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+echo ""
+echo -e "\${YELLOW}⚙️  Configurações de Segurança:\${NC}"
+echo ""
+
+# Valores padrão
+PORT=\${PORT:-8080}
+AUTH_TOKEN=\${AUTH_TOKEN:-\$(openssl rand -hex 16)}
+REQUIRE_AUTH=\${REQUIRE_AUTH:-true}
+DISABLE_DEFLATE=\${DISABLE_DEFLATE:-true}
+MAX_CLIENTS=\${MAX_CLIENTS:-10000}
+RATE_LIMIT_MAX=\${RATE_LIMIT_MAX:-100}
+
+echo -e "\${BLUE}📍 Porta:\${NC} \$PORT"
+echo -e "\${BLUE}🔐 Autenticação:\${NC} \$([ "$REQUIRE_AUTH" = "true" ] && echo -e "\${GREEN}ATIVADA\${NC}" || echo -e "\${RED}DESATIVADA\${NC}")"
+echo -e "\${BLUE}🔑 Token:\${NC} \${AUTH_TOKEN:0:8}...\${AUTH_TOKEN: -4}"
+echo -e "\${BLUE}🛡️  Compressão Deflate:\${NC} \$([ "$DISABLE_DEFLATE" = "true" ] && echo -e "\${GREEN}DESABILITADA\${NC}" || echo -e "\${RED}ATIVADA\${NC}")"
+echo -e "\${BLUE}👥 Limite de Clientes:\${NC} \$MAX_CLIENTS"
+echo -e "\${BLUE}⏱️  Rate Limit:\${NC} \$RATE_LIMIT_MAX msgs/segundo"
+
+echo ""
+echo -e "\${YELLOW}💡 Para as extensões clientes:\${NC}"
+echo -e "\${GREEN}   • URL do Servidor: ws://localhost:\$PORT\${NC}"
+echo -e "\${GREEN}   • Token de Autenticação: \$AUTH_TOKEN\${NC}"
+
+echo ""
+echo -e "\${YELLOW}⚠️  Para usar token customizado, execute:\${NC}"
+echo -e "   \${BLUE}AUTH_TOKEN=\"seu-token-secreto\" npm start\${NC}"
+
+echo ""
+echo -e "\${YELLOW}🚀 Iniciando servidor...\${NC}"
+echo -e "\${BLUE}═════════════════════════════════════════════════════════\${NC}"
+echo ""
+
+# Inicia o servidor com as variáveis de ambiente
+PORT=\$PORT \\
+AUTH_TOKEN=\$AUTH_TOKEN \\
+REQUIRE_AUTH=\$REQUIRE_AUTH \\
+DISABLE_DEFLATE=\$DISABLE_DEFLATE \\
+MAX_CLIENTS=\$MAX_CLIENTS \\
+RATE_LIMIT_MAX=\$RATE_LIMIT_MAX \\
+npm start
+
+# Captura o código de saída
+EXIT_CODE=$?
+
+echo ""
+echo -e "\${BLUE}═════════════════════════════════════════════════════════\${NC}"
+if [ $EXIT_CODE -eq 0 ]; then
+    echo -e "\${GREEN}✅ Servidor encerrado com sucesso\${NC}"
+else
+    echo -e "\${RED}❌ Servidor encerrou com erro (código: \$EXIT_CODE)\${NC}"
+fi
+echo -e "\${BLUE}═════════════════════════════════════════════════════════\${NC}"
+
+exit $EXIT_CODE`,
     },
     extension: {
       icons: {
@@ -165,7 +651,7 @@ wss.on('connection', (ws, req) => {
                 <button id="pin-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 0;" title="Fixar Janela">📌</button>
             </div>
             <div id="connection-status">
-                <span id="my-id-display">Seu ID: <span>Carregando...</span> <button id="edit-id-btn" style="background:none; border:none; cursor:pointer; font-size:12px; padding:0; color:#007bff;" title="Alterar ID">✏️</button></span>
+                <span id="my-id-display">Seu ID: <span>Carregando...</span></span>
                 <span id="peer-status" class="offline" title="Status do outro usuário"></span>
             </div>
             <div id="conversation-info" style="text-align: center; font-size: 12px; font-weight: bold; margin-top: 5px; color: #007bff; display: none;"></div>
@@ -197,6 +683,10 @@ wss.on('connection', (ws, req) => {
             <div id="auto-mode-ui">
             <div class="input-group" style="margin-bottom: 10px;">
                 <input type="text" id="signaling-url-input" placeholder="URL do Servidor (ws://...)" value="ws://localhost:8080">
+            </div>
+            <div class="input-group" id="auth-section" style="margin-bottom: 10px; display: none;">
+                <input type="password" id="auth-token-input" placeholder="Token de Autenticação">
+                <button id="auth-btn" title="Autenticar">🔓</button>
             </div>
             <div class="input-group">
                 <input type="text" id="peer-id-input" placeholder="ID do outro usuário">
@@ -677,7 +1167,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Elementos da UI ---
     const myIdDisplaySpan = document.querySelector('#my-id-display span');
     const peerStatus = document.getElementById('peer-status');
-    const editIdBtn = document.getElementById('edit-id-btn');
     const setupView = document.getElementById('setup-view');
     const chatView = document.getElementById('chat-view');
     const peerIdInput = document.getElementById('peer-id-input');
@@ -702,6 +1191,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const manualCodeInput = document.getElementById("manual-code-input");
     const processManualCodeBtn = document.getElementById("process-manual-code-btn");
     const signalingUrlInput = document.getElementById("signaling-url-input");
+    const authSection = document.getElementById("auth-section");
+    const authTokenInput = document.getElementById("auth-token-input");
+    const authBtn = document.getElementById("auth-btn");
 
     // --- Estado da Aplicação ---
     let myId = null;
@@ -710,6 +1202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let keyPair = null;
     let sharedSecretKey = null;
     let rtcHandler = null;
+    let isAuthenticated = false;
 
     // =================================================================================
     // 1. INICIALIZAÇÃO E SINALIZAÇÃO (WEBSOCKET)
@@ -732,33 +1225,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         chrome.storage.local.set({ signalingUrl: baseUrl });
 
-        chrome.storage.local.get(['customId'], (result) => {
-            let url = baseUrl;
-            const separator = url.includes('?') ? '&' : '?';
-            if (result.customId) {
-                url += \`\${separator}id=\${encodeURIComponent(result.customId)}\`;
-            }
-
-            signalingSocket = new WebSocket(url);
-            signalingSocket.onmessage = handleSignalingMessage;
-            signalingSocket.onopen = () => console.log('🔗 Conectado ao servidor de sinalização.');
-            signalingSocket.onclose = () => {
-                console.log('🔌 Desconectado do servidor de sinalização.');
-                displaySystemMessage('Desconectado do servidor. Tentando reconectar...', 'warning');
-                updatePeerStatus('Offline', 'offline');
-                if (connectionModeSelect.value === 'auto')
-                    setTimeout(connectToSignaling, 3000);
-            };
-            signalingSocket.onerror = () => {
-                console.error('❌ Erro no WebSocket.');
-                displaySystemMessage('Falha ao conectar ao servidor. Verifique se ele está rodando e a URL está correta.', 'warning');
-            };
-        });
+        const url = baseUrl;
+        signalingSocket = new WebSocket(url);
+        signalingSocket.onmessage = handleSignalingMessage;
+        signalingSocket.onopen = () => console.log('🔗 Conectado ao servidor de sinalização.');
+        signalingSocket.onclose = () => {
+            console.log('🔌 Desconectado do servidor de sinalização.');
+            displaySystemMessage('Desconectado do servidor. Tentando reconectar...', 'warning');
+            updatePeerStatus('Offline', 'offline');
+            if (connectionModeSelect.value === 'auto')
+                setTimeout(connectToSignaling, 3000);
+        };
+        signalingSocket.onerror = () => {
+            console.error('❌ Erro no WebSocket.');
+            displaySystemMessage('Falha ao conectar ao servidor. Verifique se ele está rodando e a URL está correta.', 'warning');
+        };
     }
 
     function sendSignalingMessage(type, payload) {
         if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN && peerId) {
             signalingSocket.send(JSON.stringify({ target: peerId, type, payload }));
+        }
+    }
+
+    function authenticateWithServer() {
+        const token = authTokenInput.value.trim();
+        if (!token) return;
+        
+        if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+            signalingSocket.send(JSON.stringify({ type: 'authenticate', token: token }));
+            chrome.storage.local.set({ authToken: token });
         }
     }
 
@@ -769,8 +1265,33 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'your-id':
                 myId = msg.id;
                 myIdDisplaySpan.textContent = myId;
+                
+                if (msg.requiresAuth) {
+                    authSection.style.display = 'flex';
+                    displaySystemMessage('Este servidor requer autenticação. Insira o token.', 'warning');
+                    // Tenta autenticar automaticamente se tiver token salvo
+                    chrome.storage.local.get(['authToken'], (res) => {
+                        if (res.authToken) {
+                            authTokenInput.value = res.authToken;
+                            authenticateWithServer();
+                        }
+                    });
+                } else {
+                    authSection.style.display = 'none';
+                    isAuthenticated = true;
+                }
                 break;
             
+            case 'authenticated':
+                isAuthenticated = true;
+                authSection.style.display = 'none';
+                displaySystemMessage('Autenticado com sucesso!', 'success');
+                break;
+                
+            case 'error':
+                displaySystemMessage(\`Erro do servidor: \${msg.message}\`, 'error');
+                break;
+
             case 'key-exchange':
                 peerId = msg.from;
                 initializeWebRTCHandler();
@@ -1003,6 +1524,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function startConnection() {
+        if (!isAuthenticated && connectionModeSelect.value === 'auto') {
+            displaySystemMessage('Você precisa se autenticar no servidor primeiro.', 'error');
+            return;
+        }
+
         const id = peerIdInput.value.trim();
         if (!id) {
             displaySystemMessage('Por favor, insira o ID do outro usuário.', 'error');
@@ -1186,30 +1712,9 @@ document.addEventListener('DOMContentLoaded', () => {
     processManualCodeBtn.addEventListener('click', processManualCode);
     manualCodeDisplay.addEventListener('click', () => manualCodeDisplay.select());
     
-    // --- Alterar ID Personalizado ---
-    editIdBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const currentId = myId || '';
-        const newId = prompt("Defina seu ID Personalizado (deixe vazio para aleatório):", currentId);
-        
-        if (newId !== null) {
-            const trimmedId = newId.trim();
-            if (trimmedId) {
-                chrome.storage.local.set({ customId: trimmedId }, () => {
-                    displaySystemMessage(\`ID definido. Reconectando...\`, 'info');
-                    if (signalingSocket) signalingSocket.close();
-                });
-            } else {
-                chrome.storage.local.remove('customId', () => {
-                    displaySystemMessage("Voltando para ID aleatório...", 'info');
-                    if (signalingSocket) signalingSocket.close();
-                });
-            }
-        }
-    });
-
     // --- Event Listeners ---
     connectBtn.addEventListener('click', startConnection);
+    authBtn.addEventListener('click', authenticateWithServer);
     if(saveContactBtn) saveContactBtn.addEventListener('click', saveContact);
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());

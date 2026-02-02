@@ -7,7 +7,7 @@
       "host": "servers-w3fc.onrender.com",
       "port": null,
       "protocol": "wss",
-      "token": "cbe0ff489e4daa699c733b7a4e553c14",
+      "token": "35993df72e0007e93b531ead6e9d869c",
       "region": "USA",
       "maxClients": 10000,
       "status": "active",
@@ -18,7 +18,7 @@
       "manualToken": true
     },
     {
-      "id": "server-1769879849053",
+      "id": "server-1769906444387",
       "name": "Servidor Local (Auto)",
       "description": "Detectado automaticamente via API HTTP",
       "host": "localhost",
@@ -29,12 +29,12 @@
       "maxClients": 2,
       "status": "active",
       "notes": "Sincronizado automaticamente via rede",
-      "createdAt": "2026-01-31T17:17:29.053Z",
+      "createdAt": "2026-02-01T00:40:44.387Z",
       "urltoken": "localhost:9080/token",
       "requiresAuth": true,
       "manualToken": true,
       "clientsCount": 0,
-      "lastSeen": "2026-01-31T19:32:46.138Z"
+      "lastSeen": "2026-02-02T01:56:47.636Z"
     }
   ],
   "settings": {
