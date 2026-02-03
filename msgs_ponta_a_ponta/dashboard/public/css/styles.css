@@ -36,7 +36,7 @@ body {
 header {
     background: var(--white);
     padding: 20px;
-    border-radius: var(--border-radius);
+    /* border-radius: var(--border-radius); */
     box-shadow: var(--shadow);
     margin-bottom: 20px;
     display: flex;
@@ -62,7 +62,7 @@ header h1 {
 .card {
     background: var(--white);
     padding: 20px;
-    border-radius: var(--border-radius);
+    /* border-radius: var(--border-radius); */
     box-shadow: var(--shadow);
     margin-bottom: 20px;
 }
@@ -73,7 +73,7 @@ header h1 {
     color: var(--white);
     border: none;
     padding: 10px 20px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     cursor: pointer;
     font-weight: bold;
     text-decoration: none;
@@ -93,7 +93,7 @@ header h1 {
     color: var(--white);
     border: none;
     padding: 10px 20px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     cursor: pointer;
     text-decoration: none;
     display: inline-flex;
@@ -110,7 +110,7 @@ header h1 {
     color: var(--white);
     border: none;
     padding: 5px 10px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     cursor: pointer;
     margin-right: 5px;
 }
@@ -120,7 +120,7 @@ header h1 {
     color: var(--white);
     border: none;
     padding: 5px 10px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     cursor: pointer;
 }
 
@@ -177,7 +177,7 @@ tr:hover {
     width: 100%;
     padding: 10px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     font-size: 1rem;
 }
 
@@ -206,18 +206,25 @@ tr:hover {
 
 .modal-content {
     background: var(--white);
-    padding: 25px;
-    border-radius: var(--border-radius);
-    width: 100%;
+    padding: 32px;
+    /* border-radius: 8px; */
+    width: 95%;
     max-width: 500px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    animation: slideDown 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    /* box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); */
+    animation: modalSlideIn 0.3s ease-out;
+    border: none;
 }
 
-@keyframes slideDown {
-    from { transform: translateY(-50px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
+.modal-content::-webkit-scrollbar { width: 6px; }
+.modal-content::-webkit-scrollbar-track { background: transparent; }
+.modal-content::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.2); /* border-radius: 3px; */ }
+.modal-content::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.3); }
+
+@keyframes modalSlideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .modal-header {
     display: flex;
@@ -252,14 +259,15 @@ tr:hover {
     padding: 10px;
     background-color: #fee;
     color: var(--danger-color);
-    border-radius: 4px;
+    /* border-radius: 4px; */
     margin-top: 10px;
     display: none;
 }
 
 .toast-container {
     position: fixed;
-    bottom: 20px;
+    top: 20px;
+    bottom: auto;
     right: 20px;
     z-index: 2000;
 }
@@ -268,7 +276,7 @@ tr:hover {
     background: #333;
     color: white;
     padding: 12px 24px;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     margin-top: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     animation: fadeIn 0.3s, fadeOut 0.3s 2.7s;

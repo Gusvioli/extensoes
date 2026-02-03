@@ -83,7 +83,6 @@ async function init() {
             "createdAt" VARCHAR(100),
             "notes" TEXT,
             "requiresAuth" BOOLEAN DEFAULT TRUE,
-            "manualToken" BOOLEAN DEFAULT FALSE,
             "clientsCount" INTEGER DEFAULT 0,
             "lastSeen" VARCHAR(100),
             "urltoken" VARCHAR(255)
@@ -166,17 +165,38 @@ async function init() {
           // Admin (Acesso Total)
           await query(
             `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-            ["user-admin", "admin", hashPassword("admin123"), "Administrador", "admin", now],
+            [
+              "user-admin",
+              "admin",
+              hashPassword("admin123"),
+              "Administrador",
+              "admin",
+              now,
+            ],
           );
           // Gerente (Gerencia Servidores)
           await query(
             `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-            ["user-gerente", "gerente", hashPassword("gerente123"), "Gerente", "gerente", now],
+            [
+              "user-gerente",
+              "gerente",
+              hashPassword("gerente123"),
+              "Gerente",
+              "gerente",
+              now,
+            ],
           );
           // Usuário Comum (Apenas Visualiza)
           await query(
             `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-            ["user-comum", "usuario", hashPassword("user123"), "Funcionário", "user", now],
+            [
+              "user-comum",
+              "usuario",
+              hashPassword("user123"),
+              "Funcionário",
+              "user",
+              now,
+            ],
           );
           console.log("✅ Usuários padrão criados.");
         } catch (e) {
@@ -221,14 +241,12 @@ async function getAllServers() {
     return (data.servers || []).map((s) => ({
       ...s,
       requiresAuth: s.requiresAuth !== false,
-      manualToken: s.manualToken === true,
     }));
   }
   const res = await query("SELECT * FROM servers");
   return res.rows.map((row) => ({
     ...row,
     requiresAuth: row.requiresAuth === true,
-    manualToken: row.manualToken === true,
   }));
 }
 
@@ -248,8 +266,8 @@ async function saveServer(server) {
   const sql = `
         INSERT INTO servers (
             "id", "name", "description", "host", "port", "protocol", "token", "status", "region", 
-            "maxClients", "createdAt", "notes", "requiresAuth", "manualToken", "clientsCount", "lastSeen", "urltoken"
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            "maxClients", "createdAt", "notes", "requiresAuth", "clientsCount", "lastSeen", "urltoken"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT ("id") DO UPDATE SET
             "name" = EXCLUDED."name",
             "description" = EXCLUDED."description",
@@ -263,7 +281,6 @@ async function saveServer(server) {
             "createdAt" = EXCLUDED."createdAt",
             "notes" = EXCLUDED."notes",
             "requiresAuth" = EXCLUDED."requiresAuth",
-            "manualToken" = EXCLUDED."manualToken",
             "clientsCount" = EXCLUDED."clientsCount",
             "lastSeen" = EXCLUDED."lastSeen",
             "urltoken" = EXCLUDED."urltoken"
@@ -283,7 +300,6 @@ async function saveServer(server) {
     server.createdAt,
     server.notes,
     server.requiresAuth,
-    server.manualToken,
     server.clientsCount,
     server.lastSeen,
     server.urltoken,
@@ -339,7 +355,8 @@ async function authenticateUser(username, password) {
         if (data.users) {
           return (
             data.users.find(
-              (u) => u.username === username && verifyPassword(password, u.password),
+              (u) =>
+                u.username === username && verifyPassword(password, u.password),
             ) || null
           );
         }
@@ -349,13 +366,33 @@ async function authenticateUser(username, password) {
     }
     return null;
   }
-  const res = await query(
-    'SELECT * FROM users WHERE "username" = $1',
-    [username],
-  );
+  const res = await query('SELECT * FROM users WHERE "username" = $1', [
+    username,
+  ]);
   const user = res.rows[0];
   if (user && verifyPassword(password, user.password)) return user;
   return null;
+}
+
+async function getUserByUsername(username) {
+  if (!isConnected) {
+    try {
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        const data = JSON.parse(content);
+        if (data.users) {
+          return data.users.find((u) => u.username === username) || null;
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao ler users.json:", e);
+    }
+    return null;
+  }
+  const res = await query('SELECT * FROM users WHERE "username" = $1', [
+    username,
+  ]);
+  return res.rows[0] || null;
 }
 
 async function getAllUsers() {
@@ -380,15 +417,17 @@ async function saveUser(user) {
   if (user.password) {
     // Evitar criptografar novamente se já estiver criptografada (migrações/updates)
     if (!user.password.includes(":") || user.password.length < 100) {
-        user.password = hashPassword(user.password);
+      user.password = hashPassword(user.password);
     }
   } else {
     // Se não forneceu senha, tentar manter a atual (apenas para DB conectado)
     if (isConnected && user.id) {
-        const res = await query('SELECT password FROM users WHERE id = $1', [user.id]);
-        if (res.rows.length > 0) {
-            user.password = res.rows[0].password;
-        }
+      const res = await query("SELECT password FROM users WHERE id = $1", [
+        user.id,
+      ]);
+      if (res.rows.length > 0) {
+        user.password = res.rows[0].password;
+      }
     }
   }
 
@@ -462,6 +501,7 @@ module.exports = {
   getSettings,
   saveSetting,
   authenticateUser,
+  getUserByUsername,
   getAllUsers,
   saveUser,
   deleteUser,

@@ -8,6 +8,9 @@ let currentSort = "name";
 let editingServerId = null;
 let currentUser = null; // Armazenará o objeto do usuário: { name, username, role }
 let loadServersInterval = null;
+let refreshInterval = parseInt(
+  localStorage.getItem("refresh_interval") || "30000",
+);
 
 // ===== UTILITY FUNCTIONS =====
 function generateToken() {
@@ -17,13 +20,16 @@ function generateToken() {
     .join("");
 }
 
+function escapeHtml(text) {
+  if (text === null || text === undefined) return "";
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   // Adicionar elementos de UI dinâmicos ao corpo do documento
-  const toastContainer = document.createElement("div");
-  toastContainer.id = "toast-container";
-  toastContainer.className = "toast-container";
-  document.body.appendChild(toastContainer);
 
   // Carregar CSS de componentes (substitui injeção JS)
   if (!document.querySelector('link[href="css/components.css"]')) {
@@ -32,44 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
     link.href = "css/components.css";
     document.head.appendChild(link);
   }
-
-  // O HTML do modal de confirmação é adicionado aqui para não poluir o index.html
-  const confirmationModalHTML = `
-    <div id="confirmation-modal" class="modal">
-      <div class="modal-content">
-        <h2 id="confirmation-title">Confirmar Ação</h2>
-        <p id="confirmation-message">Você tem certeza?</p>
-        <div class="modal-actions">
-          <button id="cancel-btn" class="btn-edit">Cancelar</button>
-          <button id="confirm-btn" class="btn-delete">Confirmar</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML("beforeend", confirmationModalHTML);
-
-  // Inject Settings Modal
-  const settingsModalHTML = `
-    <div id="settings-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-            <h2>Configurações</h2>
-            <button class="close-btn" id="close-settings-btn">&times;</button>
-        </div>
-        <form id="settings-form">
-            <div class="form-group">
-                <label for="discovery-url">URL de Descoberta (JSON Token)</label>
-                <input type="text" id="discovery-url" placeholder="http://localhost:9080/token" required>
-                <small style="display: block; margin-top: 8px; font-size: 0.8em; color: var(--text-muted); font-weight: 500;">URL para sincronização automática do token do servidor.</small>
-            </div>
-            <div class="modal-actions">
-                <button type="submit" class="btn-main">Salvar Configurações</button>
-            </div>
-        </form>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML("beforeend", settingsModalHTML);
 
   // Event listeners for settings
   document
@@ -81,211 +49,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("settings-modal").addEventListener("click", (e) => {
     if (e.target.id === "settings-modal") closeSettingsModal();
   });
-
-  // --- FIX: Injetar Modal de Login se não existir ---
-  if (!document.getElementById("login-modal")) {
-    const loginModalHTML = `
-      <div id="login-modal" class="modal" style="z-index: 10000;">
-        <div class="modal-content" style="max-width: 400px;">
-          <div class="modal-header" style="justify-content: center;">
-            <h2>🔐 Acesso Restrito</h2>
-          </div>
-          <form id="login-form" class="mt-2">
-            <div class="form-group">
-              <label for="login-username">Usuário</label>
-              <input type="text" id="login-username" required autocomplete="username">
-            </div>
-            <div class="form-group mt-2">
-              <label for="login-password">Senha</label>
-              <input type="password" id="login-password" required autocomplete="current-password">
-            </div>
-            <div id="login-error" class="alert-box mt-2"></div>
-            <div class="modal-actions" style="justify-content: center;">
-              <button type="submit" class="btn-main" style="width: 100%; justify-content: center;">Entrar</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    `;
-    document.body.insertAdjacentHTML("beforeend", loginModalHTML);
-  }
-
-  // --- FIX: Garantir ID do Container Principal ---
-  let dashboardContainer = document.getElementById("dashboard-container");
-  if (!dashboardContainer) {
-    dashboardContainer = document.querySelector(".container");
-    if (dashboardContainer) {
-      dashboardContainer.id = "dashboard-container";
-    }
-  }
-
-  // --- FIX: Injetar Barra de Pesquisa se não existir ---
-  const filtersContainer = document.querySelector(".filters");
-  if (filtersContainer && !document.getElementById("server-search")) {
-    const searchHTML = `
-      <div class="filters-divider"></div>
-      <div class="search-wrapper">
-        <input type="text" id="server-search" class="search-input" placeholder="Buscar servidor...">
-      </div>
-      <div class="sort-wrapper">
-        <select id="server-sort" class="sort-select">
-            <option value="name">Nome (A-Z)</option>
-            <option value="clients">Clientes (Maior)</option>
-            <option value="port">Porta (Menor)</option>
-            <option value="status">Status</option>
-        </select>
-      </div>
-      <div class="view-toggle-wrapper" style="margin-left: 10px;">
-        <button id="view-toggle-btn" class="filter-btn" title="Alternar Visualização">
-          ${currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista"}
-        </button>
-      </div>
-    `;
-    filtersContainer.insertAdjacentHTML("beforeend", searchHTML);
-
-    // Listener para toggle de visualização
-    document.getElementById("view-toggle-btn").addEventListener("click", () => {
-      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
-      localStorage.setItem("adminViewMode", currentViewMode);
-      document.getElementById("view-toggle-btn").innerHTML =
-        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-      renderServers();
-    });
-  }
-
-  // --- FIX: Injetar Botão de Logout se não existir ---
-  if (!document.getElementById("logout-btn")) {
-    const header = document.querySelector("header");
-    if (header) {
-      // Tenta inserir no header
-      const logoutBtnHTML = `<button id="logout-btn" class="btn-edit" style="display: none; margin-left: 15px; font-size: 14px; padding: 8px 16px;">Sair</button>`;
-      const h1 = header.querySelector("h1") || header;
-      if (h1) h1.insertAdjacentHTML("afterend", logoutBtnHTML);
-    }
-  }
-
-  // --- FIX: Injetar Footer se não existir ---
-  if (!document.querySelector("footer")) {
-    const footerHTML = `
-      <footer class="app-footer">
-        <div class="footer-content">
-          <div style="font-size: 1.5rem; font-weight: 900; letter-spacing: 0.1em;">P2P SECURE CHAT</div>
-          <div style="display: flex; gap: 15px; font-weight: bold; font-size: 0.9rem;">
-            <span>DASHBOARD</span>
-            <span>•</span>
-            <span>ADMIN</span>
-            <span>•</span>
-            <span>${new Date().getFullYear()}</span>
-          </div>
-          <div style="font-size: 0.8rem; font-weight: bold;">
-            SYSTEM: <span class="badge">ONLINE</span>
-          </div>
-        </div>
-      </footer>
-    `;
-    document.body.insertAdjacentHTML("beforeend", footerHTML);
-  }
-
-  // --- FIX: Injetar Modal de Servidor se não existir ---
-  if (!document.getElementById("server-modal")) {
-    const serverModalHTML = `
-      <div id="server-modal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 id="modal-title">Adicionar/Editar Servidor</h2>
-            <button class="close-btn" id="close-server-modal-btn">&times;</button>
-          </div>
-          <form id="server-form">
-            <div class="form-group">
-              <label for="server-name">Nome do Servidor</label>
-              <input type="text" id="server-name" required>
-            </div>
-            <div class="form-group mt-2">
-              <label for="server-description">Descrição</label>
-              <textarea id="server-description" rows="2"></textarea>
-            </div>
-            <div class="grid-cols-3">
-              <div class="form-group">
-                <label for="server-host">Host (IP/Domínio)</label>
-                <input type="text" id="server-host" required>
-              </div>
-              <div class="form-group">
-                <label for="server-port">Porta</label>
-                <input type="number" id="server-port">
-              </div>
-              <div class="form-group">
-                <label for="server-protocol">Protocolo</label>
-                <select id="server-protocol">
-                  <option value="ws">WS</option>
-                  <option value="wss">WSS</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group mt-2">
-              <label for="server-token">Token de Autenticação (deixe em branco para gerar automaticamente)</label>
-              <div class="flex gap-2 mb-2">
-                <input type="text" id="server-token" style="flex-grow: 1;" placeholder="Deixe vazio para gerar automaticamente">
-                <button type="button" id="generate-token-btn" class="btn-edit" style="width: auto; padding: 0 15px; display: none;" title="Gerar Novo" disabled>🎲</button>
-              </div>
-            </div>
-            <div class="form-group mt-2">
-              <label for="server-urltoken">URL do Token (JSON)</label>
-              <div class="flex gap-2 mb-2">
-                <input type="text" id="server-urltoken" style="flex-grow: 1;" placeholder="http://localhost:9080/token">
-                <button type="button" id="test-url-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Testar Conexão">⚡</button>
-              </div>
-            </div>
-            <div class="grid-cols-3" style="grid-template-columns: 1fr 1fr 1fr;">
-              <div class="form-group">
-                <label for="server-region">Região</label>
-                <input type="text" id="server-region">
-              </div>
-              <div class="form-group">
-                <label for="server-max-clients">Max Clientes</label>
-                <input type="number" id="server-max-clients" value="10000">
-              </div>
-              <div class="form-group">
-                <label for="server-status">Status</label>
-                <select id="server-status">
-                  <option value="active">Ativo</option>
-                  <option value="inactive">Inativo</option>
-                  <option value="standby">Standby</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group mt-2">
-              <label for="server-notes">Notas Internas</label>
-              <textarea id="server-notes" rows="2"></textarea>
-            </div>
-            <div class="modal-actions">
-              <button type="button" class="btn-edit" id="cancel-server-modal-btn">Cancelar</button>
-              <button type="submit" class="btn-main">Salvar Servidor</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    `;
-    document.body.insertAdjacentHTML("beforeend", serverModalHTML);
-  } else {
-    // FIX: Se o modal já existe (do HTML estático), verificar se tem o campo urltoken e injetar se faltar
-    if (!document.getElementById("server-urltoken")) {
-      const tokenInput = document.getElementById("server-token");
-      if (tokenInput) {
-        const tokenGroup = tokenInput.closest(".form-group");
-        if (tokenGroup) {
-          const urlTokenHTML = `
-                <div class="form-group">
-                  <label for="server-urltoken" class="mt-2">URL do Token (JSON)</label>
-                  <div class="flex gap-2 mb-2">
-                    <input type="text" id="server-urltoken" style="flex-grow: 1;" placeholder="http://localhost:9080/token">
-                    <button type="button" id="test-url-btn" class="btn-edit" style="width: auto; padding: 0 15px;" title="Testar Conexão">⚡</button>
-                  </div>
-                </div>`;
-          tokenGroup.insertAdjacentHTML("afterend", urlTokenHTML);
-        }
-      }
-    }
-  }
 
   // Attach listeners for server modal elements (ensure they work even if modal existed)
   const closeServerModalBtn = document.getElementById("close-server-modal-btn");
@@ -331,6 +94,54 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Listener para toggle de visualização
+  const viewToggleBtn = document.getElementById("view-toggle-btn");
+  if (viewToggleBtn) {
+    // Definir estado inicial
+    viewToggleBtn.innerHTML =
+      currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
+
+    viewToggleBtn.addEventListener("click", () => {
+      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
+      localStorage.setItem("adminViewMode", currentViewMode);
+      viewToggleBtn.innerHTML =
+        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
+      renderServers();
+    });
+  }
+
+  // Listeners para Login/Signup Toggle
+  const showSignupBtn = document.getElementById("show-signup");
+  const showLoginBtn = document.getElementById("show-login");
+  const loginContainer = document.getElementById("login-container");
+  const signupContainer = document.getElementById("signup-container");
+
+  if (showSignupBtn) {
+    showSignupBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (loginContainer) loginContainer.style.display = "none";
+      if (signupContainer) signupContainer.style.display = "block";
+      document.getElementById("signup-form").reset();
+      document.getElementById("signup-error").style.display = "none";
+    });
+  }
+
+  if (showLoginBtn) {
+    showLoginBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (signupContainer) signupContainer.style.display = "none";
+      if (loginContainer) loginContainer.style.display = "block";
+      document.getElementById("login-form").reset();
+      document.getElementById("login-error").style.display = "none";
+    });
+  }
+
+  // Listener para Signup Form
+  const signupForm = document.getElementById("signup-form");
+  if (signupForm) {
+    signupForm.addEventListener("submit", handleSignup);
+  }
+
   checkAuth();
 });
 
@@ -343,12 +154,18 @@ function checkAuth() {
       if (data.valid) {
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
-        showDashboard();
-        loadServers();
-        setupEventListeners();
-        // Atualizar lista de servidores a cada 5 segundos
-        if (loadServersInterval) clearInterval(loadServersInterval);
-        loadServersInterval = setInterval(loadServers, 5000);
+
+        // Redirecionar usuários comuns para view.html se estiverem no index.html
+        if (currentUser.role === "user") {
+          window.location.href = "/view.html";
+        } else {
+          showDashboard();
+          loadServers();
+          setupEventListeners();
+          // Atualizar lista de servidores a cada 5 segundos
+          if (loadServersInterval) clearInterval(loadServersInterval);
+          loadServersInterval = setInterval(loadServers, refreshInterval);
+        }
       } else {
         showLogin();
       }
@@ -360,7 +177,10 @@ function showLogin() {
   const loginModal = document.getElementById("login-modal");
   const dashboardContainer = document.getElementById("dashboard-container");
 
-  if (loginModal) loginModal.classList.add("show");
+  if (loginModal) {
+    loginModal.classList.add("show");
+    loginModal.style.display = ""; // Limpar estilos inline para garantir que a classe CSS funcione
+  }
   if (dashboardContainer) dashboardContainer.style.display = "none";
 
   const loginForm = document.getElementById("login-form");
@@ -369,13 +189,34 @@ function showLogin() {
     const newLoginForm = loginForm.cloneNode(true);
     loginForm.parentNode.replaceChild(newLoginForm, loginForm);
     newLoginForm.addEventListener("submit", handleLogin);
+
+    // Re-adicionar listener para o botão de criar conta, pois o clone removeu os eventos
+    const showSignupBtn = document.getElementById("show-signup");
+    if (showSignupBtn) {
+      showSignupBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const loginContainer = document.getElementById("login-container");
+        const signupContainer = document.getElementById("signup-container");
+        if (loginContainer) loginContainer.style.display = "none";
+        if (signupContainer) signupContainer.style.display = "block";
+        document.getElementById("signup-form").reset();
+        document.getElementById("signup-error").style.display = "none";
+      });
+    }
+
+    // Resetar visualização para login
+    const loginContainer = document.getElementById("login-container");
+    const signupContainer = document.getElementById("signup-container");
+    if (loginContainer) loginContainer.style.display = "block";
+    if (signupContainer) signupContainer.style.display = "none";
   }
   // Botão de fechar removido pois login é obrigatório
 }
 
 function showDashboard() {
   document.getElementById("login-modal").classList.remove("show");
-  document.getElementById("dashboard-container").style.display = "block";
+  const dashboardContainer = document.getElementById("dashboard-container");
+  if (dashboardContainer) dashboardContainer.style.display = "";
 
   if (currentUser) {
     const userInfo = document.getElementById("user-info");
@@ -383,8 +224,8 @@ function showDashboard() {
       userInfo.textContent = `Olá, ${currentUser.name}! 👋`;
     }
 
-    // Show settings button if admin
-    if (currentUser.role === "admin") {
+    // Show settings button if admin or gerente
+    if (currentUser.role === "admin" || currentUser.role === "gerente") {
       const settingsBtn = document.getElementById("settings-btn");
       if (settingsBtn) settingsBtn.style.display = "inline-flex";
 
@@ -402,6 +243,12 @@ function showDashboard() {
         if (headerTitle) headerTitle.appendChild(usersBtn);
       }
     }
+  }
+
+  const profileBtn = document.getElementById("profile-btn");
+  if (profileBtn) {
+    profileBtn.style.display = "inline-flex";
+    profileBtn.onclick = openProfileModal;
   }
 
   const logoutBtn = document.getElementById("logout-btn");
@@ -429,17 +276,46 @@ function handleLogin(e) {
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
 
-        document.getElementById("login-modal").style.display = "none";
-        showDashboard();
-        loadServers();
-        setupEventListeners();
-        // Atualizar lista de servidores a cada 5 segundos
-        if (loadServersInterval) clearInterval(loadServersInterval);
-        loadServersInterval = setInterval(loadServers, 5000);
+        if (currentUser.role === "user") {
+          window.location.href = "/view.html";
+        } else {
+          showDashboard(); // Admins/Gerentes ficam no dashboard
+        }
       } else {
         document.getElementById("login-error").textContent = data.error;
         document.getElementById("login-error").style.display = "block";
         // A classe .alert-box já cuida do estilo
+      }
+    });
+}
+
+function handleSignup(e) {
+  e.preventDefault();
+
+  const name = document.getElementById("signup-name").value;
+  const username = document.getElementById("signup-username").value;
+  const password = document.getElementById("signup-password").value;
+
+  // Usar caminho relativo simples para evitar problemas de porta
+  fetch("/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, username, password }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.success) {
+        showToast("Conta criada com sucesso! Faça login.", "success");
+        // Switch to login view
+        const loginContainer = document.getElementById("login-container");
+        const signupContainer = document.getElementById("signup-container");
+        if (signupContainer) signupContainer.style.display = "none";
+        if (loginContainer) loginContainer.style.display = "block";
+        document.getElementById("login-username").value = username;
+        document.getElementById("login-password").focus();
+      } else {
+        document.getElementById("signup-error").textContent = data.error;
+        document.getElementById("signup-error").style.display = "block";
       }
     });
 }
@@ -497,17 +373,10 @@ function setupEventListeners() {
     addNewBtn.style.display = "none";
   }
 
-  // Inject Settings Button in Header if not exists
-  const headerTitle = document.querySelector("header h1");
-  if (headerTitle && !document.getElementById("settings-btn")) {
-    const settingsBtn = document.createElement("button");
-    settingsBtn.id = "settings-btn";
-    settingsBtn.className = "btn-edit";
-    settingsBtn.innerHTML = "⚙️ Configurar";
-    settingsBtn.style.cssText = // Mantendo apenas posicionamento específico do header
-      "margin-left: auto; font-size: 14px; padding: 8px 12px; display: none; align-items: center; gap: 5px;";
-    settingsBtn.onclick = openSettingsModal;
-    headerTitle.appendChild(settingsBtn);
+  // Listener para botão de configurações
+  const settingsBtn = document.getElementById("settings-btn");
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", openSettingsModal);
   }
 
   // Listener do formulário de servidor
@@ -533,6 +402,23 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Listeners para Perfil
+  const closeProfileBtn = document.getElementById("close-profile-btn");
+  if (closeProfileBtn) {
+    closeProfileBtn.addEventListener("click", () => {
+      document.getElementById("profile-modal").classList.remove("show");
+    });
+  }
+
+  const profileForm = document.getElementById("profile-form");
+  if (profileForm) {
+    profileForm.addEventListener("submit", saveProfile);
+  }
+
+  const deleteAccountBtn = document.getElementById("delete-account-btn");
+  if (deleteAccountBtn)
+    deleteAccountBtn.addEventListener("click", deleteMyAccount);
 
   // Event listeners para o modal de confirmação
   const confirmModal = document.getElementById("confirmation-modal");
@@ -605,7 +491,7 @@ function renderServers() {
   // Configurar container baseado no modo de visualização
   if (currentViewMode === "list") {
     container.className = "servers-list";
-    container.style.display = "flex";
+    container.style.display = "block";
   } else {
     container.className = "servers-grid";
     container.style.display = "grid";
@@ -613,48 +499,74 @@ function renderServers() {
 
   emptyState.style.display = "none";
 
+  if (currentViewMode === "list") {
+    container.innerHTML = `
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <thead style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <tr>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Status</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Nome</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Host</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Porta</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Protocolo</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Clientes</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Região</th>
+                    <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${filteredServers
+                  .map((server) => {
+                    const openUrl = getOpenUrl(server);
+                    return `
+                        <tr style="border-bottom: 1px solid #e9ecef; transition: background 0.2s;">
+                            <td style="padding: 12px 15px;">
+                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 12px;">
+                                    ${server.status === "active" ? "🟢" : server.status === "standby" ? "🟡" : "🔴"} ${server.status}
+                                </span>
+                            </td>
+                            <td style="padding: 12px 15px; font-weight: 500;">${escapeHtml(server.name)}</td>
+                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${escapeHtml(server.host)}</td>
+                            <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
+                            <td style="padding: 12px 15px;">${escapeHtml(server.protocol)}</td>
+                            <td style="padding: 12px 15px;">
+                                <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
+                            </td>
+                            <td style="padding: 12px 15px;">${escapeHtml(server.region || "N/A")}</td>
+                            <td style="padding: 12px 15px; text-align: right;">
+                                <a href="${openUrl}" target="_blank" class="btn-icon" title="Abrir URL Token" style="text-decoration: none; margin-right: 8px; font-size: 1.2em;">🔗</a>
+                                ${
+                                  currentUser &&
+                                  (currentUser.role === "admin" ||
+                                    currentUser.role === "gerente")
+                                    ? `
+                                    <button class="btn-icon" onclick="editServer('${server.id}')" title="Editar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">✏️</button>
+                                `
+                                    : ""
+                                }
+                                ${
+                                  currentUser && currentUser.role === "admin"
+                                    ? `<button class="btn-icon btn-delete" onclick="deleteServer('${server.id}')" title="Deletar" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">🗑️</button>`
+                                    : ""
+                                }
+                            </td>
+                        </tr>
+                    `;
+                  })
+                  .join("")}
+            </tbody>
+        </table>
+      </div>`;
+    return;
+  }
+
   container.innerHTML = filteredServers
     .map((server) => {
       const openUrl = getOpenUrl(server);
-
-      if (currentViewMode === "list") {
-        return `
-            <div class="server-list-item ${server.status}">
-                <div style="display:flex; align-items:center; gap:15px;">
-                    <span class="status-badge ${server.status}" style="margin:0; padding:4px 8px; font-size:0.8rem;">
-                        ${server.status === "active" ? "🟢" : server.status === "standby" ? "🟡" : "🔴"}
-                    </span>
-                    <div style="text-align:left;">
-                        <h3 class="server-name" style="font-size:1.1rem; margin:0;">${server.name}</h3>
-                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${server.host}${server.port ? ":" + server.port : ""}</div>
-                    </div>
-                </div>
-
-                <div style="text-align:center;">
-                    <span class="protocol-value" style="font-size:0.9rem;">${server.protocol}</span>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">${server.region || "N/A"}</div>
-                </div>
-
-                <div style="text-align:center;">
-                    <span class="info-value" style="font-size:0.9rem;">
-                        <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
-                    </span>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">Clientes</div>
-                </div>
-
-                <div class="server-actions">
-                    <a href="${openUrl}" target="_blank" class="btn-main" title="Abrir URL Token">🔗</a>
-                    ${
-                      currentUser &&
-                      (currentUser.role === "admin" ||
-                        currentUser.role === "gerente")
-                        ? `<button class="btn-edit" onclick="editServer('${server.id}')" title="Editar">✏️</button>
-                           <button class="btn-delete" onclick="deleteServer('${server.id}')" title="Deletar">🗑️</button>`
-                        : ""
-                    }
-                </div>
-            </div>`;
-      }
+      const isAdminOrManager =
+        currentUser &&
+        (currentUser.role === "admin" || currentUser.role === "gerente");
 
       return `
         <div class="server-card ${server.status}">
@@ -662,12 +574,12 @@ function renderServers() {
                 ${server.status === "active" ? "🟢 Ativo" : server.status === "standby" ? "🟡 Em Standby" : "🔴 Inativo"}
             </span>
 
-            <h3 class="server-name">${server.name}</h3>
-            <p class="server-description">${server.description || "Sem descrição disponível."}</p>
+            <h3 class="server-name">${escapeHtml(server.name)}</h3>
+            <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
 
             <div class="info-row">
                 <span class="info-label">Host:</span>
-                <span class="info-value">${server.host}</span>
+                <span class="info-value">${escapeHtml(server.host)}</span>
             </div>
 
             <div class="info-row">
@@ -677,20 +589,26 @@ function renderServers() {
 
             <div class="info-row">
                 <span class="info-label">URL:</span>
-                <span class="info-value protocol-value">${server.protocol}://${server.host}${server.port ? ":" + server.port : ""}</span>
+                <span class="info-value protocol-value">${escapeHtml(server.protocol)}://${escapeHtml(server.host)}${server.port ? ":" + server.port : ""}</span>
             </div>
 
             <div class="info-row">
                 <span class="info-label">Região:</span>
-                <span class="region-tag">${server.region || "N/A"}</span>
+                <span class="region-tag">${escapeHtml(server.region || "N/A")}</span>
             </div>
 
-            <div class="info-row">
-                <span class="info-label">Clientes:</span>
-                <span class="info-value">
-                    <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
-                </span>
-            </div>
+            ${
+              isAdminOrManager
+                ? `
+              <div class="info-row">
+                  <span class="info-label">Clientes:</span>
+                  <span class="info-value">
+                      <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
+                  </span>
+              </div>
+            `
+                : ""
+            }
 
             <div class="info-row">
                 <span class="info-label">Autenticação:</span>
@@ -705,34 +623,45 @@ function renderServers() {
                 </span>
             </div>
 
-            <div class="info-row">
-                <span class="info-label">Url Token:</span>
-                <span class="info-value">${server.urltoken || "N/A"}</span>
-            </div>
+            ${
+              isAdminOrManager
+                ? `
+              <div class="info-row">
+                  <span class="info-label">Url Token:</span>
+                  <span class="info-value">${escapeHtml(server.urltoken || "N/A")}</span>
+              </div>
+            `
+                : ""
+            }
             ${
               server.token &&
               server.token !== "N/A" &&
               server.requiresAuth !== undefined &&
               server.requiresAuth !== null
                 ? `<div class="token-display mt-2">
-                <div class="mb-2">${server.token}</div>
+                <div class="mb-2">${escapeHtml(server.token)}</div>
                 <button class="btn-copy w-full" onclick="copyToken('${server.token}')">📋 Copiar Token</button>
             </div>`
                 : ""
             }
 
-            ${server.notes ? `<div class="info-row"><span class="info-label">Notas:</span><span class="info-value">${server.notes}</span></div>` : ""}
-
-            <div class="info-row">
-                <span class="info-label">Criado em:</span>
-                <span class="info-value">${new Date(server.createdAt).toLocaleDateString("pt-BR")}</span>
-            </div>
+            ${isAdminOrManager && server.notes ? `<div class="info-row"><span class="info-label">Notas:</span><span class="info-value">${escapeHtml(server.notes)}</span></div>` : ""}
 
             ${
-              server.lastSeen
-                ? `<div class="info-row"><span class="info-label">Visto por último:</span><span class="info-value" style="font-size: 0.85em; color: #666;">${new Date(
-                    server.lastSeen,
-                  ).toLocaleString("pt-BR")}</span></div>`
+              isAdminOrManager
+                ? `
+              <div class="info-row">
+                  <span class="info-label">Criado em:</span>
+                  <span class="info-value">${new Date(server.createdAt).toLocaleDateString("pt-BR")}</span>
+              </div>
+              ${
+                server.lastSeen
+                  ? `<div class="info-row"><span class="info-label">Visto por último:</span><span class="info-value" style="font-size: 0.85em; color: #666;">${new Date(
+                      server.lastSeen,
+                    ).toLocaleString("pt-BR")}</span></div>`
+                  : ""
+              }
+            `
                 : ""
             }
 
@@ -740,14 +669,21 @@ function renderServers() {
                 <a href="${openUrl}" target="_blank" class="btn-main">
                     🔗 Abrir url token
                 </a>
+                <a href="#" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this); return false;" class="btn-secondary" title="Testar Latência">
+                    ⚡ Ping
+                </a>
                 ${
                   currentUser &&
                   (currentUser.role === "admin" ||
                     currentUser.role === "gerente")
                     ? `
                 <button class="btn-edit" onclick="editServer('${server.id}')">✏️ Editar</button>
-                <button class="btn-delete" onclick="deleteServer('${server.id}')">🗑️ Deletar</button>
                 `
+                    : ""
+                }
+                ${
+                  currentUser && currentUser.role === "admin"
+                    ? `<button class="btn-delete" onclick="deleteServer('${server.id}')">🗑️ Deletar</button>`
                     : ""
                 }
             </div>
@@ -878,6 +814,13 @@ async function testUrlToken() {
 async function saveServer(event) {
   event.preventDefault();
 
+  const nameInput = document.getElementById("server-name");
+  if (!nameInput.value.trim()) {
+    showToast("O nome do servidor é obrigatório.", "error");
+    nameInput.focus();
+    return;
+  }
+
   const submitBtn = event.target.querySelector('button[type="submit"]');
   const originalBtnText = submitBtn ? submitBtn.textContent : "Salvar Servidor";
   if (submitBtn) {
@@ -981,7 +924,7 @@ function deleteServer(id) {
   const message = document.getElementById("confirmation-message");
 
   title.textContent = `Deletar Servidor`;
-  message.innerHTML = `Tem certeza que deseja deletar o servidor <strong>${server.name}</strong>? <br>Esta ação não pode ser desfeita.`;
+  message.innerHTML = `Tem certeza que deseja deletar o servidor <strong>${escapeHtml(server.name)}</strong>? <br>Esta ação não pode ser desfeita.`;
 
   // Para evitar múltiplos listeners, clonamos e substituímos o botão
   const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -1039,6 +982,7 @@ async function openSettingsModal() {
     }
     const data = await response.json();
     document.getElementById("discovery-url").value = data.discoveryUrl || "";
+    document.getElementById("refresh-interval").value = refreshInterval;
     document.getElementById("settings-modal").classList.add("show");
   } catch (err) {
     console.error("Erro ao carregar configurações:", err);
@@ -1053,6 +997,15 @@ function closeSettingsModal() {
 async function saveSettings(e) {
   e.preventDefault();
   const discoveryUrl = document.getElementById("discovery-url").value;
+  const newInterval = parseInt(
+    document.getElementById("refresh-interval").value,
+  );
+
+  // Salvar intervalo localmente
+  localStorage.setItem("refresh_interval", newInterval);
+  refreshInterval = newInterval;
+  if (loadServersInterval) clearInterval(loadServersInterval);
+  loadServersInterval = setInterval(loadServers, refreshInterval);
 
   try {
     const response = await fetch("/api/settings", {
@@ -1077,4 +1030,148 @@ async function saveSettings(e) {
     console.error("Erro ao salvar configurações:", error);
     showToast("Erro de conexão", "error");
   }
+}
+
+// ===== PROFILE =====
+function openProfileModal() {
+  if (!currentUser) return;
+
+  document.getElementById("profile-name").value = currentUser.name;
+  document.getElementById("profile-username").value = currentUser.username;
+  document.getElementById("profile-password").value = "";
+
+  document.getElementById("profile-modal").classList.add("show");
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+
+  const name = document.getElementById("profile-name").value;
+  const password = document.getElementById("profile-password").value;
+
+  const payload = {
+    id: currentUser.id, // O backend vai verificar se o ID bate com a sessão
+    name: name,
+    username: currentUser.username,
+    role: currentUser.role,
+  };
+
+  if (password) {
+    payload.password = password;
+  }
+
+  try {
+    const res = await fetch("/api/users", {
+      method: "POST", // Usando POST que no server.js atual lida com create/update
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      showToast("Perfil atualizado com sucesso!");
+      document.getElementById("profile-modal").classList.remove("show");
+      // Atualizar info local
+      currentUser.name = name;
+      localStorage.setItem("user_info", JSON.stringify(currentUser));
+      document.getElementById("user-info").textContent = `Olá, ${name}! 👋`;
+    } else {
+      const err = await res.json();
+      showToast(err.error || "Erro ao atualizar perfil", "error");
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Erro de conexão", "error");
+  }
+}
+
+function deleteMyAccount() {
+  const confirmModal = document.getElementById("confirmation-modal");
+  const confirmBtn = document.getElementById("confirm-btn");
+  const title = document.getElementById("confirmation-title");
+  const message = document.getElementById("confirmation-message");
+
+  title.textContent = "Excluir Conta";
+  message.innerHTML =
+    "Tem certeza que deseja excluir sua conta? <br><strong>Esta ação é irreversível e você será desconectado.</strong>";
+
+  document.getElementById("profile-modal").classList.remove("show");
+  confirmModal.classList.add("show");
+
+  // Clone para limpar listeners
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+  newConfirmBtn.addEventListener("click", async () => {
+    try {
+      await fetch("/api/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: currentUser.id }), // Backend verifica permissão
+      });
+      handleLogout();
+    } catch (e) {
+      showToast("Erro ao excluir conta", "error");
+    }
+  });
+}
+
+function pingServer(host, port, protocol, btn) {
+  const originalText = btn.innerHTML;
+  btn.innerHTML = "⏳ ...";
+  btn.style.pointerEvents = "none";
+
+  const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
+  const start = Date.now();
+
+  try {
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      const latency = Date.now() - start;
+      btn.innerHTML = `⚡ ${latency}ms`;
+      showToast(`Latência: ${latency}ms`, "success");
+      ws.close();
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.style.pointerEvents = "auto";
+      }, 3000);
+    };
+
+    ws.onerror = () => {
+      btn.innerHTML = "❌ Erro";
+      showToast("Erro ao conectar ao servidor", "error");
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.style.pointerEvents = "auto";
+      }, 3000);
+    };
+  } catch (e) {
+    btn.innerHTML = "❌ Erro";
+    showToast("Erro ao iniciar teste de ping", "error");
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.style.pointerEvents = "auto";
+    }, 3000);
+  }
+}
+
+function showToast(message, type = "success") {
+  const toastContainer = document.getElementById("toast-container");
+  if (!toastContainer) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+function copyToken(token) {
+  navigator.clipboard.writeText(token).then(() => {
+    showToast("✓ Token copiado para a área de transferência!");
+  });
 }

@@ -6,14 +6,25 @@ let currentFilter = "all";
 let searchTerm = "";
 let currentViewMode = localStorage.getItem("publicViewMode") || "grid";
 let currentSort = "name";
+let currentUser = null;
+let latencyInterval = null;
+let latencyHistory = [];
+let latencyComparisonData = [];
 
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
+  checkAuth();
   loadServers();
   setupEventListeners();
   updateLastUpdate();
   setInterval(updateLastUpdate, 60000); // Atualizar a cada minuto
   setInterval(loadServers, 5000); // Atualizar lista a cada 5 segundos
+
+  // Injetar UI necessária que pode não estar no HTML base
+  const toastContainer = document.createElement("div");
+  toastContainer.id = "toast-container";
+  toastContainer.className = "toast-container";
+  document.body.appendChild(toastContainer);
 
   // Carregar CSS de componentes (substitui injeção JS)
   if (!document.querySelector('link[href="css/components.css"]')) {
@@ -62,22 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
     document.body.insertAdjacentHTML("beforeend", modalHTML);
-
-    // Event Listeners do Modal
-    const modal = document.getElementById("connect-modal");
-    const closeBtns = document.querySelectorAll(
-      ".close-modal, .close-modal-btn",
-    );
-
-    closeBtns.forEach((btn) => {
-      btn.onclick = () => modal.classList.remove("show");
-    });
-
-    window.onclick = (event) => {
-      if (event.target == modal) {
-        modal.classList.remove("show");
-      }
-    };
   }
 
   // Injetar Barra de Pesquisa e Ordenação se não existirem
@@ -102,21 +97,51 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
     filtersContainer.insertAdjacentHTML("beforeend", controlsHTML);
+  }
 
-    document.getElementById("view-search").addEventListener("input", (e) => {
+  // Event Listeners do Modal (Movido para fora para funcionar com HTML estático)
+  const connectModal = document.getElementById("connect-modal");
+  if (connectModal) {
+    const closeBtns = connectModal.querySelectorAll(
+      ".close-modal, .close-modal-btn",
+    );
+    closeBtns.forEach((btn) => {
+      btn.addEventListener("click", () =>
+        connectModal.classList.remove("show"),
+      );
+    });
+    connectModal.addEventListener("click", (event) => {
+      if (event.target === connectModal) connectModal.classList.remove("show");
+    });
+  }
+
+  // Event listeners (movidos para fora para garantir que funcionem com HTML estático)
+  const viewSearch = document.getElementById("view-search");
+  if (viewSearch) {
+    viewSearch.addEventListener("input", (e) => {
       searchTerm = e.target.value.toLowerCase();
       renderServers();
     });
+  }
 
-    document.getElementById("view-sort").addEventListener("change", (e) => {
+  const viewSort = document.getElementById("view-sort");
+  if (viewSort) {
+    viewSort.addEventListener("change", (e) => {
       currentSort = e.target.value;
       renderServers();
     });
+  }
 
-    document.getElementById("view-toggle-btn").addEventListener("click", () => {
+  const viewToggleBtn = document.getElementById("view-toggle-btn");
+  if (viewToggleBtn) {
+    // Definir estado inicial
+    viewToggleBtn.innerHTML =
+      currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
+
+    viewToggleBtn.addEventListener("click", () => {
       currentViewMode = currentViewMode === "grid" ? "list" : "grid";
       localStorage.setItem("publicViewMode", currentViewMode);
-      document.getElementById("view-toggle-btn").innerHTML =
+      viewToggleBtn.innerHTML =
         currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
       renderServers();
     });
@@ -143,7 +168,151 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
     document.body.insertAdjacentHTML("beforeend", footerHTML);
   }
+
+  // Listeners para Perfil e Logout
+  const loginBtn = document.getElementById("login-btn");
+  if (loginBtn) {
+    loginBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
+  }
+
+  const profileBtn = document.getElementById("profile-btn");
+  if (profileBtn) {
+    profileBtn.addEventListener("click", openProfileModal);
+  }
+
+  const logoutBtn = document.getElementById("logout-btn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", handleLogout);
+  }
+
+  // Profile Modal Listeners
+  const profileModal = document.getElementById("profile-modal");
+  if (profileModal) {
+    const closeBtns = profileModal.querySelectorAll(".close-modal-btn");
+    closeBtns.forEach((btn) => {
+      btn.addEventListener("click", () =>
+        profileModal.classList.remove("show"),
+      );
+    });
+    profileModal.addEventListener("click", (e) => {
+      if (e.target === profileModal) profileModal.classList.remove("show");
+    });
+
+    const profileForm = document.getElementById("profile-form");
+    if (profileForm) {
+      profileForm.addEventListener("submit", saveProfile);
+    }
+
+    const deleteAccountBtn = document.getElementById("delete-account-btn");
+    if (deleteAccountBtn) {
+      deleteAccountBtn.addEventListener("click", deleteMyAccount);
+    }
+  }
 });
+
+// ===== AUTHENTICATION =====
+function checkAuth() {
+  fetch("/auth/verify")
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.valid) {
+        currentUser = data.user;
+        document.getElementById("login-btn").style.display = "none";
+        document.getElementById("profile-btn").style.display = "inline-flex";
+        document.getElementById("logout-btn").style.display = "inline-flex";
+      } else {
+        document.getElementById("login-btn").style.display = "inline-flex";
+        document.getElementById("profile-btn").style.display = "none";
+        document.getElementById("logout-btn").style.display = "none";
+      }
+    })
+    .catch(() => {
+      document.getElementById("login-btn").style.display = "inline-flex";
+    });
+}
+
+function handleLogout() {
+  fetch("/auth/logout", { method: "POST" }).then(() => {
+    currentUser = null;
+    window.location.reload();
+  });
+}
+
+// ===== PROFILE =====
+function openProfileModal() {
+  if (!currentUser) return;
+
+  document.getElementById("profile-name").value = currentUser.name;
+  document.getElementById("profile-username").value = currentUser.username;
+  document.getElementById("profile-password").value = "";
+
+  document.getElementById("profile-modal").classList.add("show");
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+
+  const name = document.getElementById("profile-name").value;
+  const password = document.getElementById("profile-password").value;
+
+  const payload = {
+    id: currentUser.id,
+    name: name,
+    username: currentUser.username,
+    role: currentUser.role,
+  };
+
+  if (password) {
+    payload.password = password;
+  }
+
+  try {
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      showToast("Perfil atualizado com sucesso!");
+      document.getElementById("profile-modal").classList.remove("show");
+      currentUser.name = name;
+    } else {
+      const err = await res.json();
+      showToast(err.error || "Erro ao atualizar perfil", "error");
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Erro de conexão", "error");
+  }
+}
+
+function deleteMyAccount() {
+  if (
+    !confirm(
+      "Tem certeza que deseja excluir sua conta? Esta ação é irreversível.",
+    )
+  ) {
+    return;
+  }
+
+  fetch("/api/users", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: currentUser.id }),
+  })
+    .then(async (res) => {
+      if (res.ok) {
+        handleLogout();
+      } else {
+        const err = await res.json();
+        showToast(err.error || "Erro ao excluir conta", "error");
+      }
+    })
+    .catch(() => showToast("Erro de conexão", "error"));
+}
 
 // ===== LOAD SERVERS =====
 function loadServers() {
@@ -223,46 +392,62 @@ function renderServers() {
   // Configurar container baseado no modo de visualização
   if (currentViewMode === "list") {
     container.className = "servers-list";
-    container.style.display = "flex";
+    container.style.display = "block";
   } else {
     container.className = "servers-grid";
     container.style.display = "grid";
   }
 
+  if (currentViewMode === "list") {
+    container.innerHTML = `
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <thead style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <tr>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Status</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Nome</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Host</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Porta</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Protocolo</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Clientes</th>
+                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Região</th>
+                    <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${displayServers
+                  .map((server) => {
+                    return `
+                        <tr style="border-bottom: 1px solid #e9ecef; transition: background 0.2s;">
+                            <td style="padding: 12px 15px;">
+                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 12px;">
+                                    ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
+                                </span>
+                            </td>
+                            <td style="padding: 12px 15px; font-weight: 500;">${escapeHtml(server.name)}</td>
+                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${escapeHtml(server.host)}</td>
+                            <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
+                            <td style="padding: 12px 15px;">${server.protocol}</td>
+                            <td style="padding: 12px 15px;">
+                                <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}
+                            </td>
+                            <td style="padding: 12px 15px;">${escapeHtml(server.region || "N/A")}</td>
+                            <td style="padding: 12px 15px; text-align: right;">
+                                <button class="btn-icon" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">🔗</button>
+                                <button class="btn-icon" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">📍</button>
+                            </td>
+                        </tr>
+                    `;
+                  })
+                  .join("")}
+            </tbody>
+        </table>
+      </div>`;
+    return;
+  }
+
   container.innerHTML = displayServers
     .map((server) => {
-      if (currentViewMode === "list") {
-        return `
-            <div class="server-list-item ${server.status}">
-                <div style="display:flex; align-items:center; gap:15px;">
-                    <span class="status-badge ${server.status}" style="margin:0; padding:4px 8px; font-size:0.8rem;">
-                        ${getStatusEmoji(server.status)}
-                    </span>
-                    <div style="text-align:left;">
-                        <h3 class="server-name" style="font-size:1.1rem; margin:0;">${escapeHtml(server.name)}</h3>
-                        <div style="font-size:0.85rem; color:var(--text-muted); font-family:'Roboto Mono', monospace;">${escapeHtml(server.host)}${server.port ? ":" + server.port : ""}</div>
-                    </div>
-                </div>
-
-                <div style="text-align:center;">
-                    <span class="protocol-value" style="font-size:0.9rem;">${server.protocol}</span>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(server.region || "N/A")}</div>
-                </div>
-
-                <div style="text-align:center;">
-                    <span class="info-value" style="font-size:0.9rem;">
-                        <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}
-                    </span>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">Clientes</div>
-                </div>
-
-                <div class="server-actions">
-                    <button class="btn-connect" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar">🔗</button>
-                    <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host">📍</button>
-                </div>
-            </div>`;
-      }
-
       return `
     <div class="server-card ${server.status}">
         <span class="status-badge ${server.status}">
@@ -325,7 +510,7 @@ function renderServers() {
               <button class="btn-copy w-full" onclick="copyToClipboard('${escapeHtml(server.token)}', this)">📋 Copiar Token</button>
             </div>`
           : server.requiresAuth !== undefined && server.requiresAuth !== null
-            ? `<div style="background: #fff; padding: 15px; margin: 15px 0; border: 2px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);">
+            ? `<div style="background: #fff; padding: 15px; margin: 15px 0; /* box-shadow: var(--shadow-md); */ border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);">
         <p style="margin: 0; font-size: 0.9em; color: var(--text-main); font-weight: 600;">
           ⚠️ Token não configurado para este servidor
         </p>
@@ -341,6 +526,13 @@ function renderServers() {
         )}')">
           🔗 Conectar
         </button>
+        ${
+          currentUser
+            ? `<button class="btn-edit" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência">
+              ⚡ Ping
+            </button>`
+            : ""
+        }
         <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(
           server.host,
         )}:${server.port}', this)" title="Copiar host:porta">
@@ -416,17 +608,305 @@ function connectToServer(host, port, protocol, serverName, token) {
   modal.classList.add("show");
 }
 
+function pingServer(host, port, protocol, btn) {
+  const originalText = btn.innerHTML;
+  btn.innerHTML = "⏳ ...";
+  btn.style.pointerEvents = "none";
+
+  const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
+  const start = Date.now();
+
+  try {
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      const latency = Date.now() - start;
+      btn.innerHTML = `⚡ ${latency}ms`;
+      showToast(`Latência: ${latency}ms`, "success");
+
+      // Feedback visual baseado na latência
+      if (latency < 100) btn.style.color = "var(--success)";
+      else if (latency < 300) btn.style.color = "var(--warning)";
+      else btn.style.color = "var(--danger)";
+
+      ws.close();
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.style.color = ""; // Resetar cor
+        btn.style.pointerEvents = "auto";
+      }, 3000);
+    };
+
+    ws.onerror = () => {
+      btn.innerHTML = "❌ Erro";
+      showToast("Erro ao conectar ao servidor", "error");
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.style.pointerEvents = "auto";
+      }, 3000);
+    };
+  } catch (e) {
+    btn.innerHTML = "❌ Erro";
+    showToast("Erro ao iniciar teste de ping", "error");
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.style.pointerEvents = "auto";
+    }, 3000);
+  }
+}
+
+function startLatencyMonitoring(host, port, protocol) {
+  if (latencyInterval) clearInterval(latencyInterval);
+
+  const measureLatency = () => {
+    const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
+    const start = Date.now();
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        const latency = Date.now() - start;
+        ws.close();
+        updateLatencyChart(latency);
+      };
+      ws.onerror = () => {
+        updateLatencyChart(null); // Null indica erro/timeout
+      };
+    } catch (e) {
+      updateLatencyChart(null);
+    }
+  };
+
+  measureLatency(); // Primeira medição imediata
+  latencyInterval = setInterval(measureLatency, 2000); // A cada 2 segundos
+}
+
+function updateLatencyChart(latency) {
+  const maxPoints = 20;
+  latencyHistory.push(latency);
+  if (latencyHistory.length > maxPoints) latencyHistory.shift();
+  updateConnectionQuality();
+
+  const canvas = document.getElementById("latency-chart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Limpar canvas
+  ctx.clearRect(0, 0, width, height);
+
+  // Configurar estilo
+  ctx.strokeStyle = "#3b82f6";
+  ctx.lineWidth = 2;
+  ctx.fillStyle = "rgba(59, 130, 246, 0.1)";
+
+  // Desenhar gráfico
+  ctx.beginPath();
+  const step = width / (maxPoints - 1);
+
+  // Encontrar valor máximo para escala (mínimo 100ms)
+  const maxVal = Math.max(100, ...latencyHistory.filter((v) => v !== null));
+
+  latencyHistory.forEach((val, i) => {
+    const x = i * step;
+    // Se val for null (erro), desenha no topo ou ignora
+    const y =
+      val !== null ? height - (val / maxVal) * (height - 20) - 10 : height;
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+
+    // Desenhar ponto
+    ctx.save();
+    ctx.fillStyle =
+      val !== null
+        ? val < 100
+          ? "#22c55e"
+          : val < 300
+            ? "#f59e0b"
+            : "#ef4444"
+        : "#ef4444";
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.stroke();
+
+  // Adicionar texto do último valor
+  const lastVal = latencyHistory[latencyHistory.length - 1];
+  ctx.fillStyle = "#374151";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(lastVal !== null ? `${lastVal}ms` : "Erro", width - 40, 20);
+}
+
+function updateConnectionQuality() {
+  const qualityEl = document.getElementById("connection-quality");
+  if (!qualityEl || latencyHistory.length === 0) return;
+
+  // Calcular latência média (ignorando nulos/erros)
+  const validLatencies = latencyHistory.filter((v) => v !== null);
+  const avgLatency =
+    validLatencies.length > 0
+      ? validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length
+      : 0;
+
+  // Calcular perda de pacotes
+  const packetLossCount = latencyHistory.filter((v) => v === null).length;
+  const packetLossRate = (packetLossCount / latencyHistory.length) * 100;
+
+  let status = "Desconhecido";
+  let color = "#6c757d"; // Cinza
+  let bg = "#e9ecef";
+
+  if (validLatencies.length === 0 && latencyHistory.length > 0) {
+    status = "Sem Conexão";
+    color = "#721c24"; // Vermelho escuro
+    bg = "#f8d7da";
+  } else if (avgLatency < 100 && packetLossRate < 5) {
+    status = "Excelente";
+    color = "#155724"; // Verde escuro
+    bg = "#d4edda";
+  } else if (avgLatency < 300 && packetLossRate < 15) {
+    status = "Boa";
+    color = "#856404"; // Amarelo escuro
+    bg = "#fff3cd";
+  } else {
+    status = "Ruim";
+    color = "#721c24"; // Vermelho escuro
+    bg = "#f8d7da";
+  }
+
+  qualityEl.textContent = `${status} (${Math.round(avgLatency)}ms | ${Math.round(packetLossRate)}% perda)`;
+  qualityEl.style.color = color;
+  qualityEl.style.backgroundColor = bg;
+}
+
+function startSpeedTest() {
+  const btn = document.getElementById("start-speed-test-btn");
+  const downloadEl = document.getElementById("speed-download");
+  const uploadEl = document.getElementById("speed-upload");
+  const wsUrl = document.getElementById("modal-ws-url").value;
+  const token = document.getElementById("modal-token").value;
+
+  if (!wsUrl) return;
+
+  btn.disabled = true;
+  btn.textContent = "Testando...";
+  downloadEl.textContent = "Testando...";
+  uploadEl.textContent = "Aguardando...";
+
+  const ws = new WebSocket(wsUrl);
+  let myId = null;
+  let startTime = 0;
+  // Payload de 100KB para teste
+  const payloadSize = 1024 * 100;
+  const dataPayload = "x".repeat(payloadSize);
+  let testRunning = false;
+
+  ws.onopen = () => {
+    // Aguarda identificação
+  };
+
+  ws.onmessage = (event) => {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (e) {
+      return;
+    }
+
+    if (msg.type === "your-id") {
+      myId = msg.id;
+      // Se requer autenticação, envia token antes de testar
+      if (msg.requiresAuth && token) {
+        ws.send(JSON.stringify({ type: "authenticate", token: token }));
+      } else if (msg.requiresAuth && !token) {
+        downloadEl.textContent = "Erro: Auth";
+        uploadEl.textContent = "Erro: Auth";
+        ws.close();
+        btn.disabled = false;
+        btn.textContent = "🚀 Iniciar Teste";
+      } else {
+        runTest();
+      }
+    } else if (msg.type === "authenticated") {
+      runTest();
+    } else if (msg.type === "speed-test") {
+      // Download completo (recebemos o eco da nossa própria mensagem)
+      const endTime = Date.now();
+      const totalTime = (endTime - startTime) / 1000; // segundos
+
+      if (totalTime > 0) {
+        const sizeBits = event.data.length * 8;
+        // Velocidade estimada baseada no tempo total de ida e volta
+        const speedMbps = (sizeBits / (1024 * 1024) / totalTime).toFixed(2);
+        downloadEl.textContent = `${speedMbps} Mbps`;
+      }
+
+      ws.close();
+      btn.disabled = false;
+      btn.textContent = "🚀 Iniciar Teste";
+    } else if (msg.type === "error") {
+      console.error("Speed test error:", msg);
+      downloadEl.textContent = "Erro";
+      uploadEl.textContent = "Erro";
+      ws.close();
+      btn.disabled = false;
+      btn.textContent = "🚀 Iniciar Teste";
+    }
+  };
+
+  function runTest() {
+    if (testRunning) return;
+    testRunning = true;
+
+    const message = {
+      type: "speed-test",
+      target: myId, // Envia para si mesmo (loopback)
+      payload: dataPayload,
+    };
+
+    const msgString = JSON.stringify(message);
+    startTime = Date.now();
+    ws.send(msgString);
+
+    // Medir Upload (tempo para limpar buffer de saída do navegador)
+    const checkBuffer = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        clearInterval(checkBuffer);
+        return;
+      }
+      if (ws.bufferedAmount === 0) {
+        clearInterval(checkBuffer);
+        const uploadEndTime = Date.now();
+        let duration = (uploadEndTime - startTime) / 1000;
+        if (duration <= 0.001) duration = 0.001; // Evitar divisão por zero
+
+        const sizeBits = msgString.length * 8;
+        const speedMbps = (sizeBits / (1024 * 1024) / duration).toFixed(2);
+
+        uploadEl.textContent = `${speedMbps} Mbps`;
+        downloadEl.textContent = "Testando...";
+      }
+    }, 5);
+  }
+
+  ws.onerror = () => {
+    btn.disabled = false;
+    btn.textContent = "Erro no Teste";
+    downloadEl.textContent = "Erro";
+    uploadEl.textContent = "Erro";
+  };
+}
+
 // ===== COPY TO CLIPBOARD =====
 function copyToClipboard(text, button) {
   navigator.clipboard.writeText(text).then(() => {
-    const originalText = button.textContent;
-    button.textContent = "✅ Copiado!";
-    button.style.background = "var(--success)";
-
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.style.background = "";
-    }, 2000);
+    showToast("✓ Copiado para a área de transferência!");
   });
 }
 
@@ -435,14 +915,7 @@ function copyConnection(host, port, protocol, token, button) {
   const payload = token ? `${wsUrl}\nToken: ${token}` : wsUrl;
 
   navigator.clipboard.writeText(payload).then(() => {
-    const originalText = button.textContent;
-    button.textContent = "✅ Copiado!";
-    button.style.background = "var(--primary)";
-
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.style.background = "";
-    }, 2000);
+    showToast("✓ Dados de conexão copiados!");
   });
 }
 
@@ -452,11 +925,20 @@ window.copyInput = function (elementId, button) {
   copyText.select();
   copyText.setSelectionRange(0, 99999);
   navigator.clipboard.writeText(copyText.value).then(() => {
-    const originalText = button.innerText;
-    button.innerText = "Copiado!";
-    setTimeout(() => (button.innerText = originalText), 1500);
+    showToast("✓ Copiado!");
   });
 };
+
+function showToast(message, type = "success") {
+  const toastContainer = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 3000);
+}
 
 // ===== UPDATE LAST UPDATE TIME =====
 function updateLastUpdate() {

@@ -66,6 +66,19 @@ function createSession(username) {
 }
 
 /**
+ * Limpar sessões expiradas (Garbage Collection)
+ */
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [token, session] of Object.entries(sessionsData)) {
+      if (session.expiresAt < now) delete sessionsData[token];
+    }
+  },
+  60 * 60 * 1000,
+); // Rodar a cada 1 hora
+
+/**
  * Validar dados do servidor
  */
 function validateServerData(data, isUpdate = false) {
@@ -182,6 +195,8 @@ function createDashboardServer(httpPort) {
   const server = http.createServer(async (req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname;
+    // Normalizar path para evitar erros de rota (remove barra final e lowercase)
+    const normalizedPath = pathname.replace(/\/+$/, "").toLowerCase();
 
     // Permitir CORS
     // Reflete a origem da requisição para suportar credenciais futuramente, ou fallback para *
@@ -236,9 +251,12 @@ function createDashboardServer(httpPort) {
     }
 
     // GET /users.html → Apenas Admin
-    if ((pathname === "/users.html" || pathname === "/users") && req.method === "GET") {
-        // A verificação real é feita na API, mas podemos bloquear a página estática também se quisermos.
-        // Por enquanto, deixamos carregar, e o JS vai falhar ao buscar dados se não for admin.
+    if (
+      (pathname === "/users.html" || pathname === "/users") &&
+      req.method === "GET"
+    ) {
+      // A verificação real é feita na API, mas podemos bloquear a página estática também se quisermos.
+      // Por enquanto, deixamos carregar, e o JS vai falhar ao buscar dados se não for admin.
     }
 
     // GET /css/* → Servir CSS
@@ -273,31 +291,31 @@ function createDashboardServer(httpPort) {
       req.on("end", () => {
         try {
           const { username, password } = JSON.parse(body);
-          
+
           // Usar autenticação do banco de dados
-          db.authenticateUser(username, password).then(user => {
+          db.authenticateUser(username, password).then((user) => {
             if (user) {
               const token = createSession(username);
-            // Usar HttpOnly cookie para segurança
-            res.setHeader(
-              "Set-Cookie",
-              `session_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${24 * 60 * 60}`,
-            ); // 24 horas
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(
-              JSON.stringify({
-                success: true,
-                user: {
-                  username: user.username,
-                  name: user.name,
-                  role: user.role,
-                },
-              }),
-            );
-          } else {
-            res.writeHead(401, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Usuário ou senha inválidos" }));
-          }
+              // Usar HttpOnly cookie para segurança
+              res.setHeader(
+                "Set-Cookie",
+                `session_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${24 * 60 * 60}`,
+              ); // 24 horas
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  success: true,
+                  user: {
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                  },
+                }),
+              );
+            } else {
+              res.writeHead(401, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "Usuário ou senha inválidos" }));
+            }
           });
         } catch (err) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -324,23 +342,149 @@ function createDashboardServer(httpPort) {
       return;
     }
 
+    // POST /auth/signup → Registrar novo usuário (Rota normalizada)
+    if (normalizedPath === "/auth/signup" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { username, password, name } = JSON.parse(body);
+          if (!username || !password || !name) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({ error: "Todos os campos são obrigatórios" }),
+            );
+            return;
+          }
+
+          // Validação de força de senha
+          if (password.length < 8) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "A senha deve ter pelo menos 8 caracteres." }));
+            return;
+          }
+
+          if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "A senha deve conter pelo menos uma letra e um número." }));
+            return;
+          }
+
+          const existing = await db.getUserByUsername(username);
+          if (existing) {
+            res.writeHead(409, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Nome de usuário já existe" }));
+            return;
+          }
+
+          const newUser = {
+            id: "user-" + Date.now(),
+            username,
+            password,
+            name,
+            role: "user",
+            createdAt: new Date().toISOString(),
+          };
+
+          await db.saveUser(newUser);
+          res.writeHead(201, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // ===== SOCIAL LOGIN (SIMULADO/MOCK) =====
+    // GET /auth/google
+    if (normalizedPath === "/auth/google" && req.method === "GET") {
+      // Simulação criativa: Se não tiver chaves reais, simula o login
+      const mockUser = {
+        username: "google_user",
+        name: "Google User",
+        role: "user",
+        id: "user-google-mock"
+      };
+
+      // Verifica se usuário mock já existe, senão cria
+      const existing = await db.getUserByUsername(mockUser.username);
+      if (!existing) {
+        await db.saveUser({
+          ...mockUser,
+          password: crypto.randomBytes(16).toString("hex"), // Senha aleatória
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      // Cria sessão
+      const token = createSession(mockUser.username);
+      res.setHeader(
+        "Set-Cookie",
+        `session_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${24 * 60 * 60}`
+      );
+      
+      // Redireciona para home com delay para simular rede
+      setTimeout(() => {
+        res.writeHead(302, { "Location": "/" });
+        res.end();
+      }, 800);
+      return;
+    }
+
+    // GET /auth/github
+    if (normalizedPath === "/auth/github" && req.method === "GET") {
+      const mockUser = {
+        username: "github_user",
+        name: "GitHub User",
+        role: "user",
+        id: "user-github-mock"
+      };
+
+      const existing = await db.getUserByUsername(mockUser.username);
+      if (!existing) {
+        await db.saveUser({
+          ...mockUser,
+          password: crypto.randomBytes(16).toString("hex"),
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      const token = createSession(mockUser.username);
+      res.setHeader("Set-Cookie", `session_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${24 * 60 * 60}`);
+      res.writeHead(302, { "Location": "/" });
+      res.end();
+      return;
+    }
+
     // GET /auth/verify → Verificar sessão
     if (pathname === "/auth/verify" && req.method === "GET") {
       const session = getValidSession(req);
       if (session) {
-        // Buscar dados atualizados do usuário (para checar role, etc)
-        // Como não temos getUser(username) direto, vamos assumir os dados da sessão ou buscar todos
-        // Para simplificar e performance, vamos confiar na sessão por enquanto ou implementar getUser
-        // Aqui vamos buscar todos para encontrar o usuário (idealmente teria um getOne)
-        db.getAllUsers().then(users => {
-            const user = users.find(u => u.username === session.username);
-            if (user) {
-                res.writeHead(200, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ valid: true, user: { name: user.name, username: user.username, role: user.role } }));
-            } else {
-                res.writeHead(401, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ valid: false }));
-            }
+        // Buscar dados atualizados do usuário de forma eficiente
+        db.getUserByUsername(session.username).then((user) => {
+          if (user) {
+            // Atualizar timestamp da sessão para manter vivo se ativo
+            if (sessionsData[parseCookies(req).session_token])
+              sessionsData[parseCookies(req).session_token].expiresAt =
+                Date.now() + 24 * 60 * 60 * 1000;
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                valid: true,
+                user: {
+                  name: user.name,
+                  username: user.username,
+                  id: user.id, // Importante para auto-edição
+                  role: user.role,
+                },
+              }),
+            );
+          } else {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ valid: false }));
+          }
         });
       } else {
         res.writeHead(401, { "Content-Type": "application/json" });
@@ -436,11 +580,11 @@ function createDashboardServer(httpPort) {
     if (pathname === "/api/servers" && req.method === "POST") {
       const session = getValidSession(req);
       if (!session) return send401(res);
-      
+
       // Apenas Admin e Gerente podem criar
       const user = await getUserFromSession(session);
-      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
-          return send403(res);
+      if (!user || (user.role !== "admin" && user.role !== "gerente")) {
+        return send403(res);
       }
 
       let body = "";
@@ -514,8 +658,8 @@ function createDashboardServer(httpPort) {
 
       // Apenas Admin e Gerente podem editar
       const user = await getUserFromSession(session);
-      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
-          return send403(res);
+      if (!user || (user.role !== "admin" && user.role !== "gerente")) {
+        return send403(res);
       }
 
       let body = "";
@@ -586,10 +730,10 @@ function createDashboardServer(httpPort) {
       const session = getValidSession(req);
       if (!session) return send401(res);
 
-      // Apenas Admin e Gerente podem deletar
+      // Apenas Admin pode deletar (Gerente não pode)
       const user = await getUserFromSession(session);
-      if (!user || (user.role !== 'admin' && user.role !== 'gerente')) {
-          return send403(res);
+      if (!user || user.role !== "admin") {
+        return send403(res);
       }
 
       let body = "";
@@ -643,77 +787,107 @@ function createDashboardServer(httpPort) {
 
     // GET /api/users
     if (pathname === "/api/users" && req.method === "GET") {
-        const session = getValidSession(req);
-        if (!session) {
-            res.writeHead(401, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Não autenticado" }));
-            return;
-        }
-        
-        try {
-            const users = await db.getAllUsers();
-            // Verificar se é admin
-            const currentUser = users.find(u => u.username === session.username);
-            if (!currentUser || currentUser.role !== 'admin') {
-                res.writeHead(403, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Acesso negado" }));
-                return;
-            }
-
-            const safeUsers = users.map(u => ({ ...u, password: '' }));
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify(safeUsers));
-        } catch (e) {
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: e.message }));
-        }
+      const session = getValidSession(req);
+      if (!session) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Não autenticado" }));
         return;
+      }
+
+      try {
+        // Verificar se é admin ou gerente
+        const currentUser = await getUserFromSession(session);
+        if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "gerente")) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Acesso negado" }));
+          return;
+        }
+
+        const users = await db.getAllUsers();
+        const safeUsers = users.map((u) => ({ ...u, password: "" }));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(safeUsers));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
     }
 
     // POST /api/users (Criar/Editar)
     if (pathname === "/api/users" && req.method === "POST") {
-        if (!getValidSession(req)) return send401(res);
-        
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const user = JSON.parse(body);
-                if (!user.id) {
-                    user.id = 'user-' + Date.now();
-                    user.createdAt = new Date().toISOString();
-                }
-                await db.saveUser(user);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (e) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: e.message }));
-            }
-        });
-        return;
+      const session = getValidSession(req);
+      if (!session) return send401(res);
+
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const currentUser = await getUserFromSession(session);
+          const userToSave = JSON.parse(body);
+
+          // Regras de Permissão:
+          // 1. Admin e Gerente podem criar/editar qualquer um.
+          // 2. Usuário comum pode editar APENAS a si mesmo.
+          const isSelfEdit = currentUser && userToSave.id === currentUser.id;
+          const isAdmin = currentUser && currentUser.role === "admin";
+          const isManager = currentUser && currentUser.role === "gerente";
+
+          if (!isAdmin && !isManager && !isSelfEdit) {
+            return send403(res);
+          }
+
+          const user = userToSave;
+          if (!user.id) {
+            // Criação (apenas admin e gerente, pois signup é outra rota)
+            if (!isAdmin && !isManager) return send403(res);
+            user.id = "user-" + Date.now();
+            user.createdAt = new Date().toISOString();
+          }
+          await db.saveUser(user);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
     }
 
     // DELETE /api/users
     if (pathname === "/api/users" && req.method === "DELETE") {
-        if (!getValidSession(req)) return send401(res);
-        
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-            try {
-                const { id } = JSON.parse(body);
-                await db.deleteUser(id);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (e) { res.writeHead(500); res.end(JSON.stringify({error: e.message})); }
-        });
-        return;
+      const session = getValidSession(req);
+      if (!session) return send401(res);
+
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const currentUser = await getUserFromSession(session);
+          const { id } = JSON.parse(body);
+
+          // Regras de Permissão:
+          // 1. Admin pode deletar qualquer um.
+          // 2. Usuário pode deletar a si mesmo.
+          if (currentUser.role !== "admin" && currentUser.id !== id) {
+            return send403(res);
+          }
+
+          await db.deleteUser(id);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
     }
 
     // ===== 404 =====
     res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Rota não encontrada" }));
+    res.end(JSON.stringify({ error: `Rota não encontrada: ${req.method} ${pathname}` }));
   });
 
   return server;
@@ -747,96 +921,154 @@ function startAutoSync() {
             res.on("data", (chunk) => (data += chunk));
             res.on("end", async () => {
               try {
-                const info = JSON.parse(data);
-                // info: { token, wsUrl, requiresAuth }
+                const remoteData = JSON.parse(data);
+                let serverList = [];
 
-                // Extrair dados da URL do WebSocket (suporta URLs sem porta explícita)
-                let protocol, host, port;
-                try {
-                  const parsedWs = new url.URL(info.wsUrl);
-                  protocol = parsedWs.protocol.replace(":", "");
-                  host = parsedWs.hostname;
-                  port = parsedWs.port
-                    ? parseInt(parsedWs.port, 10)
-                    : protocol === "wss"
-                      ? 443
-                      : 80;
-                } catch (e) {
-                  return;
+                // Suporte para array direto ou objeto com propriedade 'servers'
+                if (Array.isArray(remoteData)) {
+                  serverList = remoteData;
+                } else if (
+                  remoteData.servers &&
+                  Array.isArray(remoteData.servers)
+                ) {
+                  serverList = remoteData.servers;
+                } else {
+                  // Fallback para objeto único (compatibilidade)
+                  serverList = [remoteData];
                 }
 
                 const serversData = await db.getAllServers();
 
-                let server = serversData.find((s) => s.port === port);
-                let updated = false;
+                for (const info of serverList) {
+                  // Extrair dados da URL do WebSocket ou campos diretos
+                  let protocol, host, port;
 
-                if (server) {
-                  // Atualizar token se mudou ou se estava inativo
-                  let shouldUpdate = false;
-
-                  // Atualizar token APENAS se não for manual
-                  if (server.token !== info.token && !server.manualToken) {
-                    server.token = info.token;
-                    shouldUpdate = true;
+                  if (info.wsUrl) {
+                    try {
+                      const parsedWs = new url.URL(info.wsUrl);
+                      protocol = parsedWs.protocol.replace(":", "");
+                      host = parsedWs.hostname;
+                      port = parsedWs.port
+                        ? parseInt(parsedWs.port, 10)
+                        : protocol === "wss"
+                          ? 443
+                          : 80;
+                    } catch (e) {
+                      // URL inválida, tentar campos individuais
+                    }
                   }
 
-                  // Atualizar outros campos independentemente do token ser manual
-                  if (server.status !== "active") {
-                    server.status = "active";
-                    shouldUpdate = true;
-                  }
-                  if (
-                    info.requiresAuth !== undefined &&
-                    server.requiresAuth !== info.requiresAuth
-                  ) {
-                    server.requiresAuth = info.requiresAuth;
-                    shouldUpdate = true;
-                  }
-                  if (
-                    info.clientsCount !== undefined &&
-                    server.clientsCount !== info.clientsCount
-                  ) {
-                    server.clientsCount = info.clientsCount;
-                    shouldUpdate = true;
-                  }
+                  // Priorizar campos explícitos se existirem
+                  if (info.host) host = info.host;
+                  if (info.port) port = parseInt(info.port, 10);
+                  if (info.protocol) protocol = info.protocol;
 
-                  if (shouldUpdate) {
-                    updated = true;
-                    server.lastSeen = new Date().toISOString();
+                  if (!host || !port) continue; // Pular se não tiver dados suficientes
+
+                  // Tentar encontrar servidor existente (Host + Porta)
+                  let server = serversData.find(
+                    (s) =>
+                      (s.host === host ||
+                        (s.host === "localhost" && host === "127.0.0.1") ||
+                        (s.host === "127.0.0.1" && host === "localhost")) &&
+                      s.port === port,
+                  );
+
+                  let updated = false;
+
+                  if (server) {
+                    // Atualizar servidor existente
+                    let shouldUpdate = false;
+
+                    // Atualizar token APENAS se não for manual
+                    if (
+                      info.token &&
+                      server.token !== info.token &&
+                      !server.manualToken
+                    ) {
+                      server.token = info.token;
+                      shouldUpdate = true;
+                    }
+
+                    // Atualizar status e metadados
+                    if (server.status !== "active") {
+                      server.status = "active";
+                      shouldUpdate = true;
+                    }
+                    if (
+                      info.requiresAuth !== undefined &&
+                      server.requiresAuth !== info.requiresAuth
+                    ) {
+                      server.requiresAuth = info.requiresAuth;
+                      shouldUpdate = true;
+                    }
+                    if (
+                      info.clientsCount !== undefined &&
+                      server.clientsCount !== info.clientsCount
+                    ) {
+                      server.clientsCount = info.clientsCount;
+                      shouldUpdate = true;
+                    }
+                    if (
+                      info.maxClients !== undefined &&
+                      server.maxClients !== info.maxClients
+                    ) {
+                      server.maxClients = info.maxClients;
+                      shouldUpdate = true;
+                    }
+
+                    if (shouldUpdate) {
+                      updated = true;
+                      server.lastSeen = new Date().toISOString();
+                      const ts = new Date().toISOString();
+                      console.log(
+                        `[${ts}] 🔄 Auto-Sync: Servidor ${host}:${port} atualizado via Global Discovery.`,
+                      );
+                    }
+                  } else {
+                    // Novo servidor detectado
+                    const newServer = {
+                      id:
+                        info.id ||
+                        `server-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                      name: info.name || `Servidor ${host}:${port}`,
+                      description:
+                        info.description ||
+                        "Detectado automaticamente via Discovery",
+                      host: host,
+                      port: port,
+                      protocol: protocol || "ws",
+                      token: info.token || "",
+                      requiresAuth:
+                        info.requiresAuth !== undefined
+                          ? info.requiresAuth
+                          : true,
+                      clientsCount: info.clientsCount || 0,
+                      region: info.region || "Remoto",
+                      maxClients: info.maxClients || 10000,
+                      status: "active",
+                      notes: "Sincronizado automaticamente via Discovery",
+                      lastSeen: new Date().toISOString(),
+                      createdAt: new Date().toISOString(),
+                      manualToken: false,
+                    };
+
+                    // Adicionar ao array local para evitar duplicatas na mesma iteração
+                    serversData.push(newServer);
+
+                    // Salvar no banco
+                    await db.saveServer(newServer);
+
                     const ts = new Date().toISOString();
                     console.log(
-                      `[${ts}] 🔄 Auto-Sync: Servidor ${host}:${port} atualizado via Global Discovery.`,
+                      `[${ts}] ➕ Auto-Sync: Novo servidor detectado ${host}:${port}.`,
                     );
+                    continue; // Já salvou, vai para o próximo
                   }
-                } else {
-                  // Novo servidor detectado
-                  const newServer = {
-                    id: `server-${Date.now()}`,
-                    name: "Servidor Local (Auto)",
-                    description: "Detectado automaticamente via API HTTP",
-                    host: host,
-                    port: port,
-                    protocol: protocol,
-                    token: info.token,
-                    requiresAuth: info.requiresAuth,
-                    clientsCount: info.clientsCount || 0,
-                    region: "Local",
-                    maxClients: 10000,
-                    status: "active",
-                    notes: "Sincronizado automaticamente via rede",
-                    lastSeen: new Date().toISOString(),
-                    createdAt: new Date().toISOString(),
-                  };
-                  serversData.push(newServer);
-                  updated = true;
-                  const ts = new Date().toISOString();
-                  console.log(
-                    `[${ts}] ➕ Auto-Sync: Novo servidor detectado ${host}:${port}.`,
-                  );
-                }
 
-                if (updated) {
-                  await db.saveServer(server || newServer);
+                  if (updated && server) {
+                    await db.saveServer(server);
+                  }
                 }
               } catch (e) {
                 // Ignorar erros de parse
@@ -1121,18 +1353,17 @@ function startAutoSync() {
 }
 
 function send401(res) {
-    res.writeHead(401, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Não autenticado" }));
+  res.writeHead(401, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Não autenticado" }));
 }
 
 function send403(res) {
-    res.writeHead(403, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Acesso negado: Permissão insuficiente" }));
+  res.writeHead(403, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Acesso negado: Permissão insuficiente" }));
 }
 
 async function getUserFromSession(session) {
-    const users = await db.getAllUsers();
-    return users.find(u => u.username === session.username);
+  return await db.getUserByUsername(session.username);
 }
 
 /**

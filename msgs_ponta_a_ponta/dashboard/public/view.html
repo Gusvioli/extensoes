@@ -3,131 +3,397 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Servidores Públicos - P2P Secure Chat</title>
-    <link rel="stylesheet" href="css/styles.css" />
-    <style>
-      .public-server-card {
-        border-left: 5px solid var(--accent-color);
-      }
-      .public-server-card.active {
-        border-left-color: var(--success-color);
-      }
-      .public-server-card.inactive {
-        border-left-color: var(--danger-color);
-      }
-      .public-server-card.standby {
-        border-left-color: var(--warning-color);
-      }
-
-      .copy-token-btn {
-        background: var(--light-bg);
-        border: 1px solid #ddd;
-        width: 100%;
-        padding: 8px;
-        margin-top: 10px;
-        cursor: pointer;
-        border-radius: 4px;
-        transition: all 0.2s;
-      }
-      .copy-token-btn:hover {
-        background: #e0e0e0;
-      }
-    </style>
+    <title>Servidores Disponíveis - P2P Secure Chat</title>
+    <link rel="stylesheet" href="css/modern-layout.css" />
+    <script src="js/config.js"></script>
   </head>
   <body>
     <div class="container">
       <header>
         <h1>🌐 Servidores Públicos</h1>
         <div class="header-actions">
-          <a href="/" class="btn-secondary">🔐 Área Administrativa</a>
+          <span
+            style="
+              font-weight: 600;
+              color: var(--text-secondary);
+              font-size: 0.9rem;
+            "
+          >
+            Última atualização: <span id="last-update">--:--:--</span>
+          </span>
+          <button id="login-btn" class="btn btn-primary" style="display: none">
+            Entrar
+          </button>
+          <button
+            id="profile-btn"
+            class="btn btn-secondary"
+            style="display: none"
+          >
+            👤 Perfil
+          </button>
+          <button
+            id="logout-btn"
+            class="btn btn-secondary"
+            style="display: none"
+          >
+            Sair
+          </button>
         </div>
       </header>
+      <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <a href="/">📊 Dashboard</a>
+        <span class="separator">/</span>
+        <span class="current">🌐 Servidores Públicos</span>
+      </nav>
 
-      <div class="card mb-2">
-        <p>
-          Abaixo estão listados os servidores de sinalização disponíveis para
-          uso com a extensão P2P Secure Chat.
-        </p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <h3 class="stat-label">Total</h3>
+          <div id="total-servers" class="stat-number">0</div>
+        </div>
+        <div class="stat-card">
+          <h3 class="stat-label">Ativos</h3>
+          <div
+            id="active-servers"
+            class="stat-number"
+            style="color: var(--success-green)"
+          >
+            0
+          </div>
+        </div>
+        <div class="stat-card">
+          <h3 class="stat-label">Inativos</h3>
+          <div
+            id="inactive-servers"
+            class="stat-number"
+            style="color: var(--danger-red)"
+          >
+            0
+          </div>
+        </div>
+        <div class="stat-card">
+          <h3 class="stat-label">Standby</h3>
+          <div
+            id="standby-servers"
+            class="stat-number"
+            style="color: var(--warning-yellow)"
+          >
+            0
+          </div>
+        </div>
       </div>
 
-      <div id="servers-container" class="servers-grid">
-        <div style="text-align: center; padding: 20px">
-          Carregando servidores...
+      <div id="login-required-message" class="card" style="margin-bottom: 30px; text-align: center; padding: 40px; display: none;">
+        <h3 style="color: var(--text-secondary);">🔒 Ferramentas de Medição</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">Faça login para acessar gráficos de latência e testes de velocidade.</p>
+        <button onclick="document.getElementById('login-btn').click()" class="btn btn-primary">Fazer Login</button>
+      </div>
+
+      <div id="latency-comparison-card" class="card" style="margin-bottom: 30px; display: none;">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          "
+        >
+          <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary)">
+            📊 Comparação de Latência (Servidores Ativos)
+          </h3>
+          <button
+            id="refresh-latency-btn"
+            class="btn btn-secondary"
+            style="padding: 5px 10px; font-size: 0.8rem"
+          >
+            🔄 Atualizar
+          </button>
+        </div>
+        <canvas
+          id="latency-comparison-chart"
+          width="800"
+          height="200"
+          style="width: 100%; height: 200px"
+        ></canvas>
+      </div>
+
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">
+          Todos <span id="count-all"></span>
+        </button>
+        <button class="filter-btn" data-filter="active">
+          Ativos <span id="count-active"></span>
+        </button>
+        <button class="filter-btn" data-filter="inactive">
+          Inativos <span id="count-inactive"></span>
+        </button>
+        <button class="filter-btn" data-filter="standby">
+          Standby <span id="count-standby"></span>
+        </button>
+
+        <div class="filters-divider"></div>
+        <div class="search-wrapper">
+          <input
+            type="text"
+            id="view-search"
+            class="search-input"
+            placeholder="Buscar..."
+          />
+        </div>
+        <div class="sort-wrapper">
+          <select id="view-sort" class="sort-select">
+            <option value="name">Nome</option>
+            <option value="clients">Clientes</option>
+            <option value="port">Porta</option>
+            <option value="latency">Latência</option>
+          </select>
+        </div>
+        <div class="view-toggle-wrapper" style="margin-left: auto">
+          <button
+            id="view-toggle-btn"
+            class="filter-btn"
+            title="Alternar Visualização"
+          >
+            🔲 Grid
+          </button>
+        </div>
+      </div>
+
+      <div id="servers-grid">
+        <!-- Servidores públicos serão injetados aqui -->
+      </div>
+    </div>
+
+    <!-- Modal de Conexão (será preenchido e exibido via JS) -->
+    <div id="connect-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🔗 Dados de Conexão</h2>
+          <button class="close-modal-btn close-btn">×</button>
+        </div>
+        <p style="margin-bottom: 20px; color: var(--text-secondary)">
+          Copie os dados abaixo para usar na sua extensão ou aplicação.
+        </p>
+
+        <div class="form-group">
+          <label for="modal-server-name">Nome do Servidor:</label>
+          <input type="text" id="modal-server-name" readonly />
+        </div>
+
+        <div class="form-group">
+          <label for="modal-ws-url">URL WebSocket:</label>
+          <div style="display: flex; gap: 10px">
+            <input
+              type="text"
+              id="modal-ws-url"
+              readonly
+              style="flex-grow: 1"
+            />
+            <button
+              onclick="copyInput('modal-ws-url', this)"
+              class="btn btn-primary"
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <div id="modal-token-group" class="form-group">
+          <label for="modal-token">Token de Autenticação:</label>
+          <div style="display: flex; gap: 10px">
+            <input
+              type="text"
+              id="modal-token"
+              readonly
+              style="flex-grow: 1; font-family: monospace"
+            />
+            <button
+              onclick="copyInput('modal-token', this)"
+              class="btn btn-primary"
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <div id="login-alert-modal" class="card" style="display: none; margin-top: 20px; padding: 15px; text-align: center; background-color: #f8f9fa; border: 1px solid var(--border-color); box-shadow: none;">
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">🔒 Faça login para acessar ferramentas de diagnóstico (Latência e Velocidade).</p>
+        </div>
+
+        <div id="latency-history-group" class="form-group" style="margin-top: 20px; display: none;">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            "
+          >
+            <label style="margin: 0">Histórico de Latência (ms):</label>
+            <span
+              id="connection-quality"
+              class="badge"
+              style="background: #e9ecef; color: #6c757d; font-size: 0.8rem"
+              >Aguardando...</span
+            >
+          </div>
+          <div
+            style="
+              background: #f8f9fa;
+              border: 1px solid var(--border-color);
+              border-radius: 4px;
+              padding: 10px;
+            "
+          >
+            <canvas
+              id="latency-chart"
+              width="400"
+              height="150"
+              style="width: 100%; height: 150px"
+            ></canvas>
+          </div>
+        </div>
+
+        <div id="speed-test-group" class="form-group" style="margin-top: 20px; display: none;">
+          <label>Teste de Velocidade:</label>
+          <div
+            style="
+              background: #f8f9fa;
+              border: 1px solid var(--border-color);
+              border-radius: 4px;
+              padding: 15px;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="font-weight: 600; color: var(--text-secondary)"
+                >Download:</span
+              >
+              <span
+                id="speed-download"
+                style="font-weight: 700; color: var(--success-green)"
+                >-- Mbps</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="font-weight: 600; color: var(--text-secondary)"
+                >Upload:</span
+              >
+              <span
+                id="speed-upload"
+                style="font-weight: 700; color: var(--primary-blue)"
+                >-- Mbps</span
+              >
+            </div>
+            <button
+              id="start-speed-test-btn"
+              class="btn btn-secondary"
+              style="margin-top: 10px; width: 100%"
+            >
+              🚀 Iniciar Teste
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="close-modal-btn btn btn-primary" style="width: 100%">
+            Fechar
+          </button>
         </div>
       </div>
     </div>
 
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Meu Perfil</h2>
+          <button class="close-modal-btn close-btn">×</button>
+        </div>
+        <form id="profile-form">
+          <div class="form-group">
+            <label for="profile-name">Nome Completo</label>
+            <input
+              type="text"
+              id="profile-name"
+              class="form-control"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="profile-username">Usuário</label>
+            <input
+              type="text"
+              id="profile-username"
+              class="form-control"
+              readonly
+              disabled
+              style="background-color: var(--bg-body)"
+            />
+            <small style="color: var(--text-secondary); font-size: 0.8rem"
+              >O nome de usuário não pode ser alterado.</small
+            >
+          </div>
+          <div class="form-group">
+            <label for="profile-password">Nova Senha</label>
+            <input
+              type="password"
+              id="profile-password"
+              class="form-control"
+              placeholder="Deixe em branco para manter a atual"
+            />
+          </div>
+
+          <div
+            style="
+              margin-top: 20px;
+              padding-top: 20px;
+              border-top: 1px solid var(--border-color);
+            "
+          >
+            <button
+              type="button"
+              id="delete-account-btn"
+              class="btn btn-danger"
+              style="
+                width: 100%;
+                background-color: transparent;
+                color: var(--color-danger);
+                border: 1px solid var(--color-danger);
+              "
+            >
+              🗑️ Excluir minha conta
+            </button>
+          </div>
+
+          <div class="modal-actions">
+            <button type="submit" class="btn btn-primary w-full">
+              Salvar Alterações
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script>
-      document.addEventListener("DOMContentLoaded", loadPublicServers);
+    <footer>&copy; 2025 P2P Secure Chat. Todos os direitos reservados.</footer>
 
-      async function loadPublicServers() {
-        try {
-          const res = await fetch("/api/public-servers");
-          const data = await res.json();
-          renderServers(data.servers || []);
-        } catch (e) {
-          document.getElementById("servers-container").innerHTML =
-            '<div style="text-align:center; color:red;">Erro ao carregar servidores.</div>';
-        }
-      }
-
-      function renderServers(servers) {
-        const container = document.getElementById("servers-container");
-        if (servers.length === 0) {
-          container.innerHTML =
-            '<div style="text-align:center;">Nenhum servidor público disponível no momento.</div>';
-          return;
-        }
-
-        container.innerHTML = servers
-          .map(
-            (server) => `
-                <div class="card public-server-card ${server.status}">
-                    <div style="display:flex; justify-content:space-between; align-items:start;">
-                        <h3>${server.name}</h3>
-                        <span class="status-badge ${server.status}">
-                            ${server.status === "active" ? "🟢 Online" : "🔴 Offline"}
-                        </span>
-                    </div>
-                    <p style="color: #666; font-size: 0.9em; margin-bottom: 10px;">${server.description || "Sem descrição"}</p>
-                    
-                    <div class="info-row">
-                        <span class="info-label">URL:</span>
-                        <span class="info-value">${server.protocol}://${server.host}:${server.port}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Região:</span>
-                        <span class="info-value">${server.region || "N/A"}</span>
-                    </div>
-                    
-                    ${
-                      server.requiresAuth
-                        ? `
-                        <div style="margin-top: 15px;">
-                            <div style="font-size: 0.8em; font-weight: bold; margin-bottom: 5px;">Token de Autenticação:</div>
-                            <code style="display:block; background:#f5f5f5; padding:8px; border-radius:4px; word-break:break-all; font-size:0.85em;">${server.token}</code>
-                            <button class="copy-token-btn" onclick="copyToken('${server.token}')">📋 Copiar Token</button>
-                        </div>
-                    `
-                        : '<div style="margin-top:15px; color:green;">🔓 Acesso Livre (Sem token)</div>'
-                    }
-                </div>
-            `,
-          )
-          .join("");
-      }
-
-      function copyToken(token) {
-        navigator.clipboard.writeText(token).then(() => {
-          const toast = document.createElement("div");
-          toast.className = "toast success";
-          toast.textContent = "Token copiado!";
-          document.getElementById("toast-container").appendChild(toast);
-          setTimeout(() => toast.remove(), 3000);
-        });
-      }
-    </script>
+    <script src="js/view-app.js"></script>
   </body>
 </html>
