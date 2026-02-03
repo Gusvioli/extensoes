@@ -210,6 +210,41 @@ document.addEventListener("DOMContentLoaded", () => {
       deleteAccountBtn.addEventListener("click", deleteMyAccount);
     }
   }
+
+  // Listeners para o gráfico de comparação
+  const refreshLatencyBtn = document.getElementById("refresh-latency-btn");
+  if (refreshLatencyBtn) {
+    refreshLatencyBtn.addEventListener("click", updateLatencyComparisonChart);
+  }
+
+  const latencyCompCanvas = document.getElementById("latency-comparison-chart");
+  if (latencyCompCanvas) {
+    latencyCompCanvas.addEventListener("mousemove", (e) => {
+      const rect = latencyCompCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const width = latencyCompCanvas.width;
+      const results = latencyComparisonData;
+
+      if (!results || results.length === 0) return;
+
+      const padding = 40;
+      const barWidth = (width - padding * 2) / results.length - 10;
+
+      let hoverIndex = -1;
+      for (let i = 0; i < results.length; i++) {
+        const barX = padding + i * (barWidth + 10);
+        if (x >= barX && x <= barX + barWidth) {
+          hoverIndex = i;
+          break;
+        }
+      }
+      drawLatencyComparisonChart(hoverIndex);
+    });
+
+    latencyCompCanvas.addEventListener("mouseout", () => {
+      drawLatencyComparisonChart(-1);
+    });
+  }
 });
 
 // ===== AUTHENTICATION =====
@@ -222,10 +257,27 @@ function checkAuth() {
         document.getElementById("login-btn").style.display = "none";
         document.getElementById("profile-btn").style.display = "inline-flex";
         document.getElementById("logout-btn").style.display = "inline-flex";
+
+        // Mostrar ferramentas para usuários logados
+        const latencyCard = document.getElementById("latency-comparison-card");
+        if (latencyCard) latencyCard.style.display = "block";
+        const loginMsg = document.getElementById("login-required-message");
+        if (loginMsg) loginMsg.style.display = "none";
+
+        updateLatencyComparisonChart();
+        renderServers(); // Re-renderizar para mostrar botões de Ping
       } else {
         document.getElementById("login-btn").style.display = "inline-flex";
         document.getElementById("profile-btn").style.display = "none";
         document.getElementById("logout-btn").style.display = "none";
+
+        // Ocultar ferramentas para visitantes
+        const latencyCard = document.getElementById("latency-comparison-card");
+        if (latencyCard) latencyCard.style.display = "none";
+        const loginMsg = document.getElementById("login-required-message");
+        if (loginMsg) loginMsg.style.display = "block";
+
+        renderServers(); // Re-renderizar para ocultar botões de Ping
       }
     })
     .catch(() => {
@@ -319,7 +371,10 @@ function loadServers() {
   // Solicita todos os servidores públicos para calcular contadores corretamente
   const apiUrl = `${window.APP_CONFIG.API_BASE}/api/public-servers?status=all`;
   fetch(apiUrl)
-    .then((res) => res.json())
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    })
     .then((data) => {
       servers = data.servers || [];
       renderServers();
@@ -329,7 +384,7 @@ function loadServers() {
     .catch((error) => {
       console.error("Erro ao carregar servidores:", error);
       document.getElementById("servers-grid").innerHTML =
-        '<div class="empty-state"><p style="font-size: 2em;">❌</p><h2>Erro ao carregar servidores</h2><p>Não foi possível conectar ao servidor. Tente novamente.</p></div>';
+        '<div class="empty-state"><p style="font-size: 2em;">❌</p><h2>Erro ao carregar servidores</h2><p>Não foi possível conectar ao servidor.</p><button onclick="loadServers()" class="btn btn-primary" style="margin-top: 15px;">🔄 Tentar Novamente</button></div>';
     });
 }
 
@@ -606,6 +661,38 @@ function connectToServer(host, port, protocol, serverName, token) {
 
   const modal = document.getElementById("connect-modal");
   modal.classList.add("show");
+
+  // Lógica de exibição das ferramentas no modal
+  const latencyGroup = document.getElementById("latency-history-group");
+  const speedGroup = document.getElementById("speed-test-group");
+  const loginAlert = document.getElementById("login-alert-modal");
+
+  if (currentUser) {
+    if (latencyGroup) latencyGroup.style.display = "block";
+    if (speedGroup) speedGroup.style.display = "block";
+    if (loginAlert) loginAlert.style.display = "none";
+
+    // Iniciar monitoramento de latência
+    latencyHistory = [];
+    startLatencyMonitoring(host, port, protocol);
+
+    const qualityEl = document.getElementById("connection-quality");
+    if (qualityEl) {
+      qualityEl.textContent = "Aguardando...";
+      qualityEl.style.backgroundColor = "#e9ecef";
+      qualityEl.style.color = "#6c757d";
+    }
+
+    // Resetar teste de velocidade
+    document.getElementById("speed-download").textContent = "-- Mbps";
+    document.getElementById("speed-upload").textContent = "-- Mbps";
+    const startSpeedBtn = document.getElementById("start-speed-test-btn");
+    if (startSpeedBtn) startSpeedBtn.disabled = false;
+  } else {
+    if (latencyGroup) latencyGroup.style.display = "none";
+    if (speedGroup) speedGroup.style.display = "none";
+    if (loginAlert) loginAlert.style.display = "block";
+  }
 }
 
 function pingServer(host, port, protocol, btn) {
@@ -801,10 +888,6 @@ function startSpeedTest() {
 
   const ws = new WebSocket(wsUrl);
   let myId = null;
-  let startTime = 0;
-  // Payload de 100KB para teste
-  const payloadSize = 1024 * 100;
-  const dataPayload = "x".repeat(payloadSize);
   let testRunning = false;
 
   ws.onopen = () => {
@@ -831,25 +914,10 @@ function startSpeedTest() {
         btn.disabled = false;
         btn.textContent = "🚀 Iniciar Teste";
       } else {
-        runTest();
+        runTestSequence();
       }
     } else if (msg.type === "authenticated") {
-      runTest();
-    } else if (msg.type === "speed-test") {
-      // Download completo (recebemos o eco da nossa própria mensagem)
-      const endTime = Date.now();
-      const totalTime = (endTime - startTime) / 1000; // segundos
-
-      if (totalTime > 0) {
-        const sizeBits = event.data.length * 8;
-        // Velocidade estimada baseada no tempo total de ida e volta
-        const speedMbps = (sizeBits / (1024 * 1024) / totalTime).toFixed(2);
-        downloadEl.textContent = `${speedMbps} Mbps`;
-      }
-
-      ws.close();
-      btn.disabled = false;
-      btn.textContent = "🚀 Iniciar Teste";
+      runTestSequence();
     } else if (msg.type === "error") {
       console.error("Speed test error:", msg);
       downloadEl.textContent = "Erro";
@@ -860,39 +928,96 @@ function startSpeedTest() {
     }
   };
 
-  function runTest() {
+  async function runTestSequence() {
     if (testRunning) return;
     testRunning = true;
 
-    const message = {
-      type: "speed-test",
-      target: myId, // Envia para si mesmo (loopback)
-      payload: dataPayload,
-    };
+    try {
+      // 1. Teste de Upload
+      const uploadSpeed = await performUploadTest(ws, myId);
+      uploadEl.textContent = `${uploadSpeed.toFixed(2)} Mbps`;
+      downloadEl.textContent = "Testando...";
+      
+      // Pequena pausa para estabilizar
+      await new Promise(r => setTimeout(r, 500));
 
-    const msgString = JSON.stringify(message);
-    startTime = Date.now();
-    ws.send(msgString);
+      // 2. Teste de Download
+      const downloadSpeed = await performDownloadTest(ws, myId);
+      downloadEl.textContent = `${downloadSpeed.toFixed(2)} Mbps`;
 
-    // Medir Upload (tempo para limpar buffer de saída do navegador)
-    const checkBuffer = setInterval(() => {
-      if (ws.readyState !== WebSocket.OPEN) {
-        clearInterval(checkBuffer);
-        return;
-      }
-      if (ws.bufferedAmount === 0) {
-        clearInterval(checkBuffer);
-        const uploadEndTime = Date.now();
-        let duration = (uploadEndTime - startTime) / 1000;
-        if (duration <= 0.001) duration = 0.001; // Evitar divisão por zero
+    } catch (error) {
+      console.error("Speed test failed:", error);
+      uploadEl.textContent = "Erro";
+      downloadEl.textContent = "Erro";
+    } finally {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+      btn.disabled = false;
+      btn.textContent = "🚀 Iniciar Teste";
+    }
+  }
 
-        const sizeBits = msgString.length * 8;
-        const speedMbps = (sizeBits / (1024 * 1024) / duration).toFixed(2);
+  function performUploadTest(ws, targetId) {
+    return new Promise((resolve, reject) => {
+      const payload = 'x'.repeat(1024 * 100); // 100KB
+      const message = { type: 'upload-test', target: targetId, payload };
+      const msgString = JSON.stringify(message);
+      const startTime = Date.now();
+      ws.send(msgString);
+      let timeoutId = null;
 
-        uploadEl.textContent = `${speedMbps} Mbps`;
-        downloadEl.textContent = "Testando...";
-      }
-    }, 5);
+      const interval = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          clearInterval(interval);
+          return reject(new Error("Conexão fechada"));
+        }
+        if (ws.bufferedAmount === 0) {
+          clearInterval(interval);
+          if (timeoutId) clearTimeout(timeoutId);
+          const duration = (Date.now() - startTime) / 1000;
+          const speed = (msgString.length * 8) / (1024 * 1024) / (duration || 0.001);
+          resolve(speed);
+        }
+      }, 10);
+
+      // Timeout de segurança para upload (10s)
+      timeoutId = setTimeout(() => {
+        clearInterval(interval);
+        reject(new Error("Timeout no teste de upload"));
+      }, 10000);
+    });
+  }
+
+  function performDownloadTest(ws, targetId) {
+    return new Promise((resolve, reject) => {
+      const payload = 'y'.repeat(1024 * 100); // 100KB
+      const message = { type: 'download-test', target: targetId, payload };
+      const startTime = Date.now();
+      ws.send(JSON.stringify(message));
+
+      const tempListener = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'download-test') {
+            const duration = (Date.now() - startTime) / 1000;
+            const speed = (event.data.length * 8) / (1024 * 1024) / (duration || 0.001);
+            ws.removeEventListener('message', tempListener);
+            resolve(speed);
+          } else if (msg.type === 'error') {
+            ws.removeEventListener('message', tempListener);
+            reject(new Error(msg.message || "Erro do servidor"));
+          }
+        } catch (e) {
+          // Ignora mensagens que não são JSON
+        }
+      };
+
+      ws.addEventListener('message', tempListener);
+
+      setTimeout(() => {
+        ws.removeEventListener('message', tempListener);
+        reject(new Error("Timeout no teste de download"));
+      }, 5000);
+    });
   }
 
   ws.onerror = () => {
@@ -901,6 +1026,136 @@ function startSpeedTest() {
     downloadEl.textContent = "Erro";
     uploadEl.textContent = "Erro";
   };
+}
+
+async function updateLatencyComparisonChart() {
+  const activeServers = servers.filter((s) => s.status === "active");
+  if (activeServers.length === 0) return;
+
+  const canvas = document.getElementById("latency-comparison-chart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  // Ajustar resolução para o tamanho de exibição
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  const width = rect.width;
+  const height = rect.height;
+
+  // Limpar canvas e mostrar loading
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "14px sans-serif";
+  ctx.fillText("Medindo latência...", width / 2 - 50, height / 2);
+
+  const results = [];
+
+  // Medir latência de cada servidor
+  for (const server of activeServers) {
+    const wsUrl = `${server.protocol}://${server.host}${server.port ? ":" + server.port : ""}`;
+    const start = Date.now();
+    try {
+      const ws = new WebSocket(wsUrl);
+      await new Promise((resolve) => {
+        ws.onopen = () => {
+          const latency = Date.now() - start;
+          ws.close();
+          results.push({ name: server.name, latency });
+          resolve();
+        };
+        ws.onerror = () => {
+          results.push({ name: server.name, latency: null });
+          resolve();
+        };
+        setTimeout(() => {
+          if (ws.readyState !== WebSocket.CLOSED) ws.close();
+          resolve(); // Timeout
+        }, 2000);
+      });
+    } catch (e) {
+      results.push({ name: server.name, latency: null });
+    }
+  }
+
+  latencyComparisonData = results;
+  drawLatencyComparisonChart();
+}
+
+function drawLatencyComparisonChart(hoverIndex = -1) {
+  const canvas = document.getElementById("latency-comparison-chart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const results = latencyComparisonData;
+
+  ctx.clearRect(0, 0, width, height);
+
+  if (!results || results.length === 0) return;
+
+  const padding = 40;
+  const barWidth = (width - padding * 2) / results.length - 10;
+  const maxLatency = Math.max(200, ...results.map((r) => r.latency || 0));
+
+  results.forEach((res, i) => {
+    const x = padding + i * (barWidth + 10);
+    const barHeight = res.latency
+      ? (res.latency / maxLatency) * (height - 60)
+      : 0;
+    const y = height - barHeight - 20;
+
+    // Cor base
+    let color = "#ef4444";
+    if (res.latency) {
+      if (res.latency < 100) color = "#22c55e";
+      else if (res.latency < 300) color = "#f59e0b";
+    }
+
+    // Efeito de hover
+    if (i === hoverIndex) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.8;
+    } else {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 1.0;
+    }
+
+    ctx.fillRect(x, y, barWidth, barHeight);
+    ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = "#374151";
+    ctx.font = "10px sans-serif";
+    ctx.fillText(res.name.substring(0, 10), x, height - 5);
+    if (res.latency) ctx.fillText(`${res.latency}ms`, x, y - 5);
+  });
+
+  // Desenhar Tooltip
+  if (hoverIndex !== -1 && results[hoverIndex]) {
+    const res = results[hoverIndex];
+    const x = padding + hoverIndex * (barWidth + 10);
+    const barHeight = res.latency ? (res.latency / maxLatency) * (height - 60) : 0;
+    const y = height - barHeight - 20;
+
+    const text = `${res.name}: ${res.latency ? res.latency + "ms" : "Erro"}`;
+    ctx.font = "12px sans-serif";
+    const textWidth = ctx.measureText(text).width;
+    const tooltipPadding = 8;
+
+    let tooltipX = x + barWidth / 2 - textWidth / 2 - tooltipPadding;
+    let tooltipY = y - 35;
+
+    // Limites
+    if (tooltipX < 0) tooltipX = 0;
+    if (tooltipX + textWidth + tooltipPadding * 2 > width) tooltipX = width - textWidth - tooltipPadding * 2;
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+    ctx.fillRect(tooltipX, tooltipY, textWidth + tooltipPadding * 2, 28);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, tooltipX + tooltipPadding, tooltipY + 18);
+  }
 }
 
 // ===== COPY TO CLIPBOARD =====

@@ -21,7 +21,7 @@
   if (isLocalhost) {
     window.APP_CONFIG = {
       // API do dashboard (lista de servidores, CRUD)
-      API_BASE: `${protocol}//${hostname}:3000`,
+      API_BASE: window.location.origin,
 
       // WebSocket do servidor de sinalização
       WS_BASE: `${protocol === "https:" ? "wss" : "ws"}://${hostname}:8080`,

@@ -110,36 +110,36 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Listeners para Login/Signup Toggle
-  const showSignupBtn = document.getElementById("show-signup");
-  const showLoginBtn = document.getElementById("show-login");
-  const loginContainer = document.getElementById("login-container");
-  const signupContainer = document.getElementById("signup-container");
-
-  if (showSignupBtn) {
-    showSignupBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (loginContainer) loginContainer.style.display = "none";
-      if (signupContainer) signupContainer.style.display = "block";
-      document.getElementById("signup-form").reset();
-      document.getElementById("signup-error").style.display = "none";
+  // Event Delegation for Login/Signup Modal
+  const loginModal = document.getElementById("login-modal");
+  if (loginModal) {
+    loginModal.addEventListener("click", (e) => {
+      // Toggle between Login and Signup
+      if (e.target.id === "show-signup") {
+        e.preventDefault();
+        document.getElementById("login-container").style.display = "none";
+        document.getElementById("signup-container").style.display = "block";
+        document.getElementById("signup-form").reset();
+        document.getElementById("signup-error").style.display = "none";
+      }
+      if (e.target.id === "show-login") {
+        e.preventDefault();
+        document.getElementById("signup-container").style.display = "none";
+        document.getElementById("login-container").style.display = "block";
+        document.getElementById("login-form").reset();
+        document.getElementById("login-error").style.display = "none";
+      }
     });
-  }
 
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (signupContainer) signupContainer.style.display = "none";
-      if (loginContainer) loginContainer.style.display = "block";
-      document.getElementById("login-form").reset();
-      document.getElementById("login-error").style.display = "none";
+    // Handle form submissions using delegation
+    loginModal.addEventListener("submit", (e) => {
+      if (e.target.id === "login-form") {
+        handleLogin(e);
+      }
+      if (e.target.id === "signup-form") {
+        handleSignup(e);
+      }
     });
-  }
-
-  // Listener para Signup Form
-  const signupForm = document.getElementById("signup-form");
-  if (signupForm) {
-    signupForm.addEventListener("submit", handleSignup);
   }
 
   checkAuth();
@@ -183,34 +183,22 @@ function showLogin() {
   }
   if (dashboardContainer) dashboardContainer.style.display = "none";
 
+  // Reset form states and visibility
   const loginForm = document.getElementById("login-form");
-  if (loginForm) {
-    // Remove listener antigo para evitar duplicidade
-    const newLoginForm = loginForm.cloneNode(true);
-    loginForm.parentNode.replaceChild(newLoginForm, loginForm);
-    newLoginForm.addEventListener("submit", handleLogin);
+  if (loginForm) loginForm.reset();
+  const signupForm = document.getElementById("signup-form");
+  if (signupForm) signupForm.reset();
 
-    // Re-adicionar listener para o botão de criar conta, pois o clone removeu os eventos
-    const showSignupBtn = document.getElementById("show-signup");
-    if (showSignupBtn) {
-      showSignupBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        const loginContainer = document.getElementById("login-container");
-        const signupContainer = document.getElementById("signup-container");
-        if (loginContainer) loginContainer.style.display = "none";
-        if (signupContainer) signupContainer.style.display = "block";
-        document.getElementById("signup-form").reset();
-        document.getElementById("signup-error").style.display = "none";
-      });
-    }
+  const loginError = document.getElementById("login-error");
+  if (loginError) loginError.style.display = "none";
+  const signupError = document.getElementById("signup-error");
+  if (signupError) signupError.style.display = "none";
 
-    // Resetar visualização para login
-    const loginContainer = document.getElementById("login-container");
-    const signupContainer = document.getElementById("signup-container");
-    if (loginContainer) loginContainer.style.display = "block";
-    if (signupContainer) signupContainer.style.display = "none";
-  }
-  // Botão de fechar removido pois login é obrigatório
+  // Ensure login form is visible and signup is hidden
+  const loginContainer = document.getElementById("login-container");
+  const signupContainer = document.getElementById("signup-container");
+  if (loginContainer) loginContainer.style.display = "block";
+  if (signupContainer) signupContainer.style.display = "none";
 }
 
 function showDashboard() {
