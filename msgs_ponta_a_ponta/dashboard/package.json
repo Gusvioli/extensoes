@@ -23,6 +23,8 @@
   "author": "Gustavo Vieira",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^17.2.3",
+    "nodemailer": "^8.0.0",
     "pg": "^8.18.0"
   }
 }

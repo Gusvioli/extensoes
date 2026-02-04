@@ -98,11 +98,30 @@ async function init() {
     await query(`CREATE TABLE IF NOT EXISTS users (
             "id" VARCHAR(255) PRIMARY KEY,
             "username" VARCHAR(255) UNIQUE,
+            "email" VARCHAR(255),
             "password" VARCHAR(255),
             "name" VARCHAR(255),
             "role" VARCHAR(50),
             "createdAt" VARCHAR(100)
         )`);
+
+    // Migração: Adicionar coluna email se não existir (para bancos existentes)
+    try {
+      await query(`ALTER TABLE users ADD COLUMN "email" VARCHAR(255)`);
+    } catch (e) {
+      // Ignorar erro se a coluna já existir
+    }
+
+    // Migração: Adicionar colunas de verificação de e-mail
+    try {
+      await query(`ALTER TABLE users ADD COLUMN "isVerified" BOOLEAN DEFAULT FALSE`);
+    } catch (e) {}
+    try {
+      await query(`ALTER TABLE users ADD COLUMN "verificationCode" VARCHAR(20)`);
+    } catch (e) {}
+    try {
+      await query(`ALTER TABLE users ADD COLUMN "verificationExpires" BIGINT`);
+    } catch (e) {}
 
     // Migração Automática: Se o DB estiver vazio e existir JSON, importar dados
     const res = await query("SELECT count(*) as count FROM servers");
@@ -149,8 +168,16 @@ async function init() {
           if (config.users && Array.isArray(config.users)) {
             for (const u of config.users) {
               await query(
-                `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-                [u.id, u.username, u.password, u.name, u.role, u.createdAt],
+                `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                  u.id,
+                  u.username,
+                  u.password,
+                  u.name,
+                  u.role,
+                  u.createdAt,
+                  u.email || null,
+                ],
               );
             }
           }
@@ -164,7 +191,7 @@ async function init() {
         try {
           // Admin (Acesso Total)
           await query(
-            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
               "user-admin",
               "admin",
@@ -172,11 +199,12 @@ async function init() {
               "Administrador",
               "admin",
               now,
+              "admin@local.host",
             ],
           );
           // Gerente (Gerencia Servidores)
           await query(
-            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
               "user-gerente",
               "gerente",
@@ -184,11 +212,12 @@ async function init() {
               "Gerente",
               "gerente",
               now,
+              "gerente@local.host",
             ],
           );
           // Usuário Comum (Apenas Visualiza)
           await query(
-            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
               "user-comum",
               "usuario",
@@ -196,6 +225,7 @@ async function init() {
               "Funcionário",
               "user",
               now,
+              "usuario@local.host",
             ],
           );
           console.log("✅ Usuários padrão criados.");
@@ -395,6 +425,60 @@ async function getUserByUsername(username) {
   return res.rows[0] || null;
 }
 
+async function getUserByEmail(email) {
+  if (!isConnected) {
+    try {
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        const data = JSON.parse(content);
+        if (data.users) {
+          return data.users.find((u) => u.email === email) || null;
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao ler users.json:", e);
+    }
+    return null;
+  }
+  const res = await query('SELECT * FROM users WHERE "email" = $1', [
+    email,
+  ]);
+  return res.rows[0] || null;
+}
+
+async function verifyUserCode(email, code) {
+  if (!isConnected) {
+    try {
+      if (fs.existsSync(jsonUsersPath)) {
+        const content = fs.readFileSync(jsonUsersPath, "utf-8");
+        const data = JSON.parse(content);
+        const user = data.users.find((u) => u.email === email);
+        
+        if (user && user.verificationCode === code && user.verificationExpires > Date.now()) {
+          user.isVerified = true;
+          user.verificationCode = null;
+          user.verificationExpires = null;
+          fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao verificar código no JSON:", e);
+    }
+    return false;
+  }
+
+  const res = await query('SELECT * FROM users WHERE "email" = $1', [email]);
+  const user = res.rows[0];
+
+  if (user && user.verificationCode === code && parseInt(user.verificationExpires) > Date.now()) {
+    await query('UPDATE users SET "isVerified" = TRUE, "verificationCode" = NULL, "verificationExpires" = NULL WHERE "email" = $1', [email]);
+    return true;
+  }
+
+  return false;
+}
+
 async function getAllUsers() {
   if (!isConnected) {
     try {
@@ -454,14 +538,18 @@ async function saveUser(user) {
   }
 
   const sql = `
-        INSERT INTO users ("id", "username", "password", "name", "role", "createdAt")
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email", "isVerified", "verificationCode", "verificationExpires")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT ("id") DO UPDATE SET
             "username" = EXCLUDED."username",
             "password" = EXCLUDED."password",
             "name" = EXCLUDED."name",
             "role" = EXCLUDED."role",
-            "createdAt" = EXCLUDED."createdAt"
+            "createdAt" = EXCLUDED."createdAt",
+            "email" = EXCLUDED."email",
+            "isVerified" = EXCLUDED."isVerified",
+            "verificationCode" = EXCLUDED."verificationCode",
+            "verificationExpires" = EXCLUDED."verificationExpires"
     `;
 
   await query(sql, [
@@ -471,6 +559,10 @@ async function saveUser(user) {
     user.name,
     user.role,
     user.createdAt,
+    user.email || null,
+    user.isVerified === undefined ? false : user.isVerified,
+    user.verificationCode || null,
+    user.verificationExpires || null
   ]);
 }
 
@@ -502,6 +594,8 @@ module.exports = {
   saveSetting,
   authenticateUser,
   getUserByUsername,
+  getUserByEmail,
+  verifyUserCode,
   getAllUsers,
   saveUser,
   deleteUser,

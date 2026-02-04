@@ -3,6 +3,15 @@
 
 const fs = require("fs");
 const path = require("path");
+
+// Carregar variáveis de ambiente (dashboard/.env)
+try {
+  const envPath = path.join(__dirname, "../.env");
+  if (fs.existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+  }
+} catch (e) {}
+
 const http = require("http");
 const https = require("https");
 const url = require("url");
@@ -348,12 +357,20 @@ function createDashboardServer(httpPort) {
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
         try {
-          const { username, password, name } = JSON.parse(body);
-          if (!username || !password || !name) {
+          const { username, password, name, email } = JSON.parse(body);
+          if (!username || !password || !name || !email) {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(
               JSON.stringify({ error: "Todos os campos são obrigatórios" }),
             );
+            return;
+          }
+
+          // Validação profissional de e-mail no backend
+          const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+          if (!emailRegex.test(email)) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "O e-mail fornecido é inválido." }));
             return;
           }
 
@@ -377,18 +394,113 @@ function createDashboardServer(httpPort) {
             return;
           }
 
+          const existingEmail = await db.getUserByEmail(email);
+          if (existingEmail) {
+            res.writeHead(409, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "E-mail já cadastrado" }));
+            return;
+          }
+
+          // Gerar código de verificação (6 dígitos)
+          const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+          const verificationExpires = Date.now() + 15 * 60 * 1000; // 15 minutos
+
+          // Lógica de Envio de E-mail (Real ou Mock)
+          if (nodemailer && process.env.SMTP_HOST) {
+            try {
+              const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: parseInt(process.env.SMTP_PORT || "587"),
+                secure: process.env.SMTP_SECURE === "true", // true para 465, false para outras
+                auth: {
+                  user: process.env.SMTP_USER,
+                  pass: process.env.SMTP_PASS,
+                },
+              });
+
+              await transporter.sendMail({
+                from: process.env.SMTP_FROM || '"P2P Chat" <noreply@seudominio.com>',
+                to: email,
+                subject: "Seu Código de Verificação",
+                text: `Seu código de verificação é: ${verificationCode}. Válido por 15 minutos.`,
+                html: `
+                  <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #e0e0e0;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+                      <img src="https://cdn-icons-png.flaticon.com/512/2913/2913990.png" alt="Logo" style="width: 60px; height: 60px; margin-bottom: 15px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
+                      <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">P2P Secure Chat</h1>
+                    </div>
+                    <div style="padding: 40px 30px; text-align: center;">
+                      <h2 style="color: #333333; margin-top: 0; font-size: 20px;">Verifique seu endereço de e-mail</h2>
+                      <p style="color: #666666; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
+                        Obrigado por se cadastrar! Use o código abaixo para validar sua conta.
+                      </p>
+                      <div style="background-color: #f8f9fa; border: 2px dashed #667eea; border-radius: 8px; padding: 15px; display: inline-block; margin-bottom: 30px;">
+                        <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #4a5568; display: block;">${verificationCode}</span>
+                      </div>
+                      <p style="color: #999999; font-size: 14px; margin-top: 0;">
+                        Este código expira em 15 minutos.
+                      </p>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
+                      <p style="color: #888888; font-size: 12px; margin: 0;">
+                        &copy; ${new Date().getFullYear()} P2P Secure Chat
+                      </p>
+                    </div>
+                  </div>
+                `
+              });
+              console.log(`✅ E-mail real enviado para ${email}`);
+            } catch (err) {
+              console.error("❌ Erro ao enviar e-mail real:", err.message);
+              // Fallback para o console em caso de erro no SMTP
+              console.log(`\n📧 [EMAIL MOCK - FALLBACK] Para: ${email} | Código: ${verificationCode}\n`);
+            }
+          } else {
+            // Simulação se não houver configuração SMTP
+            console.log(`\n📧 [EMAIL MOCK] Para: ${email}`);
+            console.log(`🔑 Código de Verificação: ${verificationCode}\n`);
+          }
+
           const newUser = {
             id: "user-" + Date.now(),
             username,
             password,
+            email,
             name,
             role: "user",
             createdAt: new Date().toISOString(),
+            isVerified: false,
+            verificationCode,
+            verificationExpires
           };
 
           await db.saveUser(newUser);
           res.writeHead(201, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: true }));
+          res.end(JSON.stringify({ success: true, message: "Código enviado para o e-mail." }));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // POST /auth/verify-code → Verificar código de e-mail
+    if (normalizedPath === "/auth/verify-code" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { email, code } = JSON.parse(body);
+          const isValid = await db.verifyUserCode(email, code);
+
+          if (isValid) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true }));
+          } else {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Código inválido ou expirado." }));
+          }
         } catch (e) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: e.message }));

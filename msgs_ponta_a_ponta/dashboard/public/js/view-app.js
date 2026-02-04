@@ -246,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   setupPasswordToggles();
+  setupPasswordStrengthMeters();
 });
 
 // ===== AUTHENTICATION =====
@@ -1271,5 +1272,63 @@ function setupPasswordToggles() {
     });
 
     wrapper.appendChild(icon);
+  });
+}
+
+function setupPasswordStrengthMeters() {
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach(input => {
+    if (input.id.includes('login')) return; // Ignorar login
+    if (input.dataset.strengthMeter) return;
+
+    input.dataset.strengthMeter = "true";
+
+    const meter = document.createElement('div');
+    meter.className = 'password-strength-meter';
+    meter.style.height = '4px';
+    meter.style.marginTop = '4px';
+    meter.style.borderRadius = '2px';
+    meter.style.transition = 'width 0.3s ease-in-out, background-color 0.3s';
+    meter.style.width = '0%';
+    meter.style.backgroundColor = '#e9ecef';
+
+    // Inserir após o wrapper do input (criado pelo toggle) ou após o input
+    let referenceElement = input;
+    if (input.parentElement.classList.contains('password-input-wrapper')) {
+      referenceElement = input.parentElement;
+    }
+    
+    if (referenceElement.parentNode) {
+      referenceElement.parentNode.insertBefore(meter, referenceElement.nextSibling);
+    }
+
+    input.addEventListener('input', () => {
+      const val = input.value;
+      if (!val) {
+        meter.style.width = '0%';
+        return;
+      }
+
+      let score = 0;
+      if (val.length >= 8) score++;
+      if (val.length >= 12) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+
+      let color = '#dc3545'; // Fraca (Vermelho)
+      let width = '30%';
+
+      if (score >= 4) {
+        color = '#28a745'; // Forte (Verde)
+        width = '100%';
+      } else if (score >= 2) {
+        color = '#ffc107'; // Média (Amarelo)
+        width = '60%';
+      }
+
+      meter.style.backgroundColor = color;
+      meter.style.width = width;
+    });
   });
 }

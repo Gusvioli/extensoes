@@ -37,7 +37,8 @@ async function hashPasswordFrontend(password) {
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
   passwordInputs.forEach((input) => {
-    if (input.parentElement.classList.contains("password-input-wrapper")) return;
+    if (input.parentElement.classList.contains("password-input-wrapper"))
+      return;
     if (input.parentNode.querySelector(".password-toggle-icon")) return;
 
     // Criar wrapper para isolar o input e garantir centralização correta
@@ -91,7 +92,9 @@ function injectSignupConfirmField() {
     // Insere após o container do input de senha (assumindo que passwordInput está num wrapper ou div)
     // Se o pai for o form, insere depois. Se o pai for um wrapper (criado pelo toggle), insere depois do wrapper.
     let targetNode = passwordInput;
-    if (passwordInput.parentElement.classList.contains("password-input-wrapper")) {
+    if (
+      passwordInput.parentElement.classList.contains("password-input-wrapper")
+    ) {
       targetNode = passwordInput.parentElement.parentElement; // Sobe para o form-group
     } else if (passwordInput.parentElement.tagName === "DIV") {
       targetNode = passwordInput.parentElement;
@@ -101,6 +104,264 @@ function injectSignupConfirmField() {
       targetNode.parentNode.insertBefore(wrapper, targetNode.nextSibling);
     }
   }
+}
+
+function injectForgotPasswordLink() {
+  const loginPasswordInput = document.getElementById("login-password");
+  // Verifica se o campo existe e se o link ainda não foi criado
+  if (loginPasswordInput && !document.getElementById("forgot-password-link")) {
+    const link = document.createElement("a");
+    link.href = "#";
+    link.id = "forgot-password-link";
+    link.textContent = "Esqueci minha senha";
+    link.style.cssText =
+      "display: block; text-align: right; font-size: 0.85em; margin-top: 5px; color: #667eea; text-decoration: none; cursor: pointer;";
+
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      showToast(
+        "Entre em contato com o administrador para redefinir sua senha.",
+        "info",
+      );
+    });
+
+    // Inserir após o campo de senha (considerando o wrapper do toggle de senha)
+    let targetNode = loginPasswordInput;
+    if (
+      loginPasswordInput.parentElement.classList.contains(
+        "password-input-wrapper",
+      )
+    ) {
+      targetNode = loginPasswordInput.parentElement;
+    }
+
+    if (targetNode && targetNode.parentNode) {
+      targetNode.parentNode.insertBefore(link, targetNode.nextSibling);
+    }
+  }
+}
+
+function injectSignupEmailField() {
+  const nameInput = document.getElementById("signup-name");
+  if (nameInput && !document.getElementById("signup-email")) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "form-group";
+    wrapper.style.marginTop = "15px";
+
+    const label = document.createElement("label");
+    label.textContent = "E-mail";
+    label.style.display = "block";
+    label.style.marginBottom = "5px";
+
+    const input = document.createElement("input");
+    input.type = "email";
+    input.id = "signup-email";
+    input.style.width = "100%";
+    input.className = nameInput.className;
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(input);
+
+    if (nameInput.parentNode) {
+      nameInput.parentNode.insertBefore(wrapper, nameInput.nextSibling);
+    }
+  }
+}
+
+function injectVerificationModal() {
+  if (document.getElementById("verification-modal")) return;
+
+  const modalHTML = `
+    <div id="verification-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px; text-align: center;">
+        <h2 style="margin-bottom: 15px;">Verifique seu E-mail 📧</h2>
+        <p style="margin-bottom: 20px; color: #666;">Enviamos um código de 6 dígitos para o seu e-mail.</p>
+        
+        <div class="form-group">
+          <input type="text" id="verify-code-input" class="form-control" placeholder="000000" maxlength="6" style="text-align: center; font-size: 1.5em; letter-spacing: 5px;">
+        </div>
+        
+        <div id="verify-error" class="alert-box error" style="display: none; margin-top: 10px;"></div>
+
+        <button id="verify-submit-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">Verificar Código</button>
+        <button id="verify-cancel-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; background: transparent; color: #666;">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+  // Event Listeners
+  document.getElementById("verify-cancel-btn").addEventListener("click", () => {
+    document.getElementById("verification-modal").classList.remove("show");
+  });
+}
+
+function openVerificationModal(email) {
+  injectVerificationModal();
+  const modal = document.getElementById("verification-modal");
+  const input = document.getElementById("verify-code-input");
+  const btn = document.getElementById("verify-submit-btn");
+  const errorBox = document.getElementById("verify-error");
+
+  input.value = "";
+  errorBox.style.display = "none";
+  modal.classList.add("show");
+  input.focus();
+
+  // Remover listeners antigos clonando o botão
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+
+  newBtn.addEventListener("click", () => {
+    const code = input.value.trim();
+    if (code.length !== 6) {
+      errorBox.textContent = "O código deve ter 6 dígitos.";
+      errorBox.style.display = "block";
+      return;
+    }
+
+    newBtn.disabled = true;
+    newBtn.textContent = "Verificando...";
+
+    fetch("/auth/verify-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        newBtn.disabled = false;
+        newBtn.textContent = "Verificar Código";
+
+        if (data.success) {
+          modal.classList.remove("show");
+          showToast("E-mail verificado com sucesso! Faça login.", "success");
+          
+          // Ir para tela de login
+          const loginContainer = document.getElementById("login-container");
+          const signupContainer = document.getElementById("signup-container");
+          if (signupContainer) signupContainer.style.display = "none";
+          if (loginContainer) loginContainer.style.display = "block";
+          
+          // Preencher usuário no login se possível (não temos o username aqui, mas o usuário pode digitar)
+          document.getElementById("login-password").focus();
+        } else {
+          errorBox.textContent = data.error || "Código inválido.";
+          errorBox.style.display = "block";
+        }
+      })
+      .catch(() => {
+        newBtn.disabled = false;
+        newBtn.textContent = "Verificar Código";
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
+      });
+  });
+}
+
+function injectSignupClearButton() {
+  const form = document.getElementById("signup-form");
+  if (form && !document.getElementById("signup-clear-btn")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "signup-clear-btn";
+    btn.textContent = "Limpar Formulário";
+    btn.style.cssText =
+      "width: 100%; padding: 10px; margin-top: 10px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.3s;";
+
+    btn.onmouseover = () => (btn.style.backgroundColor = "#5a6268");
+    btn.onmouseout = () => (btn.style.backgroundColor = "#6c757d");
+
+    btn.addEventListener("click", () => {
+      form.reset();
+      const errorEl = document.getElementById("signup-error");
+      if (errorEl) errorEl.style.display = "none";
+
+      // Resetar visibilidade de senhas e ícones
+      const passwordInputs = form.querySelectorAll("input");
+      passwordInputs.forEach((input) => {
+        if (input.id.includes("password")) {
+          input.type = "password";
+          const wrapper = input.parentElement;
+          if (wrapper && wrapper.classList.contains("password-input-wrapper")) {
+            const icon = wrapper.querySelector(".password-toggle-icon");
+            if (icon) icon.innerText = "👁️";
+          }
+        }
+      });
+
+      // Resetar medidores de força
+      const meters = form.querySelectorAll(".password-strength-meter");
+      meters.forEach((meter) => {
+        meter.style.width = "0%";
+        meter.style.backgroundColor = "#e9ecef";
+      });
+    });
+
+    form.appendChild(btn);
+  }
+}
+
+function setupPasswordStrengthMeters() {
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach((input) => {
+    // Ignorar login e confirmação de senha
+    if (input.id.includes("login") || input.id.includes("confirm")) return;
+    if (input.dataset.strengthMeter) return;
+
+    input.dataset.strengthMeter = "true";
+
+    const meter = document.createElement("div");
+    meter.className = "password-strength-meter";
+    meter.style.height = "4px";
+    meter.style.marginTop = "4px";
+    meter.style.borderRadius = "2px";
+    meter.style.transition = "width 0.3s ease-in-out, background-color 0.3s";
+    meter.style.width = "0%";
+    meter.style.backgroundColor = "#e9ecef";
+
+    // Inserir após o wrapper do input (criado pelo toggle) ou após o input
+    let referenceElement = input;
+    if (input.parentElement.classList.contains("password-input-wrapper")) {
+      referenceElement = input.parentElement;
+    }
+
+    if (referenceElement.parentNode) {
+      referenceElement.parentNode.insertBefore(
+        meter,
+        referenceElement.nextSibling,
+      );
+    }
+
+    input.addEventListener("input", () => {
+      const val = input.value;
+      if (!val) {
+        meter.style.width = "0%";
+        return;
+      }
+
+      let score = 0;
+      if (val.length >= 8) score++;
+      if (val.length >= 12) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+
+      let color = "#dc3545"; // Fraca (Vermelho)
+      let width = "30%";
+
+      if (score >= 4) {
+        color = "#28a745"; // Forte (Verde)
+        width = "100%";
+      } else if (score >= 2) {
+        color = "#ffc107"; // Média (Amarelo)
+        width = "60%";
+      }
+
+      meter.style.backgroundColor = color;
+      meter.style.width = width;
+    });
+  });
 }
 
 function injectToastStyles() {
@@ -145,6 +406,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   injectToastStyles();
   injectSignupConfirmField();
+  injectSignupEmailField();
+  injectForgotPasswordLink();
+  injectSignupClearButton();
 
   // Event listeners for settings
   document
@@ -252,7 +516,8 @@ document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
   setupPasswordToggles();
   // Re-executar setupPasswordToggles após injetar o campo de confirmação
-  setTimeout(setupPasswordToggles, 100); 
+  setTimeout(setupPasswordToggles, 100);
+  setTimeout(setupPasswordStrengthMeters, 100);
 });
 
 // ===== AUTENTICAÇÃO =====
@@ -396,10 +661,17 @@ async function handleSignup(e) {
   e.preventDefault();
 
   const name = document.getElementById("signup-name").value;
+  const email = document.getElementById("signup-email")
+    ? document.getElementById("signup-email").value
+    : "";
   const username = document.getElementById("signup-username").value;
   const passwordRaw = document.getElementById("signup-password").value;
-  const confirmPasswordInput = document.getElementById("signup-confirm-password");
-  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : null;
+  const confirmPasswordInput = document.getElementById(
+    "signup-confirm-password",
+  );
+  const confirmPassword = confirmPasswordInput
+    ? confirmPasswordInput.value
+    : null;
 
   if (/\s/.test(username)) {
     document.getElementById("signup-error").textContent =
@@ -408,20 +680,32 @@ async function handleSignup(e) {
     return;
   }
 
+  // Regex profissional para validação de e-mail (suporta domínios compostos e caracteres especiais permitidos)
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!email || !emailRegex.test(email)) {
+    document.getElementById("signup-error").textContent =
+      "Por favor, insira um e-mail válido.";
+    document.getElementById("signup-error").style.display = "block";
+    return;
+  }
+
   if (passwordRaw.length < 8) {
-    document.getElementById("signup-error").textContent = "A senha deve ter no mínimo 8 caracteres.";
+    document.getElementById("signup-error").textContent =
+      "A senha deve ter no mínimo 8 caracteres.";
     document.getElementById("signup-error").style.display = "block";
     return;
   }
 
   if (!/[a-zA-Z]/.test(passwordRaw) || !/[0-9]/.test(passwordRaw)) {
-    document.getElementById("signup-error").textContent = "A senha deve conter letras e números.";
+    document.getElementById("signup-error").textContent =
+      "A senha deve conter letras e números.";
     document.getElementById("signup-error").style.display = "block";
     return;
   }
 
   if (confirmPassword !== null && passwordRaw !== confirmPassword) {
-    document.getElementById("signup-error").textContent = "As senhas não coincidem.";
+    document.getElementById("signup-error").textContent =
+      "As senhas não coincidem.";
     document.getElementById("signup-error").style.display = "block";
     return;
   }
@@ -432,19 +716,14 @@ async function handleSignup(e) {
   fetch("/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, username, password }),
+    body: JSON.stringify({ name, email, username, password }),
   })
     .then((res) => res.json())
     .then((data) => {
       if (data.success) {
-        showToast("Conta criada com sucesso! Faça login.", "success");
-        // Switch to login view
-        const loginContainer = document.getElementById("login-container");
-        const signupContainer = document.getElementById("signup-container");
-        if (signupContainer) signupContainer.style.display = "none";
-        if (loginContainer) loginContainer.style.display = "block";
-        document.getElementById("login-username").value = username;
-        document.getElementById("login-password").focus();
+        // Em vez de ir para login, abrir modal de verificação
+        showToast("Código enviado para seu e-mail!", "info");
+        openVerificationModal(email);
       } else {
         document.getElementById("signup-error").textContent = data.error;
         document.getElementById("signup-error").style.display = "block";
