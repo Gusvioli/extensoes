@@ -37,30 +37,70 @@ async function hashPasswordFrontend(password) {
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
   passwordInputs.forEach((input) => {
+    if (input.parentElement.classList.contains("password-input-wrapper")) return;
     if (input.parentNode.querySelector(".password-toggle-icon")) return;
 
-    const parent = input.parentElement;
-    if (parent) {
-      if (window.getComputedStyle(parent).position === "static") {
-        parent.style.position = "relative";
-      }
+    // Criar wrapper para isolar o input e garantir centralização correta
+    const wrapper = document.createElement("div");
+    wrapper.className = "password-input-wrapper";
+    wrapper.style.position = "relative";
+    wrapper.style.width = "100%";
 
-      const icon = document.createElement("span");
-      icon.innerText = "👁️";
-      icon.className = "password-toggle-icon";
-      icon.style.cssText =
-        "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;";
-      icon.title = "Mostrar/Ocultar senha";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
 
-      icon.addEventListener("click", () => {
-        const isPassword = input.type === "password";
-        input.type = isPassword ? "text" : "password";
-        icon.innerText = isPassword ? "🙈" : "👁️";
-      });
+    const icon = document.createElement("span");
+    icon.innerText = "👁️";
+    icon.className = "password-toggle-icon";
+    icon.style.cssText =
+      "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;";
+    icon.title = "Mostrar/Ocultar senha";
 
-      parent.appendChild(icon);
-    }
+    icon.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      icon.innerText = isPassword ? "🙈" : "👁️";
+    });
+
+    wrapper.appendChild(icon);
   });
+}
+
+function injectSignupConfirmField() {
+  const passwordInput = document.getElementById("signup-password");
+  // Verifica se o campo de senha existe e se o de confirmação ainda não foi criado
+  if (passwordInput && !document.getElementById("signup-confirm-password")) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "form-group";
+    wrapper.style.marginTop = "15px";
+
+    const label = document.createElement("label");
+    label.textContent = "Confirmar Senha";
+    label.style.display = "block";
+    label.style.marginBottom = "5px";
+
+    const input = document.createElement("input");
+    input.type = "password";
+    input.id = "signup-confirm-password";
+    input.style.width = "100%";
+    input.className = passwordInput.className; // Herda classes para manter estilo
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(input);
+
+    // Insere após o container do input de senha (assumindo que passwordInput está num wrapper ou div)
+    // Se o pai for o form, insere depois. Se o pai for um wrapper (criado pelo toggle), insere depois do wrapper.
+    let targetNode = passwordInput;
+    if (passwordInput.parentElement.classList.contains("password-input-wrapper")) {
+      targetNode = passwordInput.parentElement.parentElement; // Sobe para o form-group
+    } else if (passwordInput.parentElement.tagName === "DIV") {
+      targetNode = passwordInput.parentElement;
+    }
+
+    if (targetNode && targetNode.parentNode) {
+      targetNode.parentNode.insertBefore(wrapper, targetNode.nextSibling);
+    }
+  }
 }
 
 function injectToastStyles() {
@@ -104,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   injectToastStyles();
+  injectSignupConfirmField();
 
   // Event listeners for settings
   document
@@ -210,6 +251,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   checkAuth();
   setupPasswordToggles();
+  // Re-executar setupPasswordToggles após injetar o campo de confirmação
+  setTimeout(setupPasswordToggles, 100); 
 });
 
 // ===== AUTENTICAÇÃO =====
@@ -355,7 +398,8 @@ async function handleSignup(e) {
   const name = document.getElementById("signup-name").value;
   const username = document.getElementById("signup-username").value;
   const passwordRaw = document.getElementById("signup-password").value;
-  const password = await hashPasswordFrontend(passwordRaw);
+  const confirmPasswordInput = document.getElementById("signup-confirm-password");
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : null;
 
   if (/\s/.test(username)) {
     document.getElementById("signup-error").textContent =
@@ -363,6 +407,26 @@ async function handleSignup(e) {
     document.getElementById("signup-error").style.display = "block";
     return;
   }
+
+  if (passwordRaw.length < 8) {
+    document.getElementById("signup-error").textContent = "A senha deve ter no mínimo 8 caracteres.";
+    document.getElementById("signup-error").style.display = "block";
+    return;
+  }
+
+  if (!/[a-zA-Z]/.test(passwordRaw) || !/[0-9]/.test(passwordRaw)) {
+    document.getElementById("signup-error").textContent = "A senha deve conter letras e números.";
+    document.getElementById("signup-error").style.display = "block";
+    return;
+  }
+
+  if (confirmPassword !== null && passwordRaw !== confirmPassword) {
+    document.getElementById("signup-error").textContent = "As senhas não coincidem.";
+    document.getElementById("signup-error").style.display = "block";
+    return;
+  }
+
+  const password = await hashPasswordFrontend(passwordRaw);
 
   // Usar caminho relativo simples para evitar problemas de porta
   fetch("/auth/signup", {

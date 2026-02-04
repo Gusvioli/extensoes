@@ -72,28 +72,31 @@ async function hashPasswordFrontend(password) {
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
   passwordInputs.forEach(input => {
+    if (input.parentElement.classList.contains("password-input-wrapper")) return;
     if (input.parentNode.querySelector('.password-toggle-icon')) return;
 
-    const parent = input.parentElement;
-    if (parent) {
-      if (window.getComputedStyle(parent).position === 'static') {
-        parent.style.position = 'relative';
-      }
+    // Criar wrapper para isolar o input e garantir centralização correta
+    const wrapper = document.createElement("div");
+    wrapper.className = "password-input-wrapper";
+    wrapper.style.position = "relative";
+    wrapper.style.width = "100%";
 
-      const icon = document.createElement('span');
-      icon.innerText = '👁️';
-      icon.className = 'password-toggle-icon';
-      icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
-      icon.title = "Mostrar/Ocultar senha";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
 
-      icon.addEventListener('click', () => {
-        const isPassword = input.type === 'password';
-        input.type = isPassword ? 'text' : 'password';
-        icon.innerText = isPassword ? '🙈' : '👁️';
-      });
+    const icon = document.createElement('span');
+    icon.innerText = '👁️';
+    icon.className = 'password-toggle-icon';
+    icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
+    icon.title = "Mostrar/Ocultar senha";
 
-      parent.appendChild(icon);
-    }
+    icon.addEventListener('click', () => {
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      icon.innerText = isPassword ? '🙈' : '👁️';
+    });
+
+    wrapper.appendChild(icon);
   });
 }
 
