@@ -48,6 +48,8 @@ document.addEventListener("DOMContentLoaded", () => {
         loadUsers();
       }
     });
+  setupPasswordToggles();
+  injectToastStyles();
 });
 
 const modal = document.getElementById("userModal");
@@ -58,6 +60,69 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+async function hashPasswordFrontend(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function setupPasswordToggles() {
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach(input => {
+    if (input.parentNode.querySelector('.password-toggle-icon')) return;
+
+    const parent = input.parentElement;
+    if (parent) {
+      if (window.getComputedStyle(parent).position === 'static') {
+        parent.style.position = 'relative';
+      }
+
+      const icon = document.createElement('span');
+      icon.innerText = '👁️';
+      icon.className = 'password-toggle-icon';
+      icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
+      icon.title = "Mostrar/Ocultar senha";
+
+      icon.addEventListener('click', () => {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        icon.innerText = isPassword ? '🙈' : '👁️';
+      });
+
+      parent.appendChild(icon);
+    }
+  });
+}
+
+function injectToastStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      pointer-events: none;
+    }
+    .toast {
+      background-color: #333;
+      color: #fff;
+      padding: 12px 20px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      opacity: 0.95;
+      pointer-events: auto;
+      min-width: 250px;
+    }
+    .toast.success { background-color: #28a745; }
+    .toast.error { background-color: #dc3545; }
+    .toast.info { background-color: #17a2b8; }
+  `;
+  document.head.appendChild(style);
 }
 
 async function loadUsers() {
@@ -165,6 +230,9 @@ function editUser(id, name, username, role) {
   document.getElementById("userLogin").value = username;
   document.getElementById("userRole").value = role;
   document.getElementById("userPass").value = ""; // Senha não é preenchida por segurança
+  if (document.getElementById("userPassConfirm")) {
+    document.getElementById("userPassConfirm").value = "";
+  }
   modal.classList.add("show");
 }
 
@@ -228,11 +296,27 @@ form.addEventListener("submit", async (e) => {
   const name = document.getElementById("userName").value;
   const username = document.getElementById("userLogin").value;
   const password = document.getElementById("userPass").value;
+  const passwordConfirm = document.getElementById("userPassConfirm") ? document.getElementById("userPassConfirm").value : null;
   const role = document.getElementById("userRole").value;
+
+  if (/\s/.test(username)) {
+    showToast("O nome de usuário não pode conter espaços.", "error");
+    return;
+  }
+
+  if (password && password.length < 6) {
+    showToast("A senha deve ter no mínimo 6 caracteres.", "error");
+    return;
+  }
+
+  if (password && passwordConfirm !== null && password !== passwordConfirm) {
+    showToast("As senhas não coincidem.", "error");
+    return;
+  }
 
   const payload = { name, username, role };
   if (id) payload.id = id;
-  if (password) payload.password = password;
+  if (password) payload.password = await hashPasswordFrontend(password);
 
   // Se for novo usuário, senha é obrigatória
   if (!id && !password) {

@@ -27,6 +27,70 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+async function hashPasswordFrontend(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function setupPasswordToggles() {
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach((input) => {
+    if (input.parentNode.querySelector(".password-toggle-icon")) return;
+
+    const parent = input.parentElement;
+    if (parent) {
+      if (window.getComputedStyle(parent).position === "static") {
+        parent.style.position = "relative";
+      }
+
+      const icon = document.createElement("span");
+      icon.innerText = "👁️";
+      icon.className = "password-toggle-icon";
+      icon.style.cssText =
+        "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;";
+      icon.title = "Mostrar/Ocultar senha";
+
+      icon.addEventListener("click", () => {
+        const isPassword = input.type === "password";
+        input.type = isPassword ? "text" : "password";
+        icon.innerText = isPassword ? "🙈" : "👁️";
+      });
+
+      parent.appendChild(icon);
+    }
+  });
+}
+
+function injectToastStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      pointer-events: none;
+    }
+    .toast {
+      background-color: #333;
+      color: #fff;
+      padding: 12px 20px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      opacity: 0.95;
+      pointer-events: auto;
+      min-width: 250px;
+    }
+    .toast.success { background-color: #28a745; }
+    .toast.error { background-color: #dc3545; }
+    .toast.info { background-color: #17a2b8; }
+  `;
+  document.head.appendChild(style);
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   // Adicionar elementos de UI dinâmicos ao corpo do documento
@@ -38,6 +102,8 @@ document.addEventListener("DOMContentLoaded", () => {
     link.href = "css/components.css";
     document.head.appendChild(link);
   }
+
+  injectToastStyles();
 
   // Event listeners for settings
   document
@@ -143,6 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   checkAuth();
+  setupPasswordToggles();
 });
 
 // ===== AUTENTICAÇÃO =====
@@ -247,11 +314,12 @@ function showDashboard() {
   }
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
 
   const username = document.getElementById("login-username").value;
-  const password = document.getElementById("login-password").value;
+  const passwordRaw = document.getElementById("login-password").value;
+  const password = await hashPasswordFrontend(passwordRaw);
 
   fetch("/auth/login", {
     method: "POST",
@@ -268,6 +336,10 @@ function handleLogin(e) {
           window.location.href = "/view.html";
         } else {
           showDashboard(); // Admins/Gerentes ficam no dashboard
+          loadServers();
+          setupEventListeners();
+          if (loadServersInterval) clearInterval(loadServersInterval);
+          loadServersInterval = setInterval(loadServers, refreshInterval);
         }
       } else {
         document.getElementById("login-error").textContent = data.error;
@@ -277,12 +349,20 @@ function handleLogin(e) {
     });
 }
 
-function handleSignup(e) {
+async function handleSignup(e) {
   e.preventDefault();
 
   const name = document.getElementById("signup-name").value;
   const username = document.getElementById("signup-username").value;
-  const password = document.getElementById("signup-password").value;
+  const passwordRaw = document.getElementById("signup-password").value;
+  const password = await hashPasswordFrontend(passwordRaw);
+
+  if (/\s/.test(username)) {
+    document.getElementById("signup-error").textContent =
+      "O nome de usuário não pode conter espaços.";
+    document.getElementById("signup-error").style.display = "block";
+    return;
+  }
 
   // Usar caminho relativo simples para evitar problemas de porta
   fetch("/auth/signup", {
@@ -315,7 +395,7 @@ function handleLogout() {
     currentUser = null;
     localStorage.removeItem("user_info");
     if (loadServersInterval) clearInterval(loadServersInterval);
-    showLogin();
+    window.location.reload();
   });
 }
 
@@ -1055,7 +1135,11 @@ async function saveProfile(e) {
   };
 
   if (password) {
-    payload.password = password;
+    if (password.length < 6) {
+      showToast("A senha deve ter no mínimo 6 caracteres.", "error");
+      return;
+    }
+    payload.password = await hashPasswordFrontend(password);
   }
 
   try {

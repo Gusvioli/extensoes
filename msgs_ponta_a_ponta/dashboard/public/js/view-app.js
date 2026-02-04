@@ -245,6 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
       drawLatencyComparisonChart(-1);
     });
   }
+  setupPasswordToggles();
 });
 
 // ===== AUTHENTICATION =====
@@ -317,7 +318,11 @@ async function saveProfile(e) {
   };
 
   if (password) {
-    payload.password = password;
+    if (password.length < 6) {
+      showToast("A senha deve ter no mínimo 6 caracteres.", "error");
+      return;
+    }
+    payload.password = await hashPasswordFrontend(password);
   }
 
   try {
@@ -1229,4 +1234,39 @@ function getStatusEmoji(status) {
     standby: "⏸️",
   };
   return emojis[status] || "❓";
+}
+
+async function hashPasswordFrontend(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function setupPasswordToggles() {
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach(input => {
+    if (input.parentNode.querySelector('.password-toggle-icon')) return;
+
+    const parent = input.parentElement;
+    if (parent) {
+      if (window.getComputedStyle(parent).position === 'static') {
+        parent.style.position = 'relative';
+      }
+
+      const icon = document.createElement('span');
+      icon.innerText = '👁️';
+      icon.className = 'password-toggle-icon';
+      icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
+      icon.title = "Mostrar/Ocultar senha";
+
+      icon.addEventListener('click', () => {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        icon.innerText = isPassword ? '🙈' : '👁️';
+      });
+
+      parent.appendChild(icon);
+    }
+  });
 }
