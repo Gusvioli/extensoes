@@ -1,7 +1,7 @@
 🔐 P2P SECURE CHAT - TOKEN DE AUTENTICAÇÃO
 =====================================
 
-Token: 230ca81b0e0a46dee7f07f4959394c6c
+Token: 51ce84bfc2bec6e52270eb5d118429f7
 
 Instruções de Uso:
 1. Abra a extensão Chrome
@@ -9,5 +9,5 @@ Instruções de Uso:
 3. Clique em "Autenticar"
 4. Conecte-se normalmente
 
-Gerado em: 2026-02-03T12:14:54.635Z
+Gerado em: 2026-02-04T20:37:16.113Z
 Servidor: ws://localhost:8080

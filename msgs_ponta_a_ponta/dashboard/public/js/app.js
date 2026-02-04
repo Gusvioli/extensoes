@@ -399,6 +399,16 @@ function setupEventListeners() {
     });
   }
 
+  // Fechar modal de perfil ao clicar fora
+  const profileModal = document.getElementById("profile-modal");
+  if (profileModal) {
+    profileModal.addEventListener("click", (e) => {
+      if (e.target.id === "profile-modal") {
+        profileModal.classList.remove("show");
+      }
+    });
+  }
+
   const profileForm = document.getElementById("profile-form");
   if (profileForm) {
     profileForm.addEventListener("submit", saveProfile);
