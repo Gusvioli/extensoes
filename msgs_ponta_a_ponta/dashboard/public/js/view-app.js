@@ -10,10 +10,13 @@ let currentUser = null;
 let latencyInterval = null;
 let latencyHistory = [];
 let latencyComparisonData = [];
+let loginAttempts = 0;
 
 // URL Base da API (Fallback para localhost se config.js não carregar)
 const API_BASE =
   (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:3000";
+
+console.log("View API_BASE:", API_BASE); // Log para debug
 
 function getAuthHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -24,10 +27,394 @@ function getAuthHeaders() {
   return headers;
 }
 
+// ===== LOADER SYSTEM =====
+function injectLoader() {
+  if (document.getElementById("app-loader")) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #app-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #f8f9fa;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.4s ease, visibility 0.4s;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e2e8f0;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+    .loading-text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #4a5568;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    .loader-hidden { opacity: 0; visibility: hidden; }
+
+    /* Animação de Entrada do Conteúdo */
+    body > *:not(#app-loader):not(script):not(style):not(#toast-container) {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    body.loaded > *:not(#app-loader):not(script):not(style):not(#toast-container) {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Highlight de Pesquisa */
+    .highlight {
+      background-color: #fff3cd;
+      color: #856404;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const loader = document.createElement("div");
+  loader.id = "app-loader";
+  loader.innerHTML =
+    '<div class="spinner"></div><div class="loading-text">CARREGANDO...</div>';
+  document.body.appendChild(loader);
+}
+
+function hideLoader() {
+  const loader = document.getElementById("app-loader");
+  if (loader) loader.classList.add("loader-hidden");
+  document.body.classList.add("loaded");
+}
+
+// ===== FORGOT PASSWORD SYSTEM =====
+function injectForgotPasswordModal() {
+  if (document.getElementById("forgot-password-modal")) return;
+
+  const modalHTML = `
+    <div id="forgot-password-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px; text-align: center;">
+        <h2 style="margin-bottom: 15px;">Redefinir Senha 🔐</h2>
+        
+        <div id="forgot-step-1">
+            <p style="margin-bottom: 20px; color: #666;">Digite seu e-mail para receber o código.</p>
+            <div class="form-group">
+                <input type="email" id="forgot-email" class="form-control" placeholder="seu@email.com">
+            </div>
+            <button id="forgot-send-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Enviar Código</button>
+        </div>
+
+        <div id="forgot-step-2" style="display: none;">
+            <p style="margin-bottom: 20px; color: #666;">Código enviado! Verifique seu e-mail.</p>
+            
+            <div class="form-group">
+                <input type="text" id="forgot-code" class="form-control" placeholder="Código (6 dígitos)" maxlength="6" style="text-align: center; letter-spacing: 3px; margin-bottom: 10px;">
+            </div>
+
+            <div class="form-group">
+                <input type="password" id="forgot-new-pass" class="form-control" placeholder="Nova Senha">
+            </div>
+
+            <button id="forgot-reset-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Redefinir Senha</button>
+        </div>
+
+        <div id="forgot-error" class="alert-box error" style="display: none; margin-top: 10px;"></div>
+        <button id="forgot-cancel-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; background: transparent; color: #666;">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+  const modal = document.getElementById("forgot-password-modal");
+  const cancelBtn = document.getElementById("forgot-cancel-btn");
+  const sendBtn = document.getElementById("forgot-send-btn");
+  const resetBtn = document.getElementById("forgot-reset-btn");
+  const errorBox = document.getElementById("forgot-error");
+
+  cancelBtn.addEventListener("click", () => modal.classList.remove("show"));
+
+  sendBtn.addEventListener("click", () => {
+    const email = document.getElementById("forgot-email").value.trim();
+    if (!email)
+      return (
+        (errorBox.textContent = "Digite seu e-mail."),
+        (errorBox.style.display = "block")
+      );
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Enviando...";
+    errorBox.style.display = "none";
+
+    fetch(`${API_BASE}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Enviar Código";
+        if (data.success) {
+          document.getElementById("forgot-step-1").style.display = "none";
+          document.getElementById("forgot-step-2").style.display = "block";
+          showToast("Código enviado!", "success");
+        } else {
+          errorBox.textContent = data.error || "Erro ao enviar.";
+          errorBox.style.display = "block";
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Enviar Código";
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
+      });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    const email = document.getElementById("forgot-email").value.trim();
+    const code = document.getElementById("forgot-code").value.trim();
+    const newPassword = document.getElementById("forgot-new-pass").value;
+
+    if (!code || !newPassword)
+      return (
+        (errorBox.textContent = "Preencha todos os campos."),
+        (errorBox.style.display = "block")
+      );
+
+    resetBtn.disabled = true;
+    resetBtn.textContent = "Redefinindo...";
+    errorBox.style.display = "none";
+
+    fetch(`${API_BASE}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, newPassword }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        resetBtn.disabled = false;
+        resetBtn.textContent = "Redefinir Senha";
+        if (data.success) {
+          modal.classList.remove("show");
+          showToast("Senha redefinida! Faça login.", "success");
+          setTimeout(() => {
+            document.getElementById("forgot-step-1").style.display = "block";
+            document.getElementById("forgot-step-2").style.display = "none";
+            document.getElementById("forgot-email").value = "";
+            document.getElementById("forgot-code").value = "";
+            document.getElementById("forgot-new-pass").value = "";
+          }, 500);
+        } else {
+          errorBox.textContent = data.error || "Erro ao redefinir.";
+          errorBox.style.display = "block";
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        resetBtn.disabled = false;
+        resetBtn.textContent = "Redefinir Senha";
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
+      });
+  });
+}
+
+function openForgotPasswordModal() {
+  injectForgotPasswordModal();
+  setupPasswordToggles();
+  const modal = document.getElementById("forgot-password-modal");
+  const errorBox = document.getElementById("forgot-error");
+
+  document.getElementById("forgot-step-1").style.display = "block";
+  document.getElementById("forgot-step-2").style.display = "none";
+  document.getElementById("forgot-email").value = "";
+  document.getElementById("forgot-code").value = "";
+  document.getElementById("forgot-new-pass").value = "";
+  errorBox.style.display = "none";
+
+  document.getElementById("login-modal").classList.remove("show");
+  modal.classList.add("show");
+  document.getElementById("forgot-email").focus();
+}
+
+// ===== LOGIN MODAL SYSTEM =====
+function injectLoginModal() {
+  if (document.getElementById("login-modal")) return;
+
+  const modalHTML = `
+    <div id="login-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0;">🔐 Login</h2>
+          <button class="close-modal-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        </div>
+        
+        <form id="login-form" autocomplete="off">
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="login-username" style="display: block; margin-bottom: 5px; font-weight: 500;">Usuário</label>
+            <input type="text" id="login-username" class="form-control" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="login-password" style="display: block; margin-bottom: 5px; font-weight: 500;">Senha</label>
+            <input type="password" id="login-password" class="form-control" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+
+          <div id="login-error" class="alert-box error" style="display: none; color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
+
+          <button type="submit" class="btn-primary" style="width: 100%; padding: 10px; background-color: #667eea; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Entrar</button>
+        </form>
+        
+        <div style="text-align: right; margin-top: 10px;">
+          <a href="#" id="login-forgot-link" style="font-size: 0.9em; color: #667eea; text-decoration: none;">Esqueci minha senha</a>
+        </div>
+
+        <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
+          <p>Não tem uma conta? <a href="/" style="color: #667eea; text-decoration: none;">Cadastre-se no Painel</a></p>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+  const modal = document.getElementById("login-modal");
+  const closeBtns = modal.querySelectorAll(".close-modal-btn");
+  closeBtns.forEach((btn) =>
+    btn.addEventListener("click", () => modal.classList.remove("show")),
+  );
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.remove("show");
+  });
+
+  document
+    .getElementById("login-form")
+    .addEventListener("submit", handleLoginSubmit);
+
+  document
+    .getElementById("login-forgot-link")
+    .addEventListener("click", (e) => {
+      e.preventDefault();
+      openForgotPasswordModal();
+    });
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const usernameInput = document.getElementById("login-username");
+  const passwordInput = document.getElementById("login-password");
+  const errorBox = document.getElementById("login-error");
+  const submitBtn = e.target.querySelector("button[type='submit']");
+
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!username || !password) return;
+
+  const originalBtnText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Entrando...";
+  errorBox.style.display = "none";
+
+  const cleanApiBase = API_BASE.replace(/\/$/, "");
+
+  try {
+    const res = await fetch(`${cleanApiBase}/auth/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      loginAttempts = 0;
+      currentUser = data.user;
+      localStorage.setItem("user_info", JSON.stringify(currentUser));
+      document.getElementById("login-modal").classList.remove("show");
+
+      // Limpar campos de login para evitar cache/autofill
+      e.target.reset();
+      usernameInput.value = "";
+      passwordInput.value = "";
+
+      // Redirecionar Admin/Gerente para o Dashboard
+      if (currentUser.role === "admin" || currentUser.role === "gerente") {
+        window.location.href = "/";
+        return;
+      }
+
+      checkAuth();
+      showToast(`Bem-vindo, ${currentUser.name}!`, "success");
+
+      // Limpar pesquisa ao logar
+      const viewSearch = document.getElementById("view-search");
+      if (viewSearch) {
+        viewSearch.value = "";
+        searchTerm = "";
+        const clearBtn = document.getElementById("view-search-clear");
+        if (clearBtn) clearBtn.style.display = "none";
+      }
+    } else {
+      loginAttempts++;
+      errorBox.textContent = data.error || "Erro ao entrar.";
+      errorBox.style.display = "block";
+    }
+  } catch (err) {
+    console.error(err);
+    errorBox.innerHTML = `Erro de conexão.<br><span style="font-size: 0.85em; color: #666;">Backend: ${cleanApiBase}</span>`;
+    errorBox.style.display = "block";
+  } finally {
+    if (loginAttempts >= 3) {
+      let countdown = 10;
+      submitBtn.disabled = true;
+      submitBtn.textContent = `Aguarde ${countdown}s`;
+      const timer = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(timer);
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalBtnText;
+          loginAttempts = 0;
+        } else {
+          submitBtn.textContent = `Aguarde ${countdown}s`;
+        }
+      }, 1000);
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+    }
+  }
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
-  checkAuth();
-  loadServers();
+  injectLoader();
+  injectLoginModal();
+  injectForgotPasswordModal();
+
+  // Carregar dados em paralelo e remover loader quando ambos terminarem
+  Promise.allSettled([checkAuth(), loadServers()]).then(() => {
+    hideLoader();
+  });
+
   setupEventListeners();
   updateLastUpdate();
   setInterval(updateLastUpdate, 60000); // Atualizar a cada minuto
@@ -94,7 +481,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const controlsHTML = `
       <div class="filters-divider"></div>
       <div class="search-wrapper">
-        <input type="text" id="view-search" class="search-input" placeholder="Buscar...">
+        <input type="text" id="view-search" class="search-input" placeholder="Buscar..." autocomplete="off" name="view_search_query">
+        <button id="view-search-clear" class="search-clear-btn" style="display:none;">&times;</button>
       </div>
       <div class="sort-wrapper">
         <select id="view-sort" class="sort-select">
@@ -130,11 +518,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Event listeners (movidos para fora para garantir que funcionem com HTML estático)
   const viewSearch = document.getElementById("view-search");
+  const viewSearchClear = document.getElementById("view-search-clear");
+
   if (viewSearch) {
+    viewSearch.value = ""; // Limpar ao carregar a página
+    searchTerm = "";
+    viewSearch.setAttribute("autocomplete", "off");
+    viewSearch.setAttribute("name", "view_search_query");
     viewSearch.addEventListener("input", (e) => {
       searchTerm = e.target.value.toLowerCase();
+      if (viewSearchClear)
+        viewSearchClear.style.display = searchTerm ? "block" : "none";
       renderServers();
     });
+
+    viewSearch.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchTerm = e.target.value.toLowerCase();
+        renderServers();
+        viewSearch.blur(); // Remove o foco para fechar teclado em mobile
+      }
+    });
+
+    if (viewSearchClear) {
+      viewSearchClear.addEventListener("click", () => {
+        viewSearch.value = "";
+        searchTerm = "";
+        viewSearchClear.style.display = "none";
+        viewSearch.focus();
+        renderServers();
+      });
+    }
   }
 
   const viewSort = document.getElementById("view-sort");
@@ -186,7 +601,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginBtn = document.getElementById("login-btn");
   if (loginBtn) {
     loginBtn.addEventListener("click", () => {
-      window.location.href = "/";
+      const u = document.getElementById("login-username");
+      const p = document.getElementById("login-password");
+      if (u) u.value = "";
+      if (p) p.value = "";
+      document.getElementById("login-modal").classList.add("show");
+      setupPasswordToggles();
     });
   }
 
@@ -264,7 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ===== AUTHENTICATION =====
 function checkAuth() {
-  fetch(`${API_BASE}/auth/verify`, {
+  return fetch(`${API_BASE}/auth/verify`, {
     credentials: "include",
     headers: getAuthHeaders(),
   })
@@ -307,12 +727,14 @@ function handleLogout() {
   fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
     credentials: "include",
-  }).then(() => {
-    currentUser = null;
-    localStorage.removeItem("user_info");
-    localStorage.removeItem("auth_token");
-    window.location.reload();
-  });
+  })
+    .catch((err) => console.error("Logout failed:", err))
+    .finally(() => {
+      currentUser = null;
+      localStorage.removeItem("user_info");
+      localStorage.removeItem("auth_token");
+      window.location.reload();
+    });
 }
 
 // ===== PROFILE =====
@@ -398,10 +820,15 @@ function deleteMyAccount() {
 // ===== LOAD SERVERS =====
 function loadServers() {
   // Solicita todos os servidores públicos para calcular contadores corretamente
-  const apiUrl = `${API_BASE}/api/public-servers?status=all`;
-  fetch(apiUrl, { credentials: "include" })
+  const cleanApiBase = API_BASE.replace(/\/$/, "");
+  // Usa o JSON estático gerado pelo backend com status verificado
+  const apiUrl = `${cleanApiBase}/servers-status.json?_t=${Date.now()}`;
+
+  return fetch(apiUrl, { credentials: "include" })
     .then((res) => {
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       return res.json();
     })
     .then((data) => {
@@ -412,10 +839,20 @@ function loadServers() {
     })
     .catch((error) => {
       console.error("Erro ao carregar servidores:", error);
-      document.getElementById("servers-grid").innerHTML =
-        '<div class="empty-state"><p style="font-size: 2em;">❌</p><h2>Erro ao carregar servidores</h2><p>Não foi possível conectar ao servidor.</p><button onclick="loadServers()" class="btn btn-primary" style="margin-top: 15px;">🔄 Tentar Novamente</button></div>';
+      const container = document.getElementById("servers-grid");
+      if (container && servers.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+          <p style="font-size: 2em;">❌</p>
+          <h2>Erro ao carregar servidores</h2>
+          <p>${escapeHtml(error.message || "Não foi possível conectar ao servidor.")}</p>
+          <button onclick="window.loadServers()" class="btn btn-primary" style="margin-top: 15px;">🔄 Tentar Novamente</button>
+        </div>`;
+      }
     });
 }
+
+// Expor função para o botão de tentar novamente
+window.loadServers = loadServers;
 
 // ===== UPDATE STATS =====
 function updateStats() {
@@ -433,6 +870,7 @@ function updateStats() {
 // ===== RENDER SERVERS =====
 function renderServers() {
   const container = document.getElementById("servers-grid");
+  if (!container) return;
 
   const filtered = servers.filter((server) => {
     if (currentFilter === "all") return true;
@@ -504,18 +942,18 @@ function renderServers() {
                     return `
                         <tr style="border-bottom: 1px solid #e9ecef; transition: background 0.2s;">
                             <td style="padding: 12px 15px;">
-                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 12px;">
+                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 4px;">
                                     ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
                                 </span>
                             </td>
-                            <td style="padding: 12px 15px; font-weight: 500;">${escapeHtml(server.name)}</td>
-                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${escapeHtml(server.host)}</td>
+                            <td style="padding: 12px 15px; font-weight: 500;">${highlightMatch(server.name)}</td>
+                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${highlightMatch(server.host)}</td>
                             <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
                             <td style="padding: 12px 15px;">${server.protocol}</td>
                             <td style="padding: 12px 15px;">
                                 <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}
                             </td>
-                            <td style="padding: 12px 15px;">${escapeHtml(server.region || "N/A")}</td>
+                            <td style="padding: 12px 15px;">${highlightMatch(server.region || "N/A")}</td>
                             <td style="padding: 12px 15px; text-align: right;">
                                 <button class="btn-icon" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">🔗</button>
                                 <button class="btn-icon" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">📍</button>
@@ -538,12 +976,12 @@ function renderServers() {
           ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
         </span>
 
-        <h3 class="server-name">${escapeHtml(server.name)}</h3>
+        <h3 class="server-name">${highlightMatch(server.name)}</h3>
         <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
 
         <div class="info-row">
           <span class="info-label">Host:</span>
-          <span class="info-value">${escapeHtml(server.host)}</span>
+          <span class="info-value">${highlightMatch(server.host)}</span>
         </div>
 
         <div class="info-row">
@@ -560,7 +998,7 @@ function renderServers() {
           server.region
             ? `<div class="info-row">
           <span class="info-label">Região:</span>
-          <span class="info-value">${escapeHtml(server.region)}</span>
+          <span class="info-value">${highlightMatch(server.region)}</span>
         </div>`
             : ""
         }
@@ -662,8 +1100,8 @@ function setupEventListeners() {
         b.classList.remove("active");
       });
 
-      e.target.classList.add("active");
-      currentFilter = e.target.dataset.filter;
+      e.currentTarget.classList.add("active");
+      currentFilter = e.currentTarget.dataset.filter;
       renderServers();
     });
   });
@@ -731,11 +1169,32 @@ function pingServer(host, port, protocol, btn) {
 
   const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
   const start = Date.now();
+  let ws = null;
+  let timeoutId = null;
+
+  const resetBtn = () => {
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.style.color = ""; // Resetar cor
+      btn.style.pointerEvents = "auto";
+    }, 3000);
+  };
 
   try {
-    const ws = new WebSocket(wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    // Timeout de segurança
+    timeoutId = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        ws.close();
+        btn.innerHTML = "❌ Timeout";
+        showToast("Tempo limite excedido", "error");
+        resetBtn();
+      }
+    }, 5000);
 
     ws.onopen = () => {
+      clearTimeout(timeoutId);
       const latency = Date.now() - start;
       btn.innerHTML = `⚡ ${latency}ms`;
       showToast(`Latência: ${latency}ms`, "success");
@@ -746,28 +1205,21 @@ function pingServer(host, port, protocol, btn) {
       else btn.style.color = "var(--danger)";
 
       ws.close();
-      setTimeout(() => {
-        btn.innerHTML = originalText;
-        btn.style.color = ""; // Resetar cor
-        btn.style.pointerEvents = "auto";
-      }, 3000);
+      resetBtn();
     };
 
-    ws.onerror = () => {
+    ws.onerror = (err) => {
+      clearTimeout(timeoutId);
+      console.error("Ping Error:", err);
       btn.innerHTML = "❌ Erro";
       showToast("Erro ao conectar ao servidor", "error");
-      setTimeout(() => {
-        btn.innerHTML = originalText;
-        btn.style.pointerEvents = "auto";
-      }, 3000);
+      resetBtn();
     };
   } catch (e) {
+    console.error("Ping Exception:", e);
     btn.innerHTML = "❌ Erro";
     showToast("Erro ao iniciar teste de ping", "error");
-    setTimeout(() => {
-      btn.innerHTML = originalText;
-      btn.style.pointerEvents = "auto";
-    }, 3000);
+    resetBtn();
   }
 }
 
@@ -1241,9 +1693,26 @@ function updateLastUpdate() {
 
 // ===== UTILITIES =====
 function escapeHtml(text) {
+  if (text === null || text === undefined) return "";
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function highlightMatch(text) {
+  if (text === null || text === undefined) return "";
+  const strText = String(text);
+  if (!searchTerm) return escapeHtml(strText);
+
+  const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = strText.split(new RegExp(`(${term})`, "gi"));
+  return parts
+    .map((part) =>
+      part.toLowerCase() === searchTerm
+        ? `<span class="highlight">${escapeHtml(part)}</span>`
+        : escapeHtml(part),
+    )
+    .join("");
 }
 
 function getStatusLabel(status) {

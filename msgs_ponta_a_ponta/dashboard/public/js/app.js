@@ -11,10 +11,13 @@ let loadServersInterval = null;
 let refreshInterval = parseInt(
   localStorage.getItem("refresh_interval") || "30000",
 );
+let loginAttempts = 0;
 
 // URL Base da API (Fallback para localhost se config.js não carregar)
 const API_BASE =
   (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:3000";
+
+console.log("Dashboard API_BASE:", API_BASE); // Log para debug
 
 function getAuthHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -34,11 +37,97 @@ function generateToken() {
     .join("");
 }
 
+// ===== LOADER SYSTEM =====
+function injectLoader() {
+  if (document.getElementById("app-loader")) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #app-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #f4f4f7;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.4s ease, visibility 0.4s;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e2e8f0;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+    .loading-text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #667eea;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    .loader-hidden { opacity: 0; visibility: hidden; }
+
+    /* Animação de Entrada do Conteúdo */
+    #dashboard-container, #login-modal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    body.loaded #dashboard-container, body.loaded #login-modal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Highlight de Pesquisa */
+    .highlight {
+      background-color: #fff3cd;
+      color: #856404;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const loader = document.createElement("div");
+  loader.id = "app-loader";
+  loader.innerHTML = '<div class="spinner"></div><div class="loading-text">CARREGANDO...</div>';
+  document.body.appendChild(loader);
+}
+
+function hideLoader() {
+  const loader = document.getElementById("app-loader");
+  if (loader) loader.classList.add("loader-hidden");
+  document.body.classList.add("loaded");
+}
+
 function escapeHtml(text) {
   if (text === null || text === undefined) return "";
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function highlightMatch(text) {
+  if (text === null || text === undefined) return "";
+  const strText = String(text);
+  if (!searchTerm) return escapeHtml(strText);
+
+  const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = strText.split(new RegExp(`(${term})`, "gi"));
+  return parts.map((part) =>
+    part.toLowerCase() === searchTerm ? `<span class="highlight">${escapeHtml(part)}</span>` : escapeHtml(part)
+  ).join("");
 }
 
 async function hashPasswordFrontend(password) {
@@ -272,7 +361,7 @@ function injectForgotPasswordModal() {
     sendBtn.textContent = "Enviando...";
     errorBox.style.display = "none";
 
-    fetch("/auth/forgot-password", {
+    fetch(`${API_BASE}/auth/forgot-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
@@ -290,7 +379,8 @@ function injectForgotPasswordModal() {
           errorBox.style.display = "block";
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Erro forgot-password:", err);
         sendBtn.disabled = false;
         sendBtn.textContent = "Enviar Código";
         errorBox.textContent = "Erro de conexão.";
@@ -313,7 +403,7 @@ function injectForgotPasswordModal() {
     resetBtn.textContent = "Redefinindo...";
     errorBox.style.display = "none";
 
-    fetch("/auth/reset-password", {
+    fetch(`${API_BASE}/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, code, newPassword }),
@@ -338,7 +428,8 @@ function injectForgotPasswordModal() {
           errorBox.style.display = "block";
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Erro reset-password:", err);
         resetBtn.disabled = false;
         resetBtn.textContent = "Redefinir Senha";
         errorBox.textContent = "Erro de conexão.";
@@ -395,7 +486,7 @@ function openVerificationModal(email) {
       newResendLink.style.pointerEvents = "none";
       newResendLink.style.color = "#999";
 
-      fetch("/auth/resend-code", {
+      fetch(`${API_BASE}/auth/resend-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -417,7 +508,8 @@ function openVerificationModal(email) {
             newResendLink.style.color = "#667eea";
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("Erro resend-code:", err);
           showToast("Erro de conexão.", "error");
           newResendLink.textContent = "Tentar novamente";
           newResendLink.style.pointerEvents = "auto";
@@ -437,7 +529,7 @@ function openVerificationModal(email) {
     newBtn.disabled = true;
     newBtn.textContent = "Verificando...";
 
-    fetch("/auth/verify-code", {
+    fetch(`${API_BASE}/auth/verify-code`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -465,7 +557,8 @@ function openVerificationModal(email) {
           errorBox.style.display = "block";
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Erro verify-code:", err);
         newBtn.disabled = false;
         newBtn.textContent = "Verificar Código";
         errorBox.textContent = "Erro de conexão.";
@@ -610,6 +703,7 @@ function injectToastStyles() {
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   // Adicionar elementos de UI dinâmicos ao corpo do documento
+  injectLoader();
 
   // Carregar CSS de componentes (substitui injeção JS)
   if (!document.querySelector('link[href="css/components.css"]')) {
@@ -666,10 +760,49 @@ document.addEventListener("DOMContentLoaded", () => {
   // Listener para pesquisa
   const searchInput = document.getElementById("server-search");
   if (searchInput) {
+    // Injetar botão de limpar se não existir
+    let clearBtn = document.getElementById("server-search-clear");
+    if (!clearBtn) {
+      clearBtn = document.createElement("button");
+      clearBtn.id = "server-search-clear";
+      clearBtn.innerHTML = "&times;";
+      clearBtn.title = "Limpar";
+      clearBtn.style.cssText = "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 1.2em; cursor: pointer; display: none; padding: 0; line-height: 1;";
+      
+      if (searchInput.parentElement) {
+        searchInput.parentElement.style.position = "relative";
+        searchInput.parentElement.appendChild(clearBtn);
+      }
+    }
+
+    searchInput.value = ""; // Limpar ao carregar a página
+    searchTerm = "";
+    searchInput.setAttribute("autocomplete", "off");
+    searchInput.setAttribute("name", "dashboard_search_query");
     searchInput.addEventListener("input", (e) => {
       searchTerm = e.target.value.toLowerCase();
+      if (clearBtn) clearBtn.style.display = searchTerm ? "block" : "none";
       renderServers();
     });
+
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchTerm = e.target.value.toLowerCase();
+        renderServers();
+        searchInput.blur(); // Remove o foco para fechar teclado em mobile
+      }
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        searchTerm = "";
+        clearBtn.style.display = "none";
+        searchInput.focus();
+        renderServers();
+      });
+    }
   }
 
   // Listener para ordenação
@@ -744,7 +877,7 @@ function checkAuth() {
     headers: getAuthHeaders(),
   })
     .then((res) => res.json())
-    .then((data) => {
+    .then(async (data) => {
       if (data.valid) {
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
@@ -754,7 +887,7 @@ function checkAuth() {
           window.location.href = "/view.html";
         } else {
           showDashboard();
-          loadServers();
+          await loadServers(); // Aguarda o carregamento dos dados antes de liberar a tela
           setupEventListeners();
           // Atualizar lista de servidores a cada 5 segundos
           if (loadServersInterval) clearInterval(loadServersInterval);
@@ -764,7 +897,8 @@ function checkAuth() {
         showLogin();
       }
     })
-    .catch(() => showLogin());
+    .catch(() => showLogin())
+    .finally(() => hideLoader()); // Remove o loader independente do resultado
 }
 
 function showLogin() {
@@ -844,11 +978,14 @@ function showDashboard() {
 async function handleLogin(e) {
   e.preventDefault();
 
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   const username = document.getElementById("login-username").value;
   const passwordRaw = document.getElementById("login-password").value;
   const password = passwordRaw;
 
-  fetch(`${API_BASE}/auth/login`, {
+  const cleanApiBase = API_BASE.replace(/\/$/, "");
+
+  fetch(`${cleanApiBase}/auth/login`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -857,23 +994,65 @@ async function handleLogin(e) {
     .then((res) => res.json())
     .then((data) => {
       if (data.success) {
+        loginAttempts = 0;
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
         // if (data.token) localStorage.setItem("auth_token", data.token); // Não salvar JWT no dashboard
+
+        // Limpar campos de login para evitar cache/autofill
+        document.getElementById("login-username").value = "";
+        document.getElementById("login-password").value = "";
 
         if (currentUser.role === "user") {
           window.location.href = "/view.html";
         } else {
           showDashboard(); // Admins/Gerentes ficam no dashboard
+
+          // Limpar pesquisa ao logar
+          const searchInput = document.getElementById("server-search");
+          if (searchInput) {
+            searchInput.value = "";
+            searchTerm = "";
+            const clearBtn = document.getElementById("server-search-clear");
+            if (clearBtn) clearBtn.style.display = "none";
+          }
+
           loadServers();
           setupEventListeners();
           if (loadServersInterval) clearInterval(loadServersInterval);
           loadServersInterval = setInterval(loadServers, refreshInterval);
         }
       } else {
+        loginAttempts++;
+        if (loginAttempts >= 3 && submitBtn) {
+          let countdown = 10;
+          submitBtn.disabled = true;
+          const originalText = submitBtn.textContent;
+          submitBtn.textContent = `Aguarde ${countdown}s`;
+
+          const timer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+              clearInterval(timer);
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalText;
+              loginAttempts = 0;
+            } else {
+              submitBtn.textContent = `Aguarde ${countdown}s`;
+            }
+          }, 1000);
+        }
         document.getElementById("login-error").textContent = data.error;
         document.getElementById("login-error").style.display = "block";
         // A classe .alert-box já cuida do estilo
+      }
+    })
+    .catch((err) => {
+      console.error("Login error:", err);
+      const errorBox = document.getElementById("login-error");
+      if (errorBox) {
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
       }
     });
 }
@@ -957,13 +1136,15 @@ function handleLogout() {
   fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
     credentials: "include",
-  }).then(() => {
-    currentUser = null;
-    localStorage.removeItem("user_info");
-    localStorage.removeItem("auth_token");
-    if (loadServersInterval) clearInterval(loadServersInterval);
-    window.location.reload();
-  });
+  })
+    .catch((err) => console.error("Logout failed:", err))
+    .finally(() => {
+      currentUser = null;
+      localStorage.removeItem("user_info");
+      localStorage.removeItem("auth_token");
+      if (loadServersInterval) clearInterval(loadServersInterval);
+      window.location.reload();
+    });
 }
 
 // ===== EVENT LISTENERS =====
@@ -973,8 +1154,8 @@ function setupEventListeners() {
       document
         .querySelectorAll(".filter-btn:not(#add-new-btn)")
         .forEach((b) => b.classList.remove("active"));
-      e.target.classList.add("active");
-      currentFilter = e.target.dataset.filter;
+      e.currentTarget.classList.add("active");
+      currentFilter = e.currentTarget.dataset.filter;
       renderServers();
     });
   });
@@ -1080,7 +1261,8 @@ function setupEventListeners() {
 // ===== API CALLS =====
 async function loadServers() {
   try {
-    const response = await fetch(`${API_BASE}/api/servers`, {
+    const cleanApiBase = API_BASE.replace(/\/$/, "");
+    const response = await fetch(`${cleanApiBase}/api/servers`, {
       credentials: "include",
       headers: getAuthHeaders(),
     });
@@ -1090,7 +1272,7 @@ async function loadServers() {
     updateStats();
   } catch (error) {
     console.error("Erro ao carregar servidores:", error);
-    servers = [];
+    showToast("Erro ao atualizar lista de servidores", "error");
   }
 }
 
@@ -1174,14 +1356,14 @@ function renderServers() {
                                     ${server.status === "active" ? "🟢" : server.status === "standby" ? "🟡" : "🔴"} ${server.status}
                                 </span>
                             </td>
-                            <td style="padding: 12px 15px; font-weight: 500;">${escapeHtml(server.name)}</td>
-                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${escapeHtml(server.host)}</td>
+                            <td style="padding: 12px 15px; font-weight: 500;">${highlightMatch(server.name)}</td>
+                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${highlightMatch(server.host)}</td>
                             <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
                             <td style="padding: 12px 15px;">${escapeHtml(server.protocol)}</td>
                             <td style="padding: 12px 15px;">
                                 <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
                             </td>
-                            <td style="padding: 12px 15px;">${escapeHtml(server.region || "N/A")}</td>
+                            <td style="padding: 12px 15px;">${highlightMatch(server.region || "N/A")}</td>
                             <td style="padding: 12px 15px; text-align: right;">
                                 <a href="${openUrl}" target="_blank" class="btn-icon" title="Abrir URL Token" style="text-decoration: none; margin-right: 8px; font-size: 1.2em;">🔗</a>
                                 ${
@@ -1222,12 +1404,12 @@ function renderServers() {
                 ${server.status === "active" ? "🟢 Ativo" : server.status === "standby" ? "🟡 Em Standby" : "🔴 Inativo"}
             </span>
 
-            <h3 class="server-name">${escapeHtml(server.name)}</h3>
+            <h3 class="server-name">${highlightMatch(server.name)}</h3>
             <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
 
             <div class="info-row">
                 <span class="info-label">Host:</span>
-                <span class="info-value">${escapeHtml(server.host)}</span>
+                <span class="info-value">${highlightMatch(server.host)}</span>
             </div>
 
             <div class="info-row">
@@ -1242,7 +1424,7 @@ function renderServers() {
 
             <div class="info-row">
                 <span class="info-label">Região:</span>
-                <span class="region-tag">${escapeHtml(server.region || "N/A")}</span>
+                <span class="region-tag">${highlightMatch(server.region || "N/A")}</span>
             </div>
 
             ${
@@ -1781,36 +1963,50 @@ function pingServer(host, port, protocol, btn) {
 
   const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
   const start = Date.now();
+  let ws = null;
+  let timeoutId = null;
 
-  try {
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      const latency = Date.now() - start;
-      btn.innerHTML = `⚡ ${latency}ms`;
-      showToast(`Latência: ${latency}ms`, "success");
-      ws.close();
-      setTimeout(() => {
-        btn.innerHTML = originalText;
-        btn.style.pointerEvents = "auto";
-      }, 3000);
-    };
-
-    ws.onerror = () => {
-      btn.innerHTML = "❌ Erro";
-      showToast("Erro ao conectar ao servidor", "error");
-      setTimeout(() => {
-        btn.innerHTML = originalText;
-        btn.style.pointerEvents = "auto";
-      }, 3000);
-    };
-  } catch (e) {
-    btn.innerHTML = "❌ Erro";
-    showToast("Erro ao iniciar teste de ping", "error");
+  const resetBtn = () => {
     setTimeout(() => {
       btn.innerHTML = originalText;
       btn.style.pointerEvents = "auto";
     }, 3000);
+  };
+
+  try {
+    ws = new WebSocket(wsUrl);
+
+    // Timeout de segurança (5s)
+    timeoutId = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        ws.close();
+        btn.innerHTML = "❌ Timeout";
+        showToast("Tempo limite excedido ao conectar", "error");
+        resetBtn();
+      }
+    }, 5000);
+
+    ws.onopen = () => {
+      clearTimeout(timeoutId);
+      const latency = Date.now() - start;
+      btn.innerHTML = `⚡ ${latency}ms`;
+      showToast(`Latência: ${latency}ms`, "success");
+      ws.close();
+      resetBtn();
+    };
+
+    ws.onerror = (err) => {
+      clearTimeout(timeoutId);
+      console.error("Ping Error:", err);
+      btn.innerHTML = "❌ Erro";
+      showToast("Erro ao conectar (verifique HTTPS/WSS)", "error");
+      resetBtn();
+    };
+  } catch (e) {
+    console.error("Ping Exception:", e);
+    btn.innerHTML = "❌ Erro";
+    showToast("Erro ao iniciar teste de ping", "error");
+    resetBtn();
   }
 }
 

@@ -6,6 +6,33 @@
     <title>Servidores Disponíveis - P2P Secure Chat</title>
     <link rel="stylesheet" href="css/modern-layout.css" />
     <script src="js/config.js"></script>
+    <style>
+      /* Ajuste de design: Bordas levemente menos arredondadas */
+      .container, .modal-content { border-radius: 8px !important; }
+      header { border-radius: 8px 8px 0 0 !important; }
+      .card, .stat-card, .server-card { border-radius: 6px !important; }
+      .btn, .form-control, .search-input, select { border-radius: 4px !important; }
+      .status-badge { border-radius: 4px !important; }
+      footer, .app-footer { border-radius: 0 0 8px 8px !important; }
+      
+      /* Botão de limpar pesquisa */
+      .search-wrapper { position: relative; }
+      .search-clear-btn {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #999;
+        font-size: 1.2em;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        display: none;
+      }
+      .search-clear-btn:hover { color: #666; }
+    </style>
   </head>
   <body>
     <div class="container">
@@ -138,7 +165,10 @@
             id="view-search"
             class="search-input"
             placeholder="Buscar..."
+            autocomplete="off"
+            name="view_search_query"
           />
+          <button id="view-search-clear" class="search-clear-btn" title="Limpar">&times;</button>
         </div>
         <div class="sort-wrapper">
           <select id="view-sort" class="sort-select">

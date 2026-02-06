@@ -6,7 +6,7 @@ const path = require("path");
 
 // Carregar variáveis de ambiente (dashboard/.env)
 try {
-  const envPath = path.join(__dirname, "../dashboard/.env");
+  const envPath = path.join(__dirname, "../backend_dashboard/.env");
   if (fs.existsSync(envPath)) {
     require("dotenv").config({ path: envPath });
   }
@@ -192,44 +192,48 @@ function getEmailTemplate(title, message, code) {
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f7; color: #51545E; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .content { background-color: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); text-align: center; }
-    .header { margin-bottom: 30px; }
-    .logo { font-size: 48px; margin-bottom: 10px; }
-    .title { font-size: 24px; font-weight: bold; color: #333333; margin-bottom: 20px; }
-    .message { font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #666666; }
-    .code-box { background-color: #f8f9fa; border: 2px dashed #667eea; border-radius: 8px; padding: 20px; margin: 0 auto 30px; display: inline-block; }
-    .code { font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #667eea; margin: 0; }
-    .footer { font-size: 12px; color: #999999; margin-top: 20px; text-align: center; }
+    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f6f9fc; color: #333; }
+    .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px; }
+    .content { padding: 40px 30px; text-align: center; }
+    .title { font-size: 22px; color: #2d3748; margin-bottom: 15px; font-weight: 700; }
+    .text { font-size: 16px; color: #718096; line-height: 1.6; margin-bottom: 25px; }
+    .code-container { background: #f7fafc; border: 2px dashed #cbd5e0; border-radius: 8px; padding: 20px; margin: 20px 0; display: inline-block; }
+    .code { font-family: 'Monaco', 'Consolas', monospace; font-size: 32px; font-weight: bold; color: #5a67d8; letter-spacing: 4px; }
+    .footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #a0aec0; border-top: 1px solid #edf2f7; }
+    .footer p { margin: 5px 0; }
+    @media only screen and (max-width: 600px) {
+      .container { margin: 0; border-radius: 0; width: 100%; }
+      .content { padding: 20px; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="header">
+      <h1>🔐 Dashboard P2P</h1>
+    </div>
     <div class="content">
-      <div class="header">
-        <div class="logo">🔐</div>
-        <div style="font-weight: bold; font-size: 18px; color: #667eea;">Dashboard P2P</div>
-      </div>
-      <h1 class="title">${title}</h1>
-      <p class="message">${message}</p>
+      <h2 class="title">${title}</h2>
+      <p class="text">${message}</p>
       
       ${
         code
           ? `
-      <div class="code-box">
+      <div class="code-container">
         <div class="code">${code}</div>
       </div>
-      <p style="font-size: 14px; color: #999;">Este código expira em 15 minutos.</p>
+      <p style="font-size: 13px; color: #a0aec0; margin-top: 10px;">Este código expira em 15 minutos.</p>
       `
           : ""
       }
-      
-      <div class="footer">
-        <p>Se você não solicitou este e-mail, pode ignorá-lo com segurança.</p>
-        <p>&copy; ${new Date().getFullYear()} Dashboard P2P. Todos os direitos reservados.</p>
-      </div>
+    </div>
+    <div class="footer">
+      <p>Se você não solicitou este e-mail, ignore-o com segurança.</p>
+      <p>&copy; ${new Date().getFullYear()} Dashboard P2P. Todos os direitos reservados.</p>
     </div>
   </div>
 </body>
@@ -245,14 +249,20 @@ async function sendEmail(to, subject, text, html) {
     console.log(`\n📧 [EMAIL MOCK] Para: ${to}`);
     console.log(`📝 Assunto: ${subject}`);
     console.log(`🔑 Conteúdo: ${text}\n`);
-    return;
+    return true;
   }
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT || 587,
-    secure: process.env.SMTP_SECURE === "true", // true para 465, false para outras portas
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    secure: process.env.SMTP_SECURE === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 
   try {
@@ -264,8 +274,10 @@ async function sendEmail(to, subject, text, html) {
       html,
     });
     console.log(`✅ E-mail enviado para ${to}`);
+    return true;
   } catch (error) {
-    console.error("❌ Erro ao enviar e-mail:", error.message);
+    console.error("❌ Erro ao enviar e-mail:", error);
+    return false;
   }
 }
 
@@ -352,6 +364,9 @@ function createDashboardServer(httpPort) {
       .split(",")
       .map((o) => o.trim());
     const origin = req.headers.origin;
+
+    // Em produção, é crucial que a origem corresponda exatamente para credentials=true funcionar
+    const isProduction = process.env.NODE_ENV === "production";
 
     if (allowedOrigins.includes("*")) {
       // FIX: Com credentials=true, não podemos retornar '*'. Refletir a origem se existir.
@@ -460,10 +475,11 @@ function createDashboardServer(httpPort) {
               req.headers["user-agent"],
             );
 
+            const secureFlag = isProduction ? "; Secure" : "";
             // Usar HttpOnly cookie para segurança
             res.setHeader(
               "Set-Cookie",
-              `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}`,
+              `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}${secureFlag}`,
             );
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(
@@ -575,7 +591,7 @@ function createDashboardServer(httpPort) {
           ).toString();
           const verificationExpires = Date.now() + 15 * 60 * 1000; // 15 minutos
 
-          await sendEmail(
+          const emailSent = await sendEmail(
             email,
             "Verifique seu e-mail - Dashboard P2P",
             `Seu código de verificação é: ${verificationCode}`,
@@ -585,6 +601,16 @@ function createDashboardServer(httpPort) {
               verificationCode,
             ),
           );
+
+          if (!emailSent) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "Falha ao enviar e-mail. Verifique os logs do servidor.",
+              }),
+            );
+            return;
+          }
 
           const newUser = {
             id: "user-" + Date.now(),
@@ -675,7 +701,7 @@ function createDashboardServer(httpPort) {
           user.verificationExpires = verificationExpires;
           await db.saveUser(user);
 
-          await sendEmail(
+          const emailSent = await sendEmail(
             email,
             "Novo código de verificação - Dashboard P2P",
             `Seu novo código de verificação é: ${verificationCode}`,
@@ -685,6 +711,12 @@ function createDashboardServer(httpPort) {
               verificationCode,
             ),
           );
+
+          if (!emailSent) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Falha ao enviar e-mail." }));
+            return;
+          }
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(
@@ -750,7 +782,7 @@ function createDashboardServer(httpPort) {
           user.verificationExpires = verificationExpires;
           await db.saveUser(user);
 
-          await sendEmail(
+          const emailSent = await sendEmail(
             email,
             "Redefinição de Senha - Dashboard P2P",
             `Seu código para redefinir a senha é: ${verificationCode}`,
@@ -760,6 +792,12 @@ function createDashboardServer(httpPort) {
               verificationCode,
             ),
           );
+
+          if (!emailSent) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Falha ao enviar e-mail." }));
+            return;
+          }
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true }));
@@ -888,9 +926,11 @@ function createDashboardServer(httpPort) {
         req.socket.remoteAddress,
         req.headers["user-agent"],
       );
+      const secureFlag =
+        process.env.NODE_ENV === "production" ? "; Secure" : "";
       res.setHeader(
         "Set-Cookie",
-        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}`,
+        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}${secureFlag}`,
       );
 
       // Redireciona para home com delay para simular rede
@@ -924,9 +964,11 @@ function createDashboardServer(httpPort) {
         req.socket.remoteAddress,
         req.headers["user-agent"],
       );
+      const secureFlag =
+        process.env.NODE_ENV === "production" ? "; Secure" : "";
       res.setHeader(
         "Set-Cookie",
-        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}`,
+        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}${secureFlag}`,
       );
       res.writeHead(302, { Location: "/" });
       res.end();
@@ -1005,6 +1047,9 @@ function createDashboardServer(httpPort) {
         const serversData = await db.getAllServers();
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
         });
         res.end(JSON.stringify({ servers: serversData }));
       } catch (err) {
@@ -1029,6 +1074,9 @@ function createDashboardServer(httpPort) {
         // Incluir tokens para que usuários possam copiar e usar na extensão
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
         });
         res.end(JSON.stringify({ servers: list }));
       } catch (err) {
@@ -1409,6 +1457,51 @@ function send403(res) {
   res.end(JSON.stringify({ error: "Acesso negado: Permissão insuficiente" }));
 }
 
+// ============ MONITORAMENTO DE SERVIDORES ============
+function checkServerConnectivity(host, port) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(2000); // 2s timeout
+    
+    socket.on('connect', () => { socket.destroy(); resolve(true); });
+    socket.on('timeout', () => { socket.destroy(); resolve(false); });
+    socket.on('error', () => { socket.destroy(); resolve(false); });
+    
+    socket.connect(port, host);
+  });
+}
+
+async function updateServersStatusFile() {
+  try {
+    const servers = await db.getAllServers();
+    const updatedServers = [];
+    
+    for (const server of servers) {
+      // Verifica conectividade se tiver host/porta
+      if (server.host && server.port) {
+        const isOnline = await checkServerConnectivity(server.host, server.port);
+        // Atualiza status (exceto se estiver em standby manual)
+        if (server.status !== 'standby') {
+          server.status = isOnline ? 'active' : 'inactive';
+        }
+      }
+      updatedServers.push(server);
+    }
+
+    const publicDir = path.join(__dirname, "../dashboard/public");
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+
+    const jsonPath = path.join(publicDir, "servers-status.json");
+    const jsonData = JSON.stringify({ servers: updatedServers, lastUpdated: new Date().toISOString() }, null, 2);
+
+    fs.writeFileSync(jsonPath, jsonData);
+  } catch (error) {
+    console.error("Erro ao atualizar JSON de status:", error.message);
+  }
+}
+
 /**
  * Inicializar dashboard
  */
@@ -1417,6 +1510,10 @@ async function initDashboard(dashboardPort) {
     await db.init();
     const dbSettings = await db.getSettings();
     settingsData = { ...settingsData, ...dbSettings };
+
+    // Iniciar monitoramento de status (a cada 30s)
+    setInterval(updateServersStatusFile, 30000);
+    updateServersStatusFile(); // Executar primeira vez
   } catch (e) {
     console.error("Erro ao inicializar banco de dados:", e);
   }

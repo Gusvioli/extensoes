@@ -9,5 +9,5 @@ Instruções de Uso:
 3. Clique em "Autenticar"
 4. Conecte-se normalmente
 
-Gerado em: 2026-02-05T01:13:20.686Z
+Gerado em: 2026-02-06T22:20:05.939Z
 Servidor: ws://localhost:8081
