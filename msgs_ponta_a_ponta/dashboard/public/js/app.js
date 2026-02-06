@@ -18,10 +18,11 @@ const API_BASE =
 
 function getAuthHeaders() {
   const headers = { "Content-Type": "application/json" };
-  const token = localStorage.getItem("auth_token");
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  // Dashboard usa apenas Cookies HttpOnly. Não enviar JWT para evitar bypass de verificação de sessão.
+  // const token = localStorage.getItem("auth_token");
+  // if (token) {
+  //   headers["Authorization"] = `Bearer ${token}`;
+  // }
   return headers;
 }
 
@@ -132,10 +133,7 @@ function injectForgotPasswordLink() {
 
     link.addEventListener("click", (e) => {
       e.preventDefault();
-      showToast(
-        "Entre em contato com o administrador para redefinir sua senha.",
-        "info",
-      );
+      openForgotPasswordModal();
     });
 
     // Inserir após o campo de senha (considerando o wrapper do toggle de senha)
@@ -197,6 +195,11 @@ function injectVerificationModal() {
         <div id="verify-error" class="alert-box error" style="display: none; margin-top: 10px;"></div>
 
         <button id="verify-submit-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">Verificar Código</button>
+        
+        <div style="margin-top: 15px;">
+          <a href="#" id="resend-code-link" style="font-size: 0.9em; color: #667eea; text-decoration: none;">Não recebeu? Reenviar código</a>
+        </div>
+
         <button id="verify-cancel-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; background: transparent; color: #666;">Cancelar</button>
       </div>
     </div>
@@ -207,6 +210,161 @@ function injectVerificationModal() {
   document.getElementById("verify-cancel-btn").addEventListener("click", () => {
     document.getElementById("verification-modal").classList.remove("show");
   });
+}
+
+function injectForgotPasswordModal() {
+  if (document.getElementById("forgot-password-modal")) return;
+
+  const modalHTML = `
+    <div id="forgot-password-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px; text-align: center;">
+        <h2 style="margin-bottom: 15px;">Redefinir Senha 🔐</h2>
+        
+        <div id="forgot-step-1">
+            <p style="margin-bottom: 20px; color: #666;">Digite seu e-mail para receber o código.</p>
+            <div class="form-group">
+                <input type="email" id="forgot-email" class="form-control" placeholder="seu@email.com">
+            </div>
+            <button id="forgot-send-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Enviar Código</button>
+        </div>
+
+        <div id="forgot-step-2" style="display: none;">
+            <p style="margin-bottom: 20px; color: #666;">Código enviado! Verifique seu e-mail.</p>
+            
+            <div class="form-group">
+                <input type="text" id="forgot-code" class="form-control" placeholder="Código (6 dígitos)" maxlength="6" style="text-align: center; letter-spacing: 3px; margin-bottom: 10px;">
+            </div>
+
+            <div class="form-group">
+                <input type="password" id="forgot-new-pass" class="form-control" placeholder="Nova Senha">
+            </div>
+
+            <button id="forgot-reset-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Redefinir Senha</button>
+        </div>
+
+        <div id="forgot-error" class="alert-box error" style="display: none; margin-top: 10px;"></div>
+        <button id="forgot-cancel-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; background: transparent; color: #666;">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+  // Listeners
+  const modal = document.getElementById("forgot-password-modal");
+  const cancelBtn = document.getElementById("forgot-cancel-btn");
+  const sendBtn = document.getElementById("forgot-send-btn");
+  const resetBtn = document.getElementById("forgot-reset-btn");
+  const errorBox = document.getElementById("forgot-error");
+
+  cancelBtn.addEventListener("click", () => {
+    modal.classList.remove("show");
+  });
+
+  sendBtn.addEventListener("click", () => {
+    const email = document.getElementById("forgot-email").value.trim();
+    if (!email) {
+      errorBox.textContent = "Digite seu e-mail.";
+      errorBox.style.display = "block";
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Enviando...";
+    errorBox.style.display = "none";
+
+    fetch("/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Enviar Código";
+        if (data.success) {
+          document.getElementById("forgot-step-1").style.display = "none";
+          document.getElementById("forgot-step-2").style.display = "block";
+          showToast("Código enviado!", "success");
+        } else {
+          errorBox.textContent = data.error || "Erro ao enviar.";
+          errorBox.style.display = "block";
+        }
+      })
+      .catch(() => {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Enviar Código";
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
+      });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    const email = document.getElementById("forgot-email").value.trim();
+    const code = document.getElementById("forgot-code").value.trim();
+    const newPassword = document.getElementById("forgot-new-pass").value;
+
+    if (!code || !newPassword) {
+      errorBox.textContent = "Preencha todos os campos.";
+      errorBox.style.display = "block";
+      return;
+    }
+
+    resetBtn.disabled = true;
+    resetBtn.textContent = "Redefinindo...";
+    errorBox.style.display = "none";
+
+    fetch("/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, newPassword }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        resetBtn.disabled = false;
+        resetBtn.textContent = "Redefinir Senha";
+        if (data.success) {
+          modal.classList.remove("show");
+          showToast("Senha redefinida com sucesso! Faça login.", "success");
+          // Reset modal state
+          setTimeout(() => {
+            document.getElementById("forgot-step-1").style.display = "block";
+            document.getElementById("forgot-step-2").style.display = "none";
+            document.getElementById("forgot-email").value = "";
+            document.getElementById("forgot-code").value = "";
+            document.getElementById("forgot-new-pass").value = "";
+          }, 500);
+        } else {
+          errorBox.textContent = data.error || "Erro ao redefinir.";
+          errorBox.style.display = "block";
+        }
+      })
+      .catch(() => {
+        resetBtn.disabled = false;
+        resetBtn.textContent = "Redefinir Senha";
+        errorBox.textContent = "Erro de conexão.";
+        errorBox.style.display = "block";
+      });
+  });
+}
+
+function openForgotPasswordModal() {
+  injectForgotPasswordModal();
+  // Re-run password toggles for the new input
+  setupPasswordToggles();
+
+  const modal = document.getElementById("forgot-password-modal");
+  const errorBox = document.getElementById("forgot-error");
+
+  // Reset state
+  document.getElementById("forgot-step-1").style.display = "block";
+  document.getElementById("forgot-step-2").style.display = "none";
+  document.getElementById("forgot-email").value = "";
+  document.getElementById("forgot-code").value = "";
+  document.getElementById("forgot-new-pass").value = "";
+  errorBox.style.display = "none";
+
+  modal.classList.add("show");
+  document.getElementById("forgot-email").focus();
 }
 
 function openVerificationModal(email) {
@@ -224,6 +382,49 @@ function openVerificationModal(email) {
   // Remover listeners antigos clonando o botão
   const newBtn = btn.cloneNode(true);
   btn.parentNode.replaceChild(newBtn, btn);
+
+  // Lógica para o botão de reenvio
+  const resendLink = document.getElementById("resend-code-link");
+  if (resendLink) {
+    const newResendLink = resendLink.cloneNode(true);
+    resendLink.parentNode.replaceChild(newResendLink, resendLink);
+
+    newResendLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      newResendLink.textContent = "Enviando...";
+      newResendLink.style.pointerEvents = "none";
+      newResendLink.style.color = "#999";
+
+      fetch("/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            showToast("Novo código enviado!", "success");
+            newResendLink.textContent = "Código reenviado! (Aguarde 30s)";
+            setTimeout(() => {
+              newResendLink.textContent = "Não recebeu? Reenviar código";
+              newResendLink.style.pointerEvents = "auto";
+              newResendLink.style.color = "#667eea";
+            }, 30000);
+          } else {
+            showToast(data.error || "Erro ao reenviar.", "error");
+            newResendLink.textContent = "Tentar novamente";
+            newResendLink.style.pointerEvents = "auto";
+            newResendLink.style.color = "#667eea";
+          }
+        })
+        .catch(() => {
+          showToast("Erro de conexão.", "error");
+          newResendLink.textContent = "Tentar novamente";
+          newResendLink.style.pointerEvents = "auto";
+          newResendLink.style.color = "#667eea";
+        });
+    });
+  }
 
   newBtn.addEventListener("click", () => {
     const code = input.value.trim();
@@ -423,6 +624,7 @@ document.addEventListener("DOMContentLoaded", () => {
   injectSignupEmailField();
   injectForgotPasswordLink();
   injectSignupClearButton();
+  injectForgotPasswordModal();
 
   // Event listeners for settings
   document
@@ -657,7 +859,7 @@ async function handleLogin(e) {
       if (data.success) {
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
-        if (data.token) localStorage.setItem("auth_token", data.token);
+        // if (data.token) localStorage.setItem("auth_token", data.token); // Não salvar JWT no dashboard
 
         if (currentUser.role === "user") {
           window.location.href = "/view.html";

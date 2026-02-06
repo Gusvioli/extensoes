@@ -20,9 +20,19 @@ const net = require("net");
 const jwt = require("jsonwebtoken");
 const db = require("./database");
 
+let nodemailer;
+try {
+  nodemailer = require("nodemailer");
+} catch (e) {
+  console.warn(
+    "⚠️  Módulo 'nodemailer' não encontrado. E-mails serão simulados no console.",
+  );
+}
+
 let settingsData = { discoveryUrl: "http://localhost:9080/token" };
 let sessionsData = {}; // Armazenar sessões ativas
 let loginRateLimit = new Map(); // Rate limiting para login
+let resendRateLimit = new Map(); // Rate limiting para reenvio de código
 let lastDiscoveryError = null; // Controle para evitar spam de logs
 
 // Persistência de Sessões
@@ -97,8 +107,6 @@ function getValidSession(req) {
 
   // Validação de Segurança: User-Agent deve bater (previne roubo de sessão)
   // Nota: Verificação de IP removida pois causa desconexões em redes com IP dinâmico ou dual-stack (IPv4/IPv6)
-  // const userAgent = req.headers["user-agent"];
-  // if (session.userAgent !== userAgent) return null;
   const userAgent = req.headers["user-agent"];
   if (session.userAgent !== userAgent) return null;
 
@@ -174,6 +182,92 @@ setInterval(
   },
   60 * 60 * 1000,
 ); // Rodar a cada 1 hora
+
+/**
+ * Template de E-mail HTML
+ */
+function getEmailTemplate(title, message, code) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f7; color: #51545E; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .content { background-color: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); text-align: center; }
+    .header { margin-bottom: 30px; }
+    .logo { font-size: 48px; margin-bottom: 10px; }
+    .title { font-size: 24px; font-weight: bold; color: #333333; margin-bottom: 20px; }
+    .message { font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #666666; }
+    .code-box { background-color: #f8f9fa; border: 2px dashed #667eea; border-radius: 8px; padding: 20px; margin: 0 auto 30px; display: inline-block; }
+    .code { font-family: 'Courier New', monospace; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #667eea; margin: 0; }
+    .footer { font-size: 12px; color: #999999; margin-top: 20px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="content">
+      <div class="header">
+        <div class="logo">🔐</div>
+        <div style="font-weight: bold; font-size: 18px; color: #667eea;">Dashboard P2P</div>
+      </div>
+      <h1 class="title">${title}</h1>
+      <p class="message">${message}</p>
+      
+      ${
+        code
+          ? `
+      <div class="code-box">
+        <div class="code">${code}</div>
+      </div>
+      <p style="font-size: 14px; color: #999;">Este código expira em 15 minutos.</p>
+      `
+          : ""
+      }
+      
+      <div class="footer">
+        <p>Se você não solicitou este e-mail, pode ignorá-lo com segurança.</p>
+        <p>&copy; ${new Date().getFullYear()} Dashboard P2P. Todos os direitos reservados.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+/**
+ * Enviar E-mail (Real ou Mock)
+ */
+async function sendEmail(to, subject, text, html) {
+  if (!nodemailer || !process.env.SMTP_HOST || !process.env.SMTP_USER) {
+    console.log(`\n📧 [EMAIL MOCK] Para: ${to}`);
+    console.log(`📝 Assunto: ${subject}`);
+    console.log(`🔑 Conteúdo: ${text}\n`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === "true", // true para 465, false para outras portas
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || '"Dashboard P2P" <noreply@example.com>',
+      to,
+      subject,
+      text,
+      html,
+    });
+    console.log(`✅ E-mail enviado para ${to}`);
+  } catch (error) {
+    console.error("❌ Erro ao enviar e-mail:", error.message);
+  }
+}
 
 /**
  * Validar dados do servidor
@@ -481,9 +575,16 @@ function createDashboardServer(httpPort) {
           ).toString();
           const verificationExpires = Date.now() + 15 * 60 * 1000; // 15 minutos
 
-          // Simulação de envio de e-mail (Log no console)
-          console.log(`\n📧 [EMAIL MOCK] Para: ${email}`);
-          console.log(`🔑 Código de Verificação: ${verificationCode}\n`);
+          await sendEmail(
+            email,
+            "Verifique seu e-mail - Dashboard P2P",
+            `Seu código de verificação é: ${verificationCode}`,
+            getEmailTemplate(
+              "Verifique seu E-mail",
+              "Use o código abaixo para verificar sua conta e acessar o Dashboard.",
+              verificationCode,
+            ),
+          );
 
           const newUser = {
             id: "user-" + Date.now(),
@@ -509,6 +610,225 @@ function createDashboardServer(httpPort) {
               message: "Código enviado para o e-mail.",
             }),
           );
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // POST /auth/resend-code → Reenviar código de verificação
+    if (normalizedPath === "/auth/resend-code" && req.method === "POST") {
+      // Rate Limiting (Max 3 tentativas a cada 15 min por IP)
+      const clientIp = req.socket.remoteAddress;
+      const now = Date.now();
+      const limit = resendRateLimit.get(clientIp) || {
+        count: 0,
+        resetTime: now + 15 * 60 * 1000,
+      };
+
+      if (now > limit.resetTime) {
+        limit.count = 0;
+        limit.resetTime = now + 15 * 60 * 1000;
+      }
+
+      if (limit.count >= 3) {
+        logAudit(null, "RATE_LIMIT_EXCEEDED", {
+          ip: clientIp,
+          endpoint: "/auth/resend-code",
+        });
+        res.writeHead(429, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ error: "Muitas tentativas. Aguarde 15 minutos." }),
+        );
+        return;
+      }
+      limit.count++;
+      resendRateLimit.set(clientIp, limit);
+
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { email } = JSON.parse(body);
+          if (!email) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "E-mail é obrigatório." }));
+            return;
+          }
+
+          const user = await db.getUserByEmail(email);
+          if (!user) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Usuário não encontrado." }));
+            return;
+          }
+
+          // Gerar novo código
+          const verificationCode = Math.floor(
+            100000 + Math.random() * 900000,
+          ).toString();
+          const verificationExpires = Date.now() + 15 * 60 * 1000; // 15 minutos
+
+          user.verificationCode = verificationCode;
+          user.verificationExpires = verificationExpires;
+          await db.saveUser(user);
+
+          await sendEmail(
+            email,
+            "Novo código de verificação - Dashboard P2P",
+            `Seu novo código de verificação é: ${verificationCode}`,
+            getEmailTemplate(
+              "Novo Código",
+              "Você solicitou um novo código de verificação. Use-o abaixo:",
+              verificationCode,
+            ),
+          );
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({ success: true, message: "Novo código enviado." }),
+          );
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // POST /auth/forgot-password → Solicitar redefinição de senha
+    if (normalizedPath === "/auth/forgot-password" && req.method === "POST") {
+      // Rate Limiting (reutilizando lógica de resend)
+      const clientIp = req.socket.remoteAddress;
+      const now = Date.now();
+      const limit = resendRateLimit.get(clientIp) || {
+        count: 0,
+        resetTime: now + 15 * 60 * 1000,
+      };
+
+      if (now > limit.resetTime) {
+        limit.count = 0;
+        limit.resetTime = now + 15 * 60 * 1000;
+      }
+
+      if (limit.count >= 5) {
+        res.writeHead(429, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ error: "Muitas tentativas. Aguarde 15 minutos." }),
+        );
+        return;
+      }
+      limit.count++;
+      resendRateLimit.set(clientIp, limit);
+
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { email } = JSON.parse(body);
+          if (!email) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "E-mail é obrigatório." }));
+            return;
+          }
+
+          const user = await db.getUserByEmail(email);
+          if (!user) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "E-mail não encontrado." }));
+            return;
+          }
+
+          const verificationCode = Math.floor(
+            100000 + Math.random() * 900000,
+          ).toString();
+          const verificationExpires = Date.now() + 15 * 60 * 1000;
+
+          user.verificationCode = verificationCode;
+          user.verificationExpires = verificationExpires;
+          await db.saveUser(user);
+
+          await sendEmail(
+            email,
+            "Redefinição de Senha - Dashboard P2P",
+            `Seu código para redefinir a senha é: ${verificationCode}`,
+            getEmailTemplate(
+              "Redefinir Senha",
+              "Recebemos um pedido para redefinir sua senha. Use o código abaixo:",
+              verificationCode,
+            ),
+          );
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // POST /auth/reset-password → Redefinir senha com código
+    if (normalizedPath === "/auth/reset-password" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { email, code, newPassword } = JSON.parse(body);
+
+          if (!email || !code || !newPassword) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Dados incompletos." }));
+            return;
+          }
+
+          if (newPassword.length < 8) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "A senha deve ter no mínimo 8 caracteres.",
+              }),
+            );
+            return;
+          }
+
+          const user = await db.getUserByEmail(email);
+          if (!user) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Usuário não encontrado." }));
+            return;
+          }
+
+          if (
+            user.verificationCode !== code ||
+            parseInt(user.verificationExpires) < Date.now()
+          ) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Código inválido ou expirado." }));
+            return;
+          }
+
+          user.password = db.hashPassword(newPassword);
+          user.verificationCode = null;
+          user.verificationExpires = null;
+          user.isVerified = true; // Garante que usuário fique verificado
+
+          await db.saveUser(user);
+          logAudit(
+            { username: user.username, role: user.role },
+            "RESET_PASSWORD",
+            {
+              email,
+              ip: req.socket.remoteAddress,
+              userAgent: req.headers["user-agent"],
+            },
+          );
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
         } catch (e) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: e.message }));
