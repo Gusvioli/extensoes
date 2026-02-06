@@ -9,16 +9,17 @@ Sistema completo de chat criptografado P2P usando WebRTC + WebSocket + Criptogra
 ./start.sh install
 
 # Iniciar servidor + dashboard
-./start.sh start
+node start-all.js
 
 # Abrir dashboard
 ./start.sh open
 ```
 
 **URLs:**
-- 📊 Dashboard Administrativo: http://localhost:3000 (requer login)
-- 🌐 Visualização Pública: http://localhost:3000/view.html (sem autenticação)
-- 🔗 Token: http://localhost:9080
+
+- 📊 Dashboard Administrativo: <http://localhost:3000> (requer login)
+- 🌐 Visualização Pública: <http://localhost:3000/view.html> (sem autenticação)
+- 🔗 Token: <http://localhost:9080>
 - 📡 WebSocket: ws://localhost:8080
 
 ## 📁 Estrutura do Projeto
@@ -39,8 +40,6 @@ msgs_ponta_a_ponta/
 │   ├── package.json
 │   └── TOKEN.txt
 ├── dashboard/                     # Painel de controle
-│   ├── src/
-│   │   └── server.js             # API REST
 │   ├── public/
 │   │   ├── index.html            # Painel Administrativo (com login)
 │   │   ├── view.html             # Visualização Pública (sem login)
@@ -51,8 +50,12 @@ msgs_ponta_a_ponta/
 │   ├── data/
 │   │   ├── servers-config.json   # Dados de servidores
 │   │   └── users.json            # Usuários autorizados
+├── backend_dashboard/             # Servidor do Dashboard (Novo Backend)
+│   ├── server.js                 # API REST e Servidor Estático
+│   ├── database.js               # Lógica de Banco de Dados
 │   └── package.json
 ├── start.sh                       # Script de controle
+├── start-all.js                   # Script para rodar tudo junto
 ├── README.md                      # Este arquivo
 ├── render.yaml                    # Configuração de Deploy (Render.com)
 └── CHANGELOG.md                   # Histórico
@@ -61,6 +64,7 @@ msgs_ponta_a_ponta/
 ## 🎯 Funcionalidades
 
 ### Extensão Chrome (secure-p2p-chat/)
+
 - ✅ Chat criptografado ponta a ponta
 - ✅ Conexão WebRTC direto entre navegadores
 - ✅ Criptografia assimétrica (RSA)
@@ -68,6 +72,7 @@ msgs_ponta_a_ponta/
 - ✅ Interface simples e intuitiva
 
 ### Servidor (server/)
+
 - ✅ Sinalização WebRTC via WebSocket
 - ✅ Gerenciamento de tokens
 - ✅ Escalabilidade horizontal
@@ -75,6 +80,7 @@ msgs_ponta_a_ponta/
 - ✅ Teste de segurança integrado
 
 ### Dashboard (dashboard/)
+
 - ✅ Duas interfaces separadas:
   - 🔐 **Painel Administrativo** (index.html): Adicionar/editar/deletar servidores (requer login)
   - 🌐 **Página Pública** (view.html): Visualizar servidores disponíveis (sem autenticação)
@@ -92,18 +98,22 @@ msgs_ponta_a_ponta/
 ## 🔐 Acesso ao Dashboard
 
 ### 🌐 Interface Pública (Qualquer um pode acessar)
+
 ```
 http://localhost:3000/view.html
 ```
+
 - Visualizar lista de servidores
 - Filtrar por status (Ativo, Inativo, Standby)
 - Ver detalhes de cada servidor
 - Sem necessidade de login
 
 ### 🔐 Painel Administrativo (Apenas autorizados)
+
 ```
 http://localhost:3000
 ```
+
 - Requer login com credenciais
 - Criar novos servidores
 - Editar servidores existentes
@@ -111,6 +121,7 @@ http://localhost:3000
 - Gerenciar lista de servidores
 
 **Credenciais Padrão:**
+
 | Usuário | Senha | Função |
 |---------|-------|--------|
 | admin | admin123 | Administrador |

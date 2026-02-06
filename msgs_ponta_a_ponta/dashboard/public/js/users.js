@@ -1,5 +1,18 @@
 let currentUser = null;
 
+// URL Base da API (Fallback para localhost se config.js não carregar)
+const API_BASE =
+  (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:3000";
+
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("auth_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Event Delegation para ações na tabela (editar, excluir)
   const tableBody = document.querySelector("#users-table tbody");
@@ -40,7 +53,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Verificar autenticação antes de carregar
-  fetch("/auth/verify")
+  fetch(`${API_BASE}/auth/verify`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  })
     .then((res) => res.json())
     .then((data) => {
       if (data.valid) {
@@ -65,16 +81,17 @@ function escapeHtml(text) {
 
 async function hashPasswordFrontend(password) {
   const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
-  passwordInputs.forEach(input => {
-    if (input.parentElement.classList.contains("password-input-wrapper")) return;
-    if (input.parentNode.querySelector('.password-toggle-icon')) return;
+  passwordInputs.forEach((input) => {
+    if (input.parentElement.classList.contains("password-input-wrapper"))
+      return;
+    if (input.parentNode.querySelector(".password-toggle-icon")) return;
 
     // Criar wrapper para isolar o input e garantir centralização correta
     const wrapper = document.createElement("div");
@@ -85,16 +102,17 @@ function setupPasswordToggles() {
     input.parentNode.insertBefore(wrapper, input);
     wrapper.appendChild(input);
 
-    const icon = document.createElement('span');
-    icon.innerText = '👁️';
-    icon.className = 'password-toggle-icon';
-    icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
+    const icon = document.createElement("span");
+    icon.innerText = "👁️";
+    icon.className = "password-toggle-icon";
+    icon.style.cssText =
+      "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;";
     icon.title = "Mostrar/Ocultar senha";
 
-    icon.addEventListener('click', () => {
-      const isPassword = input.type === 'password';
-      input.type = isPassword ? 'text' : 'password';
-      icon.innerText = isPassword ? '🙈' : '👁️';
+    icon.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      icon.innerText = isPassword ? "🙈" : "👁️";
     });
 
     wrapper.appendChild(icon);
@@ -103,36 +121,39 @@ function setupPasswordToggles() {
 
 function setupPasswordStrengthMeters() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
-  passwordInputs.forEach(input => {
+  passwordInputs.forEach((input) => {
     // Ignorar confirmação de senha
-    if (input.id.includes('confirm')) return;
+    if (input.id.includes("confirm")) return;
     if (input.dataset.strengthMeter) return;
 
     input.dataset.strengthMeter = "true";
 
-    const meter = document.createElement('div');
-    meter.className = 'password-strength-meter';
-    meter.style.height = '4px';
-    meter.style.marginTop = '4px';
-    meter.style.borderRadius = '2px';
-    meter.style.transition = 'width 0.3s ease-in-out, background-color 0.3s';
-    meter.style.width = '0%';
-    meter.style.backgroundColor = '#e9ecef';
+    const meter = document.createElement("div");
+    meter.className = "password-strength-meter";
+    meter.style.height = "4px";
+    meter.style.marginTop = "4px";
+    meter.style.borderRadius = "2px";
+    meter.style.transition = "width 0.3s ease-in-out, background-color 0.3s";
+    meter.style.width = "0%";
+    meter.style.backgroundColor = "#e9ecef";
 
     // Inserir após o wrapper do input (criado pelo toggle) ou após o input
     let referenceElement = input;
-    if (input.parentElement.classList.contains('password-input-wrapper')) {
+    if (input.parentElement.classList.contains("password-input-wrapper")) {
       referenceElement = input.parentElement;
     }
-    
+
     if (referenceElement.parentNode) {
-      referenceElement.parentNode.insertBefore(meter, referenceElement.nextSibling);
+      referenceElement.parentNode.insertBefore(
+        meter,
+        referenceElement.nextSibling,
+      );
     }
 
-    input.addEventListener('input', () => {
+    input.addEventListener("input", () => {
       const val = input.value;
       if (!val) {
-        meter.style.width = '0%';
+        meter.style.width = "0%";
         return;
       }
 
@@ -143,15 +164,15 @@ function setupPasswordStrengthMeters() {
       if (/[0-9]/.test(val)) score++;
       if (/[^A-Za-z0-9]/.test(val)) score++;
 
-      let color = '#dc3545'; // Fraca (Vermelho)
-      let width = '30%';
+      let color = "#dc3545"; // Fraca (Vermelho)
+      let width = "30%";
 
       if (score >= 4) {
-        color = '#28a745'; // Forte (Verde)
-        width = '100%';
+        color = "#28a745"; // Forte (Verde)
+        width = "100%";
       } else if (score >= 2) {
-        color = '#ffc107'; // Média (Amarelo)
-        width = '60%';
+        color = "#ffc107"; // Média (Amarelo)
+        width = "60%";
       }
 
       meter.style.backgroundColor = color;
@@ -161,7 +182,7 @@ function setupPasswordStrengthMeters() {
 }
 
 function injectToastStyles() {
-  const style = document.createElement('style');
+  const style = document.createElement("style");
   style.textContent = `
     #toast-container {
       position: fixed;
@@ -190,7 +211,10 @@ function injectToastStyles() {
 
 async function loadUsers() {
   try {
-    const res = await fetch("/api/users");
+    const res = await fetch(`${API_BASE}/api/users`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const users = await res.json();
 
@@ -314,9 +338,10 @@ function confirmDeleteUser(id, name) {
 
   newConfirmBtn.addEventListener("click", async () => {
     try {
-      const res = await fetch("/api/users", {
+      const res = await fetch(`${API_BASE}/api/users`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id }),
       });
 
@@ -359,7 +384,9 @@ form.addEventListener("submit", async (e) => {
   const name = document.getElementById("userName").value;
   const username = document.getElementById("userLogin").value;
   const password = document.getElementById("userPass").value;
-  const passwordConfirm = document.getElementById("userPassConfirm") ? document.getElementById("userPassConfirm").value : null;
+  const passwordConfirm = document.getElementById("userPassConfirm")
+    ? document.getElementById("userPassConfirm").value
+    : null;
   const role = document.getElementById("userRole").value;
 
   if (/\s/.test(username)) {
@@ -379,7 +406,7 @@ form.addEventListener("submit", async (e) => {
 
   const payload = { name, username, role };
   if (id) payload.id = id;
-  if (password) payload.password = await hashPasswordFrontend(password);
+  if (password) payload.password = password;
 
   // Se for novo usuário, senha é obrigatória
   if (!id && !password) {
@@ -387,9 +414,10 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
-  const res = await fetch("/api/users", {
+  const res = await fetch(`${API_BASE}/api/users`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
 

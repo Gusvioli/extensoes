@@ -2,10 +2,10 @@
   "name": "p2p-dashboard",
   "version": "1.0.0",
   "description": "Dashboard para gerenciar servidores de sinalização WebSocket P2P",
-  "main": "src/server.js",
+  "main": "public/index.html",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js",
+    "start": "npx serve public -p 8080",
+    "dev": "npx serve public -p 8080",
     "sync-token": "node scripts/sync-token.js",
     "list-servers": "node scripts/list-servers.js",
     "list-servers:admin": "node scripts/list-servers.js --role=admin",
@@ -24,7 +24,6 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.2.3",
-    "nodemailer": "^8.0.0",
     "pg": "^8.18.0"
   }
 }

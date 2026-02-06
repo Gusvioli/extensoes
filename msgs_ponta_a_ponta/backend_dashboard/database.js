@@ -1,3 +1,5 @@
+// backend_dashboard/database.js
+
 const { Pool } = require("pg");
 const path = require("path");
 const fs = require("fs");
@@ -29,7 +31,8 @@ const pool = new Pool({
   connectionString,
 });
 
-const dataDir = path.join(__dirname, "../data");
+// Adjusted path: points to ../dashboard/data
+const dataDir = path.join(__dirname, "../dashboard/data");
 const jsonConfigPath = path.join(dataDir, "servers-config.json");
 const jsonUsersPath = path.join(dataDir, "users.json");
 
@@ -114,10 +117,14 @@ async function init() {
 
     // Migração: Adicionar colunas de verificação de e-mail
     try {
-      await query(`ALTER TABLE users ADD COLUMN "isVerified" BOOLEAN DEFAULT FALSE`);
+      await query(
+        `ALTER TABLE users ADD COLUMN "isVerified" BOOLEAN DEFAULT FALSE`,
+      );
     } catch (e) {}
     try {
-      await query(`ALTER TABLE users ADD COLUMN "verificationCode" VARCHAR(20)`);
+      await query(
+        `ALTER TABLE users ADD COLUMN "verificationCode" VARCHAR(20)`,
+      );
     } catch (e) {}
     try {
       await query(`ALTER TABLE users ADD COLUMN "verificationExpires" BIGINT`);
@@ -265,58 +272,88 @@ function saveJsonConfig(data) {
   }
 }
 
+async function getSettings() {
+  if (!isConnected) {
+    const config = loadJsonConfig();
+    return config.settings || {};
+  }
+  const res = await query("SELECT * FROM settings");
+  const settings = {};
+  res.rows.forEach((row) => {
+    settings[row.key] = row.value;
+  });
+  return settings;
+}
+
+async function saveSetting(key, value) {
+  if (!isConnected) {
+    const config = loadJsonConfig();
+    if (!config.settings) config.settings = {};
+    config.settings[key] = value;
+    saveJsonConfig(config);
+    return;
+  }
+  await query(
+    `INSERT INTO settings ("key", "value") VALUES ($1, $2)
+     ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value"`,
+    [key, value],
+  );
+}
+
 async function getAllServers() {
   if (!isConnected) {
-    const data = loadJsonConfig();
-    return (data.servers || []).map((s) => ({
-      ...s,
-      requiresAuth: s.requiresAuth !== false,
-    }));
+    const config = loadJsonConfig();
+    return config.servers || [];
   }
   const res = await query("SELECT * FROM servers");
-  return res.rows.map((row) => ({
-    ...row,
-    requiresAuth: row.requiresAuth === true,
+  return res.rows.map((s) => ({
+    ...s,
+    port: s.port ? parseInt(s.port) : null,
+    maxClients: parseInt(s.maxClients),
+    requiresAuth: s.requiresAuth === true,
+    clientsCount: parseInt(s.clientsCount || 0),
   }));
 }
 
 async function saveServer(server) {
   if (!isConnected) {
-    const data = loadJsonConfig();
-    if (!data.servers) data.servers = [];
-    const index = data.servers.findIndex((s) => s.id === server.id);
+    const config = loadJsonConfig();
+    if (!config.servers) config.servers = [];
+    const index = config.servers.findIndex((s) => s.id === server.id);
     if (index !== -1) {
-      data.servers[index] = { ...data.servers[index], ...server };
+      config.servers[index] = server;
     } else {
-      data.servers.push(server);
+      config.servers.push(server);
     }
-    saveJsonConfig(data);
+    saveJsonConfig(config);
     return;
   }
-  const sql = `
-        INSERT INTO servers (
-            "id", "name", "description", "host", "port", "protocol", "token", "status", "region", 
-            "maxClients", "createdAt", "notes", "requiresAuth", "clientsCount", "lastSeen", "urltoken"
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        ON CONFLICT ("id") DO UPDATE SET
-            "name" = EXCLUDED."name",
-            "description" = EXCLUDED."description",
-            "host" = EXCLUDED."host",
-            "port" = EXCLUDED."port",
-            "protocol" = EXCLUDED."protocol",
-            "token" = EXCLUDED."token",
-            "status" = EXCLUDED."status",
-            "region" = EXCLUDED."region",
-            "maxClients" = EXCLUDED."maxClients",
-            "createdAt" = EXCLUDED."createdAt",
-            "notes" = EXCLUDED."notes",
-            "requiresAuth" = EXCLUDED."requiresAuth",
-            "clientsCount" = EXCLUDED."clientsCount",
-            "lastSeen" = EXCLUDED."lastSeen",
-            "urltoken" = EXCLUDED."urltoken"
-    `;
 
-  const params = [
+  const sql = `
+    INSERT INTO servers (
+      "id", "name", "description", "host", "port", "protocol", "token",
+      "status", "region", "maxClients", "createdAt", "notes",
+      "requiresAuth", "clientsCount", "lastSeen", "urltoken"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    ON CONFLICT ("id") DO UPDATE SET
+      "name" = EXCLUDED."name",
+      "description" = EXCLUDED."description",
+      "host" = EXCLUDED."host",
+      "port" = EXCLUDED."port",
+      "protocol" = EXCLUDED."protocol",
+      "token" = EXCLUDED."token",
+      "status" = EXCLUDED."status",
+      "region" = EXCLUDED."region",
+      "maxClients" = EXCLUDED."maxClients",
+      "createdAt" = EXCLUDED."createdAt",
+      "notes" = EXCLUDED."notes",
+      "requiresAuth" = EXCLUDED."requiresAuth",
+      "clientsCount" = EXCLUDED."clientsCount",
+      "lastSeen" = EXCLUDED."lastSeen",
+      "urltoken" = EXCLUDED."urltoken"
+  `;
+
+  await query(sql, [
     server.id,
     server.name,
     server.description,
@@ -330,165 +367,34 @@ async function saveServer(server) {
     server.createdAt,
     server.notes,
     server.requiresAuth,
-    server.clientsCount,
+    server.clientsCount || 0,
     server.lastSeen,
     server.urltoken,
-  ];
-
-  await query(sql, params);
+  ]);
 }
 
 async function deleteServer(id) {
   if (!isConnected) {
-    const data = loadJsonConfig();
-    if (data.servers) {
-      data.servers = data.servers.filter((s) => s.id !== id);
-      saveJsonConfig(data);
+    const config = loadJsonConfig();
+    if (config.servers) {
+      config.servers = config.servers.filter((s) => s.id !== id);
+      saveJsonConfig(config);
     }
     return;
   }
   await query('DELETE FROM servers WHERE "id" = $1', [id]);
 }
 
-async function getSettings() {
-  if (!isConnected) {
-    const data = loadJsonConfig();
-    return data.settings || {};
-  }
-  const res = await query("SELECT * FROM settings");
-  const settings = {};
-  res.rows.forEach((row) => (settings[row.key] = row.value));
-  return settings;
-}
-
-async function saveSetting(key, value) {
-  if (!isConnected) {
-    const data = loadJsonConfig();
-    if (!data.settings) data.settings = {};
-    data.settings[key] = value;
-    saveJsonConfig(data);
-    return;
-  }
-  const sql = `
-        INSERT INTO settings ("key", "value") VALUES ($1, $2)
-        ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value"
-    `;
-  await query(sql, [key, value]);
-}
-
-async function authenticateUser(username, password) {
-  if (!isConnected) {
-    try {
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const data = JSON.parse(content);
-        if (data.users) {
-          return (
-            data.users.find(
-              (u) =>
-                u.username === username && verifyPassword(password, u.password),
-            ) || null
-          );
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao ler users.json:", e);
-    }
-    return null;
-  }
-  const res = await query('SELECT * FROM users WHERE "username" = $1', [
-    username,
-  ]);
-  const user = res.rows[0];
-  if (user && verifyPassword(password, user.password)) return user;
-  return null;
-}
-
-async function getUserByUsername(username) {
-  if (!isConnected) {
-    try {
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const data = JSON.parse(content);
-        if (data.users) {
-          return data.users.find((u) => u.username === username) || null;
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao ler users.json:", e);
-    }
-    return null;
-  }
-  const res = await query('SELECT * FROM users WHERE "username" = $1', [
-    username,
-  ]);
-  return res.rows[0] || null;
-}
-
-async function getUserByEmail(email) {
-  if (!isConnected) {
-    try {
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const data = JSON.parse(content);
-        if (data.users) {
-          return data.users.find((u) => u.email === email) || null;
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao ler users.json:", e);
-    }
-    return null;
-  }
-  const res = await query('SELECT * FROM users WHERE "email" = $1', [
-    email,
-  ]);
-  return res.rows[0] || null;
-}
-
-async function verifyUserCode(email, code) {
-  if (!isConnected) {
-    try {
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const data = JSON.parse(content);
-        const user = data.users.find((u) => u.email === email);
-        
-        if (user && user.verificationCode === code && user.verificationExpires > Date.now()) {
-          user.isVerified = true;
-          user.verificationCode = null;
-          user.verificationExpires = null;
-          fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
-          return true;
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao verificar código no JSON:", e);
-    }
-    return false;
-  }
-
-  const res = await query('SELECT * FROM users WHERE "email" = $1', [email]);
-  const user = res.rows[0];
-
-  if (user && user.verificationCode === code && parseInt(user.verificationExpires) > Date.now()) {
-    await query('UPDATE users SET "isVerified" = TRUE, "verificationCode" = NULL, "verificationExpires" = NULL WHERE "email" = $1', [email]);
-    return true;
-  }
-
-  return false;
-}
-
 async function getAllUsers() {
   if (!isConnected) {
-    try {
-      if (fs.existsSync(jsonUsersPath)) {
+    if (fs.existsSync(jsonUsersPath)) {
+      try {
         const content = fs.readFileSync(jsonUsersPath, "utf-8");
         const data = JSON.parse(content);
         return data.users || [];
+      } catch (e) {
+        return [];
       }
-    } catch (e) {
-      console.error("Erro ao ler users.json:", e);
     }
     return [];
   }
@@ -496,61 +402,49 @@ async function getAllUsers() {
   return res.rows;
 }
 
+async function getUserByUsername(username) {
+  const users = await getAllUsers(); // Reutiliza lógica (DB ou JSON)
+  return users.find((u) => u.username === username) || null;
+}
+
+async function getUserById(id) {
+  const users = await getAllUsers();
+  return users.find((u) => u.id === id) || null;
+}
+
+async function getUserByEmail(email) {
+  const users = await getAllUsers();
+  return users.find((u) => u.email === email) || null;
+}
+
 async function saveUser(user) {
-  // Criptografar senha se fornecida
-  if (user.password) {
-    // Evitar criptografar novamente se já estiver criptografada (migrações/updates)
-    if (!user.password.includes(":") || user.password.length < 100) {
-      user.password = hashPassword(user.password);
-    }
-  } else {
-    // Se não forneceu senha, tentar manter a atual (apenas para DB conectado)
-    if (isConnected && user.id) {
-      const res = await query("SELECT password FROM users WHERE id = $1", [
-        user.id,
-      ]);
-      if (res.rows.length > 0) {
-        user.password = res.rows[0].password;
-      }
-    }
-  }
-
   if (!isConnected) {
+    let users = await getAllUsers();
+    const index = users.findIndex((u) => u.id === user.id);
+    if (index !== -1) users[index] = user;
+    else users.push(user);
     try {
-      let data = { users: [] };
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        data = JSON.parse(content);
-      }
-      if (!data.users) data.users = [];
-
-      const index = data.users.findIndex((u) => u.id === user.id);
-      if (index !== -1) {
-        data.users[index] = { ...data.users[index], ...user };
-      } else {
-        data.users.push(user);
-      }
-      fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
-    } catch (e) {
-      console.error("Erro ao salvar users.json:", e);
-    }
+      fs.writeFileSync(jsonUsersPath, JSON.stringify({ users }, null, 2));
+    } catch (e) {}
     return;
   }
 
   const sql = `
-        INSERT INTO users ("id", "username", "password", "name", "role", "createdAt", "email", "isVerified", "verificationCode", "verificationExpires")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT ("id") DO UPDATE SET
-            "username" = EXCLUDED."username",
-            "password" = EXCLUDED."password",
-            "name" = EXCLUDED."name",
-            "role" = EXCLUDED."role",
-            "createdAt" = EXCLUDED."createdAt",
-            "email" = EXCLUDED."email",
-            "isVerified" = EXCLUDED."isVerified",
-            "verificationCode" = EXCLUDED."verificationCode",
-            "verificationExpires" = EXCLUDED."verificationExpires"
-    `;
+    INSERT INTO users (
+      "id", "username", "password", "name", "role", "createdAt", "email",
+      "isVerified", "verificationCode", "verificationExpires"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT ("id") DO UPDATE SET
+      "username" = EXCLUDED."username",
+      "password" = EXCLUDED."password",
+      "name" = EXCLUDED."name",
+      "role" = EXCLUDED."role",
+      "createdAt" = EXCLUDED."createdAt",
+      "email" = EXCLUDED."email",
+      "isVerified" = EXCLUDED."isVerified",
+      "verificationCode" = EXCLUDED."verificationCode",
+      "verificationExpires" = EXCLUDED."verificationExpires"
+  `;
 
   await query(sql, [
     user.id,
@@ -559,44 +453,64 @@ async function saveUser(user) {
     user.name,
     user.role,
     user.createdAt,
-    user.email || null,
-    user.isVerified === undefined ? false : user.isVerified,
-    user.verificationCode || null,
-    user.verificationExpires || null
+    user.email,
+    user.isVerified,
+    user.verificationCode,
+    user.verificationExpires,
   ]);
 }
 
 async function deleteUser(id) {
   if (!isConnected) {
+    let users = await getAllUsers();
+    users = users.filter((u) => u.id !== id);
     try {
-      if (fs.existsSync(jsonUsersPath)) {
-        const content = fs.readFileSync(jsonUsersPath, "utf-8");
-        const data = JSON.parse(content);
-        if (data.users) {
-          data.users = data.users.filter((u) => u.id !== id);
-          fs.writeFileSync(jsonUsersPath, JSON.stringify(data, null, 2));
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao deletar de users.json:", e);
-    }
+      fs.writeFileSync(jsonUsersPath, JSON.stringify({ users }, null, 2));
+    } catch (e) {}
     return;
   }
   await query('DELETE FROM users WHERE "id" = $1', [id]);
 }
 
+async function authenticateUser(username, password) {
+  const user = await getUserByUsername(username);
+  if (!user) return null;
+  if (verifyPassword(password, user.password)) {
+    return user;
+  }
+  return null;
+}
+
+async function verifyUserCode(email, code) {
+  const user = await getUserByEmail(email);
+  if (!user) return false;
+  if (
+    user.verificationCode === code &&
+    parseInt(user.verificationExpires) > Date.now()
+  ) {
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationExpires = null;
+    await saveUser(user);
+    return true;
+  }
+  return false;
+}
+
 module.exports = {
   init,
+  getSettings,
+  saveSetting,
   getAllServers,
   saveServer,
   deleteServer,
-  getSettings,
-  saveSetting,
-  authenticateUser,
+  getAllUsers,
   getUserByUsername,
   getUserByEmail,
-  verifyUserCode,
-  getAllUsers,
   saveUser,
   deleteUser,
+  authenticateUser,
+  verifyUserCode,
+  hashPassword,
+  getUserById,
 };

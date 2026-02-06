@@ -11,6 +11,19 @@ let latencyInterval = null;
 let latencyHistory = [];
 let latencyComparisonData = [];
 
+// URL Base da API (Fallback para localhost se config.js não carregar)
+const API_BASE =
+  (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:3000";
+
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("auth_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
@@ -251,7 +264,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ===== AUTHENTICATION =====
 function checkAuth() {
-  fetch("/auth/verify")
+  fetch(`${API_BASE}/auth/verify`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  })
     .then((res) => res.json())
     .then((data) => {
       if (data.valid) {
@@ -288,8 +304,13 @@ function checkAuth() {
 }
 
 function handleLogout() {
-  fetch("/auth/logout", { method: "POST" }).then(() => {
+  fetch(`${API_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  }).then(() => {
     currentUser = null;
+    localStorage.removeItem("user_info");
+    localStorage.removeItem("auth_token");
     window.location.reload();
   });
 }
@@ -323,13 +344,14 @@ async function saveProfile(e) {
       showToast("A senha deve ter no mínimo 6 caracteres.", "error");
       return;
     }
-    payload.password = await hashPasswordFrontend(password);
+    payload.password = password;
   }
 
   try {
-    const res = await fetch("/api/users", {
+    const res = await fetch(`${API_BASE}/api/users`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -356,9 +378,10 @@ function deleteMyAccount() {
     return;
   }
 
-  fetch("/api/users", {
+  fetch(`${API_BASE}/api/users`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers: getAuthHeaders(),
     body: JSON.stringify({ id: currentUser.id }),
   })
     .then(async (res) => {
@@ -375,8 +398,8 @@ function deleteMyAccount() {
 // ===== LOAD SERVERS =====
 function loadServers() {
   // Solicita todos os servidores públicos para calcular contadores corretamente
-  const apiUrl = `${window.APP_CONFIG.API_BASE}/api/public-servers?status=all`;
-  fetch(apiUrl)
+  const apiUrl = `${API_BASE}/api/public-servers?status=all`;
+  fetch(apiUrl, { credentials: "include" })
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       return res.json();
@@ -943,14 +966,13 @@ function startSpeedTest() {
       const uploadSpeed = await performUploadTest(ws, myId);
       uploadEl.textContent = `${uploadSpeed.toFixed(2)} Mbps`;
       downloadEl.textContent = "Testando...";
-      
+
       // Pequena pausa para estabilizar
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
 
       // 2. Teste de Download
       const downloadSpeed = await performDownloadTest(ws, myId);
       downloadEl.textContent = `${downloadSpeed.toFixed(2)} Mbps`;
-
     } catch (error) {
       console.error("Speed test failed:", error);
       uploadEl.textContent = "Erro";
@@ -964,8 +986,8 @@ function startSpeedTest() {
 
   function performUploadTest(ws, targetId) {
     return new Promise((resolve, reject) => {
-      const payload = 'x'.repeat(1024 * 100); // 100KB
-      const message = { type: 'upload-test', target: targetId, payload };
+      const payload = "x".repeat(1024 * 100); // 100KB
+      const message = { type: "upload-test", target: targetId, payload };
       const msgString = JSON.stringify(message);
       const startTime = Date.now();
       ws.send(msgString);
@@ -980,7 +1002,8 @@ function startSpeedTest() {
           clearInterval(interval);
           if (timeoutId) clearTimeout(timeoutId);
           const duration = (Date.now() - startTime) / 1000;
-          const speed = (msgString.length * 8) / (1024 * 1024) / (duration || 0.001);
+          const speed =
+            (msgString.length * 8) / (1024 * 1024) / (duration || 0.001);
           resolve(speed);
         }
       }, 10);
@@ -995,21 +1018,22 @@ function startSpeedTest() {
 
   function performDownloadTest(ws, targetId) {
     return new Promise((resolve, reject) => {
-      const payload = 'y'.repeat(1024 * 100); // 100KB
-      const message = { type: 'download-test', target: targetId, payload };
+      const payload = "y".repeat(1024 * 100); // 100KB
+      const message = { type: "download-test", target: targetId, payload };
       const startTime = Date.now();
       ws.send(JSON.stringify(message));
 
       const tempListener = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'download-test') {
+          if (msg.type === "download-test") {
             const duration = (Date.now() - startTime) / 1000;
-            const speed = (event.data.length * 8) / (1024 * 1024) / (duration || 0.001);
-            ws.removeEventListener('message', tempListener);
+            const speed =
+              (event.data.length * 8) / (1024 * 1024) / (duration || 0.001);
+            ws.removeEventListener("message", tempListener);
             resolve(speed);
-          } else if (msg.type === 'error') {
-            ws.removeEventListener('message', tempListener);
+          } else if (msg.type === "error") {
+            ws.removeEventListener("message", tempListener);
             reject(new Error(msg.message || "Erro do servidor"));
           }
         } catch (e) {
@@ -1017,10 +1041,10 @@ function startSpeedTest() {
         }
       };
 
-      ws.addEventListener('message', tempListener);
+      ws.addEventListener("message", tempListener);
 
       setTimeout(() => {
-        ws.removeEventListener('message', tempListener);
+        ws.removeEventListener("message", tempListener);
         reject(new Error("Timeout no teste de download"));
       }, 5000);
     });
@@ -1141,7 +1165,9 @@ function drawLatencyComparisonChart(hoverIndex = -1) {
   if (hoverIndex !== -1 && results[hoverIndex]) {
     const res = results[hoverIndex];
     const x = padding + hoverIndex * (barWidth + 10);
-    const barHeight = res.latency ? (res.latency / maxLatency) * (height - 60) : 0;
+    const barHeight = res.latency
+      ? (res.latency / maxLatency) * (height - 60)
+      : 0;
     const y = height - barHeight - 20;
 
     const text = `${res.name}: ${res.latency ? res.latency + "ms" : "Erro"}`;
@@ -1154,7 +1180,8 @@ function drawLatencyComparisonChart(hoverIndex = -1) {
 
     // Limites
     if (tooltipX < 0) tooltipX = 0;
-    if (tooltipX + textWidth + tooltipPadding * 2 > width) tooltipX = width - textWidth - tooltipPadding * 2;
+    if (tooltipX + textWidth + tooltipPadding * 2 > width)
+      tooltipX = width - textWidth - tooltipPadding * 2;
 
     ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
     ctx.fillRect(tooltipX, tooltipY, textWidth + tooltipPadding * 2, 28);
@@ -1239,16 +1266,17 @@ function getStatusEmoji(status) {
 
 async function hashPasswordFrontend(password) {
   const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
-  passwordInputs.forEach(input => {
-    if (input.parentElement.classList.contains("password-input-wrapper")) return;
-    if (input.parentNode.querySelector('.password-toggle-icon')) return;
+  passwordInputs.forEach((input) => {
+    if (input.parentElement.classList.contains("password-input-wrapper"))
+      return;
+    if (input.parentNode.querySelector(".password-toggle-icon")) return;
 
     // Criar wrapper para isolar o input e garantir centralização correta
     const wrapper = document.createElement("div");
@@ -1259,16 +1287,17 @@ function setupPasswordToggles() {
     input.parentNode.insertBefore(wrapper, input);
     wrapper.appendChild(input);
 
-    const icon = document.createElement('span');
-    icon.innerText = '👁️';
-    icon.className = 'password-toggle-icon';
-    icon.style.cssText = 'position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;';
+    const icon = document.createElement("span");
+    icon.innerText = "👁️";
+    icon.className = "password-toggle-icon";
+    icon.style.cssText =
+      "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; z-index: 10; font-size: 1.2em; line-height: 1;";
     icon.title = "Mostrar/Ocultar senha";
 
-    icon.addEventListener('click', () => {
-      const isPassword = input.type === 'password';
-      input.type = isPassword ? 'text' : 'password';
-      icon.innerText = isPassword ? '🙈' : '👁️';
+    icon.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      icon.innerText = isPassword ? "🙈" : "👁️";
     });
 
     wrapper.appendChild(icon);
@@ -1277,35 +1306,38 @@ function setupPasswordToggles() {
 
 function setupPasswordStrengthMeters() {
   const passwordInputs = document.querySelectorAll('input[type="password"]');
-  passwordInputs.forEach(input => {
-    if (input.id.includes('login')) return; // Ignorar login
+  passwordInputs.forEach((input) => {
+    if (input.id.includes("login")) return; // Ignorar login
     if (input.dataset.strengthMeter) return;
 
     input.dataset.strengthMeter = "true";
 
-    const meter = document.createElement('div');
-    meter.className = 'password-strength-meter';
-    meter.style.height = '4px';
-    meter.style.marginTop = '4px';
-    meter.style.borderRadius = '2px';
-    meter.style.transition = 'width 0.3s ease-in-out, background-color 0.3s';
-    meter.style.width = '0%';
-    meter.style.backgroundColor = '#e9ecef';
+    const meter = document.createElement("div");
+    meter.className = "password-strength-meter";
+    meter.style.height = "4px";
+    meter.style.marginTop = "4px";
+    meter.style.borderRadius = "2px";
+    meter.style.transition = "width 0.3s ease-in-out, background-color 0.3s";
+    meter.style.width = "0%";
+    meter.style.backgroundColor = "#e9ecef";
 
     // Inserir após o wrapper do input (criado pelo toggle) ou após o input
     let referenceElement = input;
-    if (input.parentElement.classList.contains('password-input-wrapper')) {
+    if (input.parentElement.classList.contains("password-input-wrapper")) {
       referenceElement = input.parentElement;
     }
-    
+
     if (referenceElement.parentNode) {
-      referenceElement.parentNode.insertBefore(meter, referenceElement.nextSibling);
+      referenceElement.parentNode.insertBefore(
+        meter,
+        referenceElement.nextSibling,
+      );
     }
 
-    input.addEventListener('input', () => {
+    input.addEventListener("input", () => {
       const val = input.value;
       if (!val) {
-        meter.style.width = '0%';
+        meter.style.width = "0%";
         return;
       }
 
@@ -1316,15 +1348,15 @@ function setupPasswordStrengthMeters() {
       if (/[0-9]/.test(val)) score++;
       if (/[^A-Za-z0-9]/.test(val)) score++;
 
-      let color = '#dc3545'; // Fraca (Vermelho)
-      let width = '30%';
+      let color = "#dc3545"; // Fraca (Vermelho)
+      let width = "30%";
 
       if (score >= 4) {
-        color = '#28a745'; // Forte (Verde)
-        width = '100%';
+        color = "#28a745"; // Forte (Verde)
+        width = "100%";
       } else if (score >= 2) {
-        color = '#ffc107'; // Média (Amarelo)
-        width = '60%';
+        color = "#ffc107"; // Média (Amarelo)
+        width = "60%";
       }
 
       meter.style.backgroundColor = color;

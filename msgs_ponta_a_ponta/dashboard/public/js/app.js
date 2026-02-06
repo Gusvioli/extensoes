@@ -12,6 +12,19 @@ let refreshInterval = parseInt(
   localStorage.getItem("refresh_interval") || "30000",
 );
 
+// URL Base da API (Fallback para localhost se config.js não carregar)
+const API_BASE =
+  (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "http://localhost:3000";
+
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("auth_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 // ===== UTILITY FUNCTIONS =====
 function generateToken() {
   // Gera um token aleatório de 32 caracteres em hexadecimal
@@ -225,6 +238,7 @@ function openVerificationModal(email) {
 
     fetch("/auth/verify-code", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, code }),
     })
@@ -236,13 +250,13 @@ function openVerificationModal(email) {
         if (data.success) {
           modal.classList.remove("show");
           showToast("E-mail verificado com sucesso! Faça login.", "success");
-          
+
           // Ir para tela de login
           const loginContainer = document.getElementById("login-container");
           const signupContainer = document.getElementById("signup-container");
           if (signupContainer) signupContainer.style.display = "none";
           if (loginContainer) loginContainer.style.display = "block";
-          
+
           // Preencher usuário no login se possível (não temos o username aqui, mas o usuário pode digitar)
           document.getElementById("login-password").focus();
         } else {
@@ -523,7 +537,10 @@ document.addEventListener("DOMContentLoaded", () => {
 // ===== AUTENTICAÇÃO =====
 function checkAuth() {
   // O cookie HttpOnly é enviado automaticamente. Apenas verificamos a sessão.
-  fetch(`/auth/verify`)
+  fetch(`${API_BASE}/auth/verify`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  })
     .then((res) => res.json())
     .then((data) => {
       if (data.valid) {
@@ -627,10 +644,11 @@ async function handleLogin(e) {
 
   const username = document.getElementById("login-username").value;
   const passwordRaw = document.getElementById("login-password").value;
-  const password = await hashPasswordFrontend(passwordRaw);
+  const password = passwordRaw;
 
-  fetch("/auth/login", {
+  fetch(`${API_BASE}/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   })
@@ -639,6 +657,7 @@ async function handleLogin(e) {
       if (data.success) {
         currentUser = data.user;
         localStorage.setItem("user_info", JSON.stringify(currentUser));
+        if (data.token) localStorage.setItem("auth_token", data.token);
 
         if (currentUser.role === "user") {
           window.location.href = "/view.html";
@@ -710,11 +729,12 @@ async function handleSignup(e) {
     return;
   }
 
-  const password = await hashPasswordFrontend(passwordRaw);
+  const password = passwordRaw;
 
   // Usar caminho relativo simples para evitar problemas de porta
-  fetch("/auth/signup", {
+  fetch(`${API_BASE}/auth/signup`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, username, password }),
   })
@@ -732,11 +752,13 @@ async function handleSignup(e) {
 }
 
 function handleLogout() {
-  fetch("/auth/logout", {
+  fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
+    credentials: "include",
   }).then(() => {
     currentUser = null;
     localStorage.removeItem("user_info");
+    localStorage.removeItem("auth_token");
     if (loadServersInterval) clearInterval(loadServersInterval);
     window.location.reload();
   });
@@ -856,7 +878,10 @@ function setupEventListeners() {
 // ===== API CALLS =====
 async function loadServers() {
   try {
-    const response = await fetch("/api/servers");
+    const response = await fetch(`${API_BASE}/api/servers`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
     const data = await response.json();
     servers = data.servers || [];
     renderServers();
@@ -1286,10 +1311,10 @@ async function saveServer(event) {
     };
 
     const method = editingServerId ? "PUT" : "POST";
-    const response = await fetch(`/api/servers`, {
+    const response = await fetch(`${API_BASE}/api/servers`, {
       method: method,
-
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: getAuthHeaders(),
       body: JSON.stringify(serverData),
     });
 
@@ -1353,9 +1378,10 @@ function deleteServer(id) {
 
   newConfirmBtn.addEventListener("click", async () => {
     try {
-      const response = await fetch(`/api/servers`, {
+      const response = await fetch(`${API_BASE}/api/servers`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id }),
       });
 
@@ -1395,7 +1421,10 @@ function closeModal() {
 // ===== SETTINGS =====
 async function openSettingsModal() {
   try {
-    const response = await fetch("/api/settings");
+    const response = await fetch(`${API_BASE}/api/settings`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
     if (response.status === 401) {
       showToast("Sessão expirada.", "error");
       showLogin();
@@ -1429,9 +1458,10 @@ async function saveSettings(e) {
   loadServersInterval = setInterval(loadServers, refreshInterval);
 
   try {
-    const response = await fetch("/api/settings", {
+    const response = await fetch(`${API_BASE}/api/settings`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: getAuthHeaders(),
       body: JSON.stringify({ discoveryUrl }),
     });
 
@@ -1482,13 +1512,14 @@ async function saveProfile(e) {
       showToast("A senha deve ter no mínimo 6 caracteres.", "error");
       return;
     }
-    payload.password = await hashPasswordFrontend(password);
+    payload.password = password;
   }
 
   try {
-    const res = await fetch("/api/users", {
+    const res = await fetch(`${API_BASE}/api/users`, {
       method: "POST", // Usando POST que no server.js atual lida com create/update
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -1528,9 +1559,10 @@ function deleteMyAccount() {
 
   newConfirmBtn.addEventListener("click", async () => {
     try {
-      await fetch("/api/users", {
+      await fetch(`${API_BASE}/api/users`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id: currentUser.id }), // Backend verifica permissão
       });
       handleLogout();

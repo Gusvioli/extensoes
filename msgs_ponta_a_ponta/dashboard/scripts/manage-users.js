@@ -1,4 +1,4 @@
-const db = require("../src/database");
+const db = require("../../backend_dashboard/database.js");
 
 const args = process.argv.slice(2);
 const command = args[0];

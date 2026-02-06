@@ -1,29 +1,6 @@
 version: "3.8"
 
 services:
-  server:
-    build: ./server
-    container_name: p2p_server
-    ports:
-      - "8080:8080"
-      - "9080:9080"
-    environment:
-      - PORT=8080
-      - AUTH_TOKEN=token_seguro_docker_123
-    restart: unless-stopped
-
-  dashboard:
-    build: ./dashboard
-    container_name: p2p_dashboard
-    ports:
-      - "3000:3000"
-    depends_on:
-      - server
-      - postgres
-    environment:
-      - DATABASE_URL=postgresql://gerente:admin@postgres:5432/dashboard_p2p
-    restart: unless-stopped
-
   postgres:
     image: postgres:15-alpine
     container_name: p2p_dashboard_db
