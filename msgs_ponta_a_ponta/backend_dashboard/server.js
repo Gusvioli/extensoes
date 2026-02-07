@@ -1016,6 +1016,8 @@ function createDashboardServer(httpPort) {
     // POST /api/settings → Salvar configurações (PROTEGIDO)
     if (normalizedPath === "/api/settings" && req.method === "POST") {
       if (!req.user) return send401(res);
+      if (req.user.role !== 'admin') return send403(res);
+
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
@@ -1090,6 +1092,7 @@ function createDashboardServer(httpPort) {
     // POST /api/servers → Criar novo servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "POST") {
       if (!req.user) return send401(res);
+      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1162,6 +1165,7 @@ function createDashboardServer(httpPort) {
     // PUT /api/servers → Atualizar servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "PUT") {
       if (!req.user) return send401(res);
+      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1233,6 +1237,7 @@ function createDashboardServer(httpPort) {
     // DELETE /api/servers → Deletar servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "DELETE") {
       if (!req.user) return send401(res);
+      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1287,6 +1292,7 @@ function createDashboardServer(httpPort) {
     // GET /api/users
     if (normalizedPath === "/api/users" && req.method === "GET") {
       if (!req.user) return send401(res);
+      if (req.user.role !== 'admin') return send403(res);
 
       try {
         const users = await db.getAllUsers();
@@ -1309,6 +1315,32 @@ function createDashboardServer(httpPort) {
       req.on("end", async () => {
         try {
           const userToSave = JSON.parse(body);
+          const isAdmin = req.user.role === 'admin';
+
+          // RBAC: Se for CRIAÇÃO de usuário (sem ID), apenas admin pode fazer
+          if (!userToSave.id) {
+            if (!isAdmin) {
+              logAudit(req.user, "CREATE_USER_FORBIDDEN", {});
+              return send403(res);
+            }
+            userToSave.id = "user-" + Date.now();
+            userToSave.createdAt = new Date().toISOString();
+          }
+          // RBAC: Se for EDIÇÃO de usuário
+          else {
+            const isEditingSelf = userToSave.id === req.user.id;
+            // Se não for admin, só pode editar a si mesmo
+            if (!isAdmin && !isEditingSelf) {
+              logAudit(req.user, "UPDATE_OTHER_USER_FORBIDDEN", { targetId: userToSave.id });
+              return send403(res);
+            }
+            // Se não for admin, não pode mudar o próprio 'role'
+            if (!isAdmin && userToSave.role && userToSave.role !== req.user.role) {
+              logAudit(req.user, "UPDATE_ROLE_FORBIDDEN", { attemptedRole: userToSave.role });
+              // Remove silenciosamente a tentativa de elevação de privilégio
+              delete userToSave.role;
+            }
+          }
 
           const user = userToSave;
           if (!user.id) {
@@ -1344,12 +1376,21 @@ function createDashboardServer(httpPort) {
     // DELETE /api/users
     if (normalizedPath === "/api/users" && req.method === "DELETE") {
       if (!req.user) return send401(res);
+      if (req.user.role !== 'admin') return send403(res);
 
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
         try {
           const { id } = JSON.parse(body);
+
+          // RBAC: Admin não pode deletar a própria conta
+          if (id === req.user.id) {
+            logAudit(req.user, "DELETE_SELF_FORBIDDEN", { id });
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Um administrador não pode excluir a própria conta." }));
+            return;
+          }
 
           await db.deleteUser(id);
           logAudit(req.user, "DELETE_USER", { id });

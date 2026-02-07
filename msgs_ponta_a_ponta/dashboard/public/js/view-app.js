@@ -364,13 +364,20 @@ async function handleLoginSubmit(e) {
       checkAuth();
       showToast(`Bem-vindo, ${currentUser.name}!`, "success");
 
-      // Limpar pesquisa ao logar
+      // Limpar pesquisa ao logar. A adição do setTimeout ajuda a combater
+      // o preenchimento automático agressivo de alguns navegadores após o login.
       const viewSearch = document.getElementById("view-search");
       if (viewSearch) {
         viewSearch.value = "";
         searchTerm = "";
         const clearBtn = document.getElementById("view-search-clear");
         if (clearBtn) clearBtn.style.display = "none";
+
+        setTimeout(() => {
+          if (viewSearch.value) { // Se o browser preencheu de novo
+            viewSearch.value = "";
+          }
+        }, 200);
       }
     } else {
       loginAttempts++;

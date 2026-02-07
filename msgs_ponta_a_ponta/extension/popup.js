@@ -46,7 +46,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!baseUrl.startsWith("ws://") && !baseUrl.startsWith("wss://")) {
-      baseUrl = `ws://${baseUrl}`;
+      if (baseUrl.startsWith("localhost") || baseUrl.startsWith("127.0.0.1")) {
+        baseUrl = `ws://${baseUrl}`;
+      } else {
+        baseUrl = `wss://${baseUrl}`;
+      }
       signalingUrlInput.value = baseUrl;
     }
     chrome.storage.local.set({ signalingUrl: baseUrl });
@@ -261,15 +265,27 @@ document.addEventListener("DOMContentLoaded", () => {
       const li = document.createElement("li");
       li.style.cssText =
         "display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #f0f0f0;";
-      li.innerHTML = `<span style="cursor: pointer; font-weight: 500; flex-grow: 1;" title="${contact.id}">${contact.nickname}</span>
-                            <button class="delete-btn" style="padding: 2px 6px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">×</button>`;
-      li.querySelector("span").onclick = () => {
+
+      const span = document.createElement("span");
+      span.style.cssText = "cursor: pointer; font-weight: 500; flex-grow: 1;";
+      span.title = contact.id;
+      span.textContent = contact.nickname; // Prevenção de XSS
+      span.onclick = () => {
         peerIdInput.value = contact.id;
       };
-      li.querySelector(".delete-btn").onclick = (e) => {
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "delete-btn";
+      deleteBtn.style.cssText =
+        "padding: 2px 6px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;";
+      deleteBtn.textContent = "×";
+      deleteBtn.onclick = (e) => {
         e.stopPropagation();
         deleteContact(contact.id);
       };
+
+      li.appendChild(span);
+      li.appendChild(deleteBtn);
       contactsList.appendChild(li);
     });
   }
