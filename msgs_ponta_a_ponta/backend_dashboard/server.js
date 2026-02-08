@@ -98,17 +98,22 @@ function parseCookies(req) {
 function getValidSession(req) {
   const cookies = parseCookies(req);
   const token = cookies.session_token;
-  const session = sessionsData[token];
 
   if (!token) return null; // Sem cookie
 
+  const session = sessionsData[token];
   if (!session) return null;
   if (Date.now() > session.expiresAt) return null;
 
   // Validação de Segurança: User-Agent deve bater (previne roubo de sessão)
   // Nota: Verificação de IP removida pois causa desconexões em redes com IP dinâmico ou dual-stack (IPv4/IPv6)
   const userAgent = req.headers["user-agent"];
-  if (session.userAgent !== userAgent) return null;
+  if (session.userAgent !== userAgent) {
+    console.log(
+      `⚠️  Sessão inválida: User-Agent alterado (User: ${session.username})`,
+    );
+    return null;
+  }
 
   return session;
 }
@@ -496,6 +501,9 @@ function createDashboardServer(httpPort) {
           } else {
             limit.count++; // Incrementar falha
             loginRateLimit.set(clientIp, limit);
+            console.log(
+              `⚠️  Falha de login para usuário '${username}' (IP: ${clientIp})`,
+            );
             res.writeHead(401, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Usuário ou senha inválidos" }));
           }
@@ -1016,7 +1024,7 @@ function createDashboardServer(httpPort) {
     // POST /api/settings → Salvar configurações (PROTEGIDO)
     if (normalizedPath === "/api/settings" && req.method === "POST") {
       if (!req.user) return send401(res);
-      if (req.user.role !== 'admin') return send403(res);
+      if (req.user.role !== "admin") return send403(res);
 
       let body = "";
       req.on("data", (chunk) => (body += chunk));
@@ -1049,9 +1057,10 @@ function createDashboardServer(httpPort) {
         const serversData = await db.getAllServers();
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         });
         res.end(JSON.stringify({ servers: serversData }));
       } catch (err) {
@@ -1076,9 +1085,10 @@ function createDashboardServer(httpPort) {
         // Incluir tokens para que usuários possam copiar e usar na extensão
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         });
         res.end(JSON.stringify({ servers: list }));
       } catch (err) {
@@ -1092,7 +1102,7 @@ function createDashboardServer(httpPort) {
     // POST /api/servers → Criar novo servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "POST") {
       if (!req.user) return send401(res);
-      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
+      if (!["admin", "gerente"].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1165,7 +1175,7 @@ function createDashboardServer(httpPort) {
     // PUT /api/servers → Atualizar servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "PUT") {
       if (!req.user) return send401(res);
-      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
+      if (!["admin", "gerente"].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1237,7 +1247,7 @@ function createDashboardServer(httpPort) {
     // DELETE /api/servers → Deletar servidor (PROTEGIDO)
     if (normalizedPath === "/api/servers" && req.method === "DELETE") {
       if (!req.user) return send401(res);
-      if (!['admin', 'gerente'].includes(req.user.role)) return send403(res);
+      if (!["admin", "gerente"].includes(req.user.role)) return send403(res);
 
       let body = "";
       req.on("data", (chunk) => {
@@ -1287,12 +1297,35 @@ function createDashboardServer(httpPort) {
       return;
     }
 
+    // POST /api/servers/refresh → Forçar atualização de status (PROTEGIDO)
+    if (normalizedPath === "/api/servers/refresh" && req.method === "POST") {
+      if (!req.user) return send401(res);
+
+      try {
+        await updateServersStatusFile();
+        const updatedServers = await updateServersStatusFile();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: true,
+            message: "Verificação de status realizada com sucesso",
+            servers: updatedServers,
+          }),
+        );
+      } catch (err) {
+        console.error("Erro ao forçar atualização:", err.message);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Erro ao atualizar status" }));
+      }
+      return;
+    }
+
     // ===== API DE USUÁRIOS (PROTEGIDA) =====
 
     // GET /api/users
     if (normalizedPath === "/api/users" && req.method === "GET") {
       if (!req.user) return send401(res);
-      if (req.user.role !== 'admin') return send403(res);
+      if (req.user.role !== "admin") return send403(res);
 
       try {
         const users = await db.getAllUsers();
@@ -1315,7 +1348,7 @@ function createDashboardServer(httpPort) {
       req.on("end", async () => {
         try {
           const userToSave = JSON.parse(body);
-          const isAdmin = req.user.role === 'admin';
+          const isAdmin = req.user.role === "admin";
 
           // RBAC: Se for CRIAÇÃO de usuário (sem ID), apenas admin pode fazer
           if (!userToSave.id) {
@@ -1331,12 +1364,20 @@ function createDashboardServer(httpPort) {
             const isEditingSelf = userToSave.id === req.user.id;
             // Se não for admin, só pode editar a si mesmo
             if (!isAdmin && !isEditingSelf) {
-              logAudit(req.user, "UPDATE_OTHER_USER_FORBIDDEN", { targetId: userToSave.id });
+              logAudit(req.user, "UPDATE_OTHER_USER_FORBIDDEN", {
+                targetId: userToSave.id,
+              });
               return send403(res);
             }
             // Se não for admin, não pode mudar o próprio 'role'
-            if (!isAdmin && userToSave.role && userToSave.role !== req.user.role) {
-              logAudit(req.user, "UPDATE_ROLE_FORBIDDEN", { attemptedRole: userToSave.role });
+            if (
+              !isAdmin &&
+              userToSave.role &&
+              userToSave.role !== req.user.role
+            ) {
+              logAudit(req.user, "UPDATE_ROLE_FORBIDDEN", {
+                attemptedRole: userToSave.role,
+              });
               // Remove silenciosamente a tentativa de elevação de privilégio
               delete userToSave.role;
             }
@@ -1376,7 +1417,7 @@ function createDashboardServer(httpPort) {
     // DELETE /api/users
     if (normalizedPath === "/api/users" && req.method === "DELETE") {
       if (!req.user) return send401(res);
-      if (req.user.role !== 'admin') return send403(res);
+      if (req.user.role !== "admin") return send403(res);
 
       let body = "";
       req.on("data", (chunk) => (body += chunk));
@@ -1388,7 +1429,11 @@ function createDashboardServer(httpPort) {
           if (id === req.user.id) {
             logAudit(req.user, "DELETE_SELF_FORBIDDEN", { id });
             res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Um administrador não pode excluir a própria conta." }));
+            res.end(
+              JSON.stringify({
+                error: "Um administrador não pode excluir a própria conta.",
+              }),
+            );
             return;
           }
 
@@ -1416,52 +1461,6 @@ function createDashboardServer(httpPort) {
       return;
     }
 
-    // ===== SERVIR ARQUIVOS ESTÁTICOS (Frontend) =====
-    if (
-      !normalizedPath.startsWith("/api/") &&
-      !normalizedPath.startsWith("/auth/")
-    ) {
-      const staticDir = path.join(__dirname, "../dashboard/public");
-
-      // Mapear raiz para index.html
-      let filename = pathname === "/" ? "index.html" : pathname;
-
-      // Sanitização básica de caminho
-      filename = path.normalize(filename).replace(/^(\.\.[\/\\])+/, "");
-
-      const filePath = path.join(staticDir, filename);
-
-      // Verificar se arquivo existe e está dentro do diretório public
-      if (filePath.startsWith(staticDir) && fs.existsSync(filePath)) {
-        try {
-          const stat = fs.statSync(filePath);
-          if (stat.isFile()) {
-            const ext = path.extname(filePath).toLowerCase();
-            const mimeTypes = {
-              ".html": "text/html",
-              ".js": "text/javascript",
-              ".css": "text/css",
-              ".json": "application/json",
-              ".png": "image/png",
-              ".jpg": "image/jpeg",
-              ".gif": "image/gif",
-              ".svg": "image/svg+xml",
-              ".ico": "image/x-icon",
-            };
-
-            const contentType = mimeTypes[ext] || "application/octet-stream";
-
-            res.writeHead(200, { "Content-Type": contentType });
-            const readStream = fs.createReadStream(filePath);
-            readStream.pipe(res);
-            return;
-          }
-        } catch (e) {
-          // Ignorar erro e deixar cair no 404
-        }
-      }
-    }
-
     // ===== 404 =====
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(
@@ -1482,10 +1481,93 @@ function startAutoSync() {
   // ... (código de sincronização mantido, mas omitido para brevidade, pois é idêntico ao original)
   // A lógica de sincronização não depende de caminhos de arquivo, apenas de rede e DB.
   // Se necessário, copie a função startAutoSync do arquivo original.
+  const sync = async () => {
+    try {
+      const discoveryUrl = settingsData.discoveryUrl;
+      if (!discoveryUrl) return;
+
+      const parsedUrl = url.parse(discoveryUrl);
+      const lib = parsedUrl.protocol === "https:" ? https : http;
+
+      const req = lib.get(discoveryUrl, (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          return;
+        }
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", async () => {
+          try {
+            const info = JSON.parse(data);
+            if (info && info.token) {
+              const servers = await db.getAllServers();
+              let target = null;
+
+              // 1. Pela porta informada no JSON
+              if (info.port) {
+                target = servers.find(
+                  (s) =>
+                    s.port === info.port &&
+                    (s.host === "localhost" ||
+                      s.host === "127.0.0.1" ||
+                      s.host === "0.0.0.0"),
+                );
+              }
+
+              // 2. Fallback: Se discovery for localhost
+              if (
+                !target &&
+                (parsedUrl.hostname === "localhost" ||
+                  parsedUrl.hostname === "127.0.0.1")
+              ) {
+                target = servers.find(
+                  (s) => s.host === "localhost" || s.host === "127.0.0.1",
+                );
+              }
+
+              if (target) {
+                let changed = false;
+                if (target.token !== info.token) {
+                  target.token = info.token;
+                  changed = true;
+                }
+                if (
+                  info.requiresAuth !== undefined &&
+                  target.requiresAuth !== info.requiresAuth
+                ) {
+                  target.requiresAuth = info.requiresAuth;
+                  changed = true;
+                }
+
+                if (changed) {
+                  await db.saveServer(target);
+                  console.log(
+                    `[AUTO-SYNC] Servidor '${target.name}' atualizado via Discovery URL.`,
+                  );
+                }
+              }
+            }
+          } catch (e) {}
+        });
+      });
+
+      req.on("error", (e) => {});
+    } catch (e) {
+      console.error("Erro no auto-sync:", e);
+    }
+  };
+
+  // Executar imediatamente e agendar
+  sync();
+  setInterval(sync, 30000);
 }
 
 function send401(res) {
   console.log("⚠️  Acesso negado (401) - Sessão inválida ou expirada");
+  res.setHeader(
+    "Set-Cookie",
+    "session_token=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+  );
   res.writeHead(401, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "Não autenticado" }));
 }
@@ -1499,16 +1581,53 @@ function send403(res) {
 }
 
 // ============ MONITORAMENTO DE SERVIDORES ============
-function checkServerConnectivity(host, port) {
+function checkServerHealth(server) {
   return new Promise((resolve) => {
-    const socket = new net.Socket();
-    socket.setTimeout(2000); // 2s timeout
-    
-    socket.on('connect', () => { socket.destroy(); resolve(true); });
-    socket.on('timeout', () => { socket.destroy(); resolve(false); });
-    socket.on('error', () => { socket.destroy(); resolve(false); });
-    
-    socket.connect(port, host);
+    if (!server.host || !server.port) return resolve(false);
+
+    const isSecure = server.protocol === "wss";
+    const transport = isSecure ? https : http;
+
+    const req = transport.get(
+      {
+        hostname: server.host,
+        port: server.port,
+        path: "/status",
+        timeout: 3000, // Aumentado para 3s para evitar falsos negativos
+        rejectUnauthorized: false,
+        headers: { "User-Agent": "P2P-Dashboard-Monitor" },
+      },
+      (res) => {
+        if (res.statusCode === 200) {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            try {
+              const json = JSON.parse(data);
+              // Se status for explicitamente offline
+              if (json.status === "offline") resolve(false);
+              else resolve(true);
+            } catch (e) {
+              resolve(true); // 200 OK mas não JSON -> Online
+            }
+          });
+        } else {
+          res.resume();
+          resolve(true); // Porta aberta, respondeu HTTP -> Online
+        }
+      },
+    );
+
+    req.on("timeout", () => {
+      req.destroy();
+      // console.log(`[MONITOR] Timeout ao conectar em ${server.name}`);
+      resolve(false);
+    });
+
+    req.on("error", (err) => {
+      // console.log(`[MONITOR] Erro de conexão em ${server.name}: ${err.message}`);
+      resolve(false);
+    });
   });
 }
 
@@ -1516,15 +1635,32 @@ async function updateServersStatusFile() {
   try {
     const servers = await db.getAllServers();
     const updatedServers = [];
-    
+
     for (const server of servers) {
-      // Verifica conectividade se tiver host/porta
-      if (server.host && server.port) {
-        const isOnline = await checkServerConnectivity(server.host, server.port);
-        // Atualiza status (exceto se estiver em standby manual)
-        if (server.status !== 'standby') {
-          server.status = isOnline ? 'active' : 'inactive';
+      try {
+        // Verifica conectividade se tiver host/porta
+        if (server.host && server.port) {
+          const isOnline = await checkServerHealth(server);
+
+          // Atualiza status (exceto se estiver em standby manual)
+          if (server.status !== "standby") {
+            const newStatus = isOnline ? "active" : "inactive";
+
+            // Persistir mudança de status no banco de dados
+            if (server.status !== newStatus) {
+              server.status = newStatus;
+              await db.saveServer(server);
+              console.log(
+                `[MONITOR] Status do servidor '${server.name}' alterado para: ${newStatus.toUpperCase()}`,
+              );
+            }
+          }
         }
+      } catch (err) {
+        console.error(
+          `[MONITOR] Erro ao verificar servidor ${server.name}:`,
+          err.message,
+        );
       }
       updatedServers.push(server);
     }
@@ -1535,11 +1671,17 @@ async function updateServersStatusFile() {
     }
 
     const jsonPath = path.join(publicDir, "servers-status.json");
-    const jsonData = JSON.stringify({ servers: updatedServers, lastUpdated: new Date().toISOString() }, null, 2);
+    const jsonData = JSON.stringify(
+      { servers: updatedServers, lastUpdated: new Date().toISOString() },
+      null,
+      2,
+    );
 
     fs.writeFileSync(jsonPath, jsonData);
+    return updatedServers;
   } catch (error) {
     console.error("Erro ao atualizar JSON de status:", error.message);
+    return [];
   }
 }
 
@@ -1561,6 +1703,7 @@ async function initDashboard(dashboardPort) {
 
   // Iniciar sincronização automática via HTTP
   // startAutoSync(); // Descomente se copiar a função startAutoSync
+  startAutoSync();
 
   const dashboardServer = createDashboardServer(dashboardPort);
 
@@ -1577,10 +1720,12 @@ async function initDashboard(dashboardPort) {
     }
   });
 
-  dashboardServer.listen(dashboardPort, () => {
+  const host = process.env.HOST || "0.0.0.0";
+  dashboardServer.listen(dashboardPort, host, () => {
     const timestamp = new Date().toISOString();
+    const displayHost = host === "0.0.0.0" ? "localhost" : host;
     console.log(
-      `[${timestamp}] 📊 Dashboard de Servidores iniciado em http://localhost:${dashboardPort}`,
+      `[${timestamp}] 📊 Dashboard de Servidores iniciado em http://${displayHost}:${dashboardPort}`,
     );
   });
 

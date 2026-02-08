@@ -342,7 +342,14 @@ async function handleLoginSubmit(e) {
       body: JSON.stringify({ username, password }),
     });
 
-    const data = await res.json();
+    let data;
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      throw new Error(`Erro (${res.status}): ${text.substring(0, 50)}`);
+    }
 
     if (data.success) {
       loginAttempts = 0;
@@ -373,11 +380,14 @@ async function handleLoginSubmit(e) {
         const clearBtn = document.getElementById("view-search-clear");
         if (clearBtn) clearBtn.style.display = "none";
 
+        renderServers();
+
         setTimeout(() => {
-          if (viewSearch.value) { // Se o browser preencheu de novo
-            viewSearch.value = "";
-          }
-        }, 200);
+          viewSearch.value = "";
+          searchTerm = "";
+          if (clearBtn) clearBtn.style.display = "none";
+          renderServers();
+        }, 500);
       }
     } else {
       loginAttempts++;
@@ -386,7 +396,7 @@ async function handleLoginSubmit(e) {
     }
   } catch (err) {
     console.error(err);
-    errorBox.innerHTML = `Erro de conexão.<br><span style="font-size: 0.85em; color: #666;">Backend: ${cleanApiBase}</span>`;
+    errorBox.innerHTML = `Erro: ${err.message}<br><span style="font-size: 0.85em; color: #666;">Backend: ${cleanApiBase || "Relativo"}</span>`;
     errorBox.style.display = "block";
   } finally {
     if (loginAttempts >= 3) {
@@ -532,6 +542,15 @@ document.addEventListener("DOMContentLoaded", () => {
     searchTerm = "";
     viewSearch.setAttribute("autocomplete", "off");
     viewSearch.setAttribute("name", "view_search_query");
+
+    // Forçar limpeza após delay para combater preenchimento automático do navegador ao atualizar
+    setTimeout(() => {
+      viewSearch.value = "";
+      searchTerm = "";
+      if (viewSearchClear) viewSearchClear.style.display = "none";
+      renderServers();
+    }, 100);
+
     viewSearch.addEventListener("input", (e) => {
       searchTerm = e.target.value.toLowerCase();
       if (viewSearchClear)
@@ -569,6 +588,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const viewToggleBtn = document.getElementById("view-toggle-btn");
   if (viewToggleBtn) {
+    viewSearch.value = ""; // Limpar ao carregar a página
     // Definir estado inicial
     viewToggleBtn.innerHTML =
       currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
@@ -578,7 +598,19 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("publicViewMode", currentViewMode);
       viewToggleBtn.innerHTML =
         currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-      renderServers();
+
+      // Forçar limpeza e re-renderização com delay para evitar glitches visuais
+      const container = document.getElementById("servers-grid");
+      if (container) container.innerHTML = "";
+
+      setTimeout(() => {
+        currentFilter = "all";
+        document.querySelectorAll(".filter-btn").forEach((btn) => {
+          btn.classList.remove("active");
+          if (btn.dataset.filter === "all") btn.classList.add("active");
+        });
+        renderServers();
+      }, 10);
     });
   }
 
@@ -709,6 +741,15 @@ function checkAuth() {
         const loginMsg = document.getElementById("login-required-message");
         if (loginMsg) loginMsg.style.display = "none";
 
+        // Limpar pesquisa ao verificar autenticação com sucesso
+        const viewSearch = document.getElementById("view-search");
+        if (viewSearch) {
+          viewSearch.value = "";
+          searchTerm = "";
+          const clearBtn = document.getElementById("view-search-clear");
+          if (clearBtn) clearBtn.style.display = "none";
+        }
+
         updateLatencyComparisonChart();
         renderServers(); // Re-renderizar para mostrar botões de Ping
       } else {
@@ -828,8 +869,8 @@ function deleteMyAccount() {
 function loadServers() {
   // Solicita todos os servidores públicos para calcular contadores corretamente
   const cleanApiBase = API_BASE.replace(/\/$/, "");
-  // Usa o JSON estático gerado pelo backend com status verificado
-  const apiUrl = `${cleanApiBase}/servers-status.json?_t=${Date.now()}`;
+  // Usa a API dinâmica em vez do arquivo estático (que pode não ser servido pelo backend)
+  const apiUrl = `${cleanApiBase}/api/public-servers`;
 
   return fetch(apiUrl, { credentials: "include" })
     .then((res) => {

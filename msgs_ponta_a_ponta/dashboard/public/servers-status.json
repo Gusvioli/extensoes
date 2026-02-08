@@ -1,17 +1,36 @@
 {
   "servers": [
     {
-      "id": "server-1770416175262",
+      "id": "server-1770556604513",
+      "name": "servers-w3fc.onrender.com",
+      "description": "sERVIDOR HOSPEDADO NO rENDER",
+      "host": "servers-w3fc.onrender.com",
+      "port": null,
+      "protocol": "wss",
+      "token": "a9a5c199a73471ae0970036709d80598",
+      "status": "active",
+      "region": "",
+      "maxClients": 100,
+      "createdAt": "2026-02-08T13:16:44.519Z",
+      "notes": "",
+      "requiresAuth": true,
+      "manualToken": false,
+      "clientsCount": 0,
+      "lastSeen": null,
+      "urltoken": ""
+    },
+    {
+      "id": "server-1770558379333",
       "name": "Servidor Local (Auto)",
       "description": "",
       "host": "localhost",
-      "port": 3000,
+      "port": 8080,
       "protocol": "ws",
-      "token": "1a90d18d791a779e82b5e4eac49becf0",
+      "token": "c8698239cb7f6fdc6fa78b55a32c1f51",
       "status": "active",
-      "region": "Local",
+      "region": "",
       "maxClients": 100,
-      "createdAt": "2026-02-06T22:16:15.274Z",
+      "createdAt": "2026-02-08T13:46:19.347Z",
       "notes": "",
       "requiresAuth": true,
       "manualToken": false,
@@ -20,5 +39,5 @@
       "urltoken": ""
     }
   ],
-  "lastUpdated": "2026-02-07T02:14:04.475Z"
+  "lastUpdated": "2026-02-08T15:58:20.044Z"
 }

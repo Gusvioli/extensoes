@@ -101,7 +101,8 @@ function injectLoader() {
 
   const loader = document.createElement("div");
   loader.id = "app-loader";
-  loader.innerHTML = '<div class="spinner"></div><div class="loading-text">CARREGANDO...</div>';
+  loader.innerHTML =
+    '<div class="spinner"></div><div class="loading-text">CARREGANDO...</div>';
   document.body.appendChild(loader);
 }
 
@@ -125,9 +126,13 @@ function highlightMatch(text) {
 
   const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const parts = strText.split(new RegExp(`(${term})`, "gi"));
-  return parts.map((part) =>
-    part.toLowerCase() === searchTerm ? `<span class="highlight">${escapeHtml(part)}</span>` : escapeHtml(part)
-  ).join("");
+  return parts
+    .map((part) =>
+      part.toLowerCase() === searchTerm
+        ? `<span class="highlight">${escapeHtml(part)}</span>`
+        : escapeHtml(part),
+    )
+    .join("");
 }
 
 async function hashPasswordFrontend(password) {
@@ -767,8 +772,9 @@ document.addEventListener("DOMContentLoaded", () => {
       clearBtn.id = "server-search-clear";
       clearBtn.innerHTML = "&times;";
       clearBtn.title = "Limpar";
-      clearBtn.style.cssText = "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 1.2em; cursor: pointer; display: none; padding: 0; line-height: 1;";
-      
+      clearBtn.style.cssText =
+        "position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 1.2em; cursor: pointer; display: none; padding: 0; line-height: 1;";
+
       if (searchInput.parentElement) {
         searchInput.parentElement.style.position = "relative";
         searchInput.parentElement.appendChild(clearBtn);
@@ -826,7 +832,21 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("adminViewMode", currentViewMode);
       viewToggleBtn.innerHTML =
         currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-      renderServers();
+
+      // Forçar limpeza e re-renderização com delay para evitar glitches visuais
+      const container = document.getElementById("servers-container");
+      if (container) container.innerHTML = "";
+
+      setTimeout(() => {
+        currentFilter = "all";
+        document
+          .querySelectorAll(".filter-btn:not(#add-new-btn)")
+          .forEach((btn) => {
+            btn.classList.remove("active");
+            if (btn.dataset.filter === "all") btn.classList.add("active");
+          });
+        renderServers();
+      }, 10);
     });
   }
 
@@ -991,7 +1011,16 @@ async function handleLogin(e) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   })
-    .then((res) => res.json())
+    .then(async (res) => {
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return res.json();
+      }
+      const text = await res.text();
+      throw new Error(
+        `Erro do servidor (${res.status}): ${text.substring(0, 100)}`,
+      );
+    })
     .then((data) => {
       if (data.success) {
         loginAttempts = 0;
@@ -1051,7 +1080,10 @@ async function handleLogin(e) {
       console.error("Login error:", err);
       const errorBox = document.getElementById("login-error");
       if (errorBox) {
-        errorBox.textContent = "Erro de conexão.";
+        errorBox.textContent =
+          err.message === "Failed to fetch"
+            ? "Erro de conexão: Verifique se o servidor está rodando."
+            : err.message;
         errorBox.style.display = "block";
       }
     });

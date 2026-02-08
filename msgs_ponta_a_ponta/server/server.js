@@ -43,6 +43,7 @@ try {
 // ============ CONFIGURAÇÕES VIA VARIÁVEIS DE AMBIENTE ============
 const config = {
   port: parseInt(process.env.PORT || "8080", 10),
+  host: process.env.HOST || "0.0.0.0",
   maxClients: parseInt(process.env.MAX_CLIENTS || "10000", 10),
   heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL || "30000", 10),
   heartbeatTimeout: parseInt(process.env.HEARTBEAT_TIMEOUT || "5000", 10),
@@ -78,12 +79,29 @@ Instruções de Uso:
 4. Conecte-se normalmente
 
 Gerado em: ${new Date().toISOString()}
-Servidor: ws://localhost:${config.port}
+Servidor: ws://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config.port}
 `;
     fs.writeFileSync(tokenFile, content);
     log(`Token salvo em: ${tokenFile}`, "info");
   } catch (err) {
     log(`Erro ao salvar token em arquivo: ${err.message}`, "warn");
+  }
+}
+
+// Função para atualizar arquivo de status (Heartbeat)
+function updateStatusFile() {
+  try {
+    const statusFile = path.join(__dirname, "status.json");
+    const statusData = {
+      status: "online",
+      port: config.port,
+      clientsCount: clients.size,
+      uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
+      lastUpdated: new Date().toISOString(),
+    };
+    fs.writeFileSync(statusFile, JSON.stringify(statusData, null, 2));
+  } catch (e) {
+    console.error("Erro ao atualizar status.json:", e.message);
   }
 }
 
@@ -105,296 +123,24 @@ const requestHandler = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
 
-  // Determinar URL do WebSocket dinamicamente (compatível com Render e Local)
-  const isSecure = req.headers["x-forwarded-proto"] === "https";
-  const protocol = isSecure ? "wss" : "ws";
-  const hostHeader = req.headers.host || "localhost";
-  let wsUrl;
-
-  if (process.env.RENDER || req.socket.localPort === config.port) {
-    // No Render ou porta principal: usa o host diretamente (porta 443 implícita no Render)
-    wsUrl = `${protocol}://${hostHeader}`;
-  } else {
-    // Porta secundária local: ajusta para a porta do WS
-    const hostname = hostHeader.replace(/:\d+$/, "");
-    wsUrl = `${protocol}://${hostname}:${config.port}`;
-  }
-
-  if (req.url === "/token") {
-    // Endpoint para obter token
-    res.writeHead(200);
-    res.end(
-      JSON.stringify({
-        token: config.authToken,
-        wsUrl: wsUrl,
-        requiresAuth: config.requireAuth,
-        status: "online",
-        clientsCount: clients.size,
-        maxClients: config.maxClients,
-        uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
-        startedAt: new Date(metrics.startTime).toISOString(),
-      }),
-    );
-  } else if (req.url === "/") {
-    // Página inicial com instruções
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P Secure Chat - Token</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .container { 
-      max-width: 500px;
-      background: white; 
-      padding: 40px; 
-      border-radius: 16px; 
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      animation: slideIn 0.5s ease;
-      text-align: center;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .emoji { font-size: 60px; margin-bottom: 20px; }
-    h1 { 
-      color: #333; 
-      margin-bottom: 10px; 
-      font-size: 32px;
-      font-weight: 700;
-    }
-    .status { 
-      color: #28a745; 
-      font-weight: bold; 
-      margin-bottom: 30px;
-      font-size: 16px;
-    }
-    .section { 
-      margin: 30px 0; 
-      padding: 20px 0;
-      border-bottom: 1px solid #eee;
-    }
-    .section:last-child { border-bottom: none; }
-    h2 { 
-      color: #667eea; 
-      font-size: 18px; 
-      margin: 15px 0;
-      font-weight: 600;
-    }
-    .token-box { 
-      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-      padding: 20px; 
-      border-radius: 10px; 
-      font-family: 'Courier New', monospace;
-      word-break: break-all;
-      border: 2px dashed #667eea;
-      margin: 20px 0;
-      font-size: 16px;
-      line-height: 1.6;
-      font-weight: bold;
-      color: #333;
-    }
-    button {
-      width: 100%;
-      padding: 14px 20px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: bold;
-      transition: all 0.3s;
-      margin: 10px 0;
-    }
-    .copy-btn { 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-    .copy-btn:hover { 
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-    }
-    .copy-btn:active {
-      transform: translateY(0);
-    }
-    .step {
-      background: #f8f9fa;
-      padding: 12px;
-      border-radius: 6px;
-      margin: 8px 0;
-      font-size: 14px;
-      line-height: 1.6;
-      text-align: left;
-    }
-    .step strong {
-      color: #667eea;
-    }
-    .alert {
-      background: #cfe2ff;
-      border-left: 4px solid #0066cc;
-      color: #084298;
-      padding: 15px;
-      border-radius: 6px;
-      margin: 15px 0;
-      text-align: left;
-      font-size: 14px;
-    }
-    .faq {
-      text-align: left;
-      margin: 20px 0;
-    }
-    .faq-item {
-      margin: 12px 0;
-      padding: 12px;
-      background: #f8f9fa;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .faq-item:hover {
-      background: #e9ecef;
-    }
-    .faq-q {
-      font-weight: bold;
-      color: #333;
-      font-size: 14px;
-    }
-    .faq-a {
-      color: #666;
-      font-size: 13px;
-      margin-top: 8px;
-      display: none;
-    }
-    .faq-item.open .faq-a {
-      display: block;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="emoji">🔐</div>
-    <h1>Chat Seguro</h1>
-    <p class="status">✅ Pronto para usar!</p>
-    
-    <!-- TOKEN -->
-    <div class="section">
-      <h2>📝 Seu Código de Acesso</h2>
-      <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Compartilhe esse código com a pessoa que quer conversar com você:</p>
-      <div class="token-box" id="token">${config.authToken}</div>
-      <button class="copy-btn" onclick="copyToken()">📋 Copiar Código</button>
-    </div>
-
-    <!-- INSTRUÇÕES SIMPLES -->
-    <div class="section">
-      <h2>⚡ Como Usar (4 passos)</h2>
-      <div class="step">
-        <strong>1️⃣ Você (pessoa que começou aqui)</strong><br>
-        Copie o código acima
-      </div>
-      <div class="step">
-        <strong>2️⃣ Envie para seu amigo</strong><br>
-        WhatsApp, email, telegram... como preferir
-      </div>
-      <div class="step">
-        <strong>3️⃣ Seu amigo abre a extensão Chrome</strong><br>
-        Instala a extensão "P2P Secure Chat"
-      </div>
-      <div class="step">
-        <strong>4️⃣ Seu amigo cola o código</strong><br>
-        Na extensão, coloca o código no campo "Token" e clica conectar
-      </div>
-    </div>
-
-    <!-- AVISO -->
-    <div class="alert">
-      <strong>💡 Dica:</strong> Deixe essa página aberta enquanto estiver usando o chat!
-    </div>
-
-    <!-- FAQ SIMPLES -->
-    <div class="section">
-      <h2>❓ Dúvidas?</h2>
-      <div class="faq">
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">É seguro?</div>
-          <div class="faq-a">Sim! Suas mensagens são criptografadas. Ninguém consegue ler.</div>
-        </div>
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">Preciso criar conta?</div>
-          <div class="faq-a">Não! Instala a extensão e pronto. Sem cadastro, sem senhas.</div>
-        </div>
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">Funciona em celular?</div>
-          <div class="faq-a">Só no Chrome de computador por enquanto.</div>
-        </div>
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">O que é esse código?</div>
-          <div class="faq-a">É uma senha para conectar com segurança. Muda toda vez que você reinicia.</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <script>
-    function copyToken() {
-      const token = document.getElementById('token').innerText;
-      navigator.clipboard.writeText(token).then(() => {
-        showNotification('✅ Código copiado!');
-      });
-    }
-
-    function toggleFaq(element) {
-      element.classList.toggle('open');
-    }
-
-    function showNotification(msg) {
-      const notif = document.createElement('div');
-      notif.innerText = msg;
-      notif.style.cssText = \`
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #28a745;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        animation: slideInRight 0.3s ease;
-        z-index: 1000;
-        font-weight: bold;
-      \`;
-      document.body.appendChild(notif);
-      setTimeout(() => notif.remove(), 2000);
-    }
-
-    const style = document.createElement('style');
-    style.textContent = \`
-      @keyframes slideInRight {
-        from { opacity: 0; transform: translateX(100px); }
-        to { opacity: 1; transform: translateX(0); }
+  if (req.url === "/status") {
+    try {
+      const statusFile = path.join(__dirname, "status.json");
+      if (fs.existsSync(statusFile)) {
+        const statusData = fs.readFileSync(statusFile, "utf-8");
+        res.writeHead(200);
+        res.end(statusData);
+        return;
       }
-    \`;
-    document.head.appendChild(style);
-  </script>
-</body>
-</html>
-      `;
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(html);
-  } else {
-    res.writeHead(404);
-    res.end(JSON.stringify({ error: "Rota não encontrada" }));
+    } catch (e) {}
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: "online", message: "Initializing" }));
+    return;
   }
+
+  // Rotas removidas conforme solicitado.
+  res.writeHead(404);
+  res.end(JSON.stringify({ error: "Not found" }));
 };
 
 // Servidor HTTP para servir o token (para fácil acesso)
@@ -437,7 +183,7 @@ function createServer(port) {
         reject(err);
       });
 
-      httpServer.listen(port);
+      httpServer.listen(port, config.host);
     } catch (err) {
       reject(err);
     }
@@ -480,9 +226,11 @@ async function initServer() {
       // Inicia servidor HTTP para servir token
       const httpPort = port + 1000; // Usa a porta real que foi vinculada
       const httpServer = createTokenServer(httpPort);
-      httpServer.listen(httpPort, () => {
+      httpServer.listen(httpPort, config.host, () => {
+        const displayHost =
+          config.host === "0.0.0.0" ? "localhost" : config.host;
         log(
-          `📱 Acesse http://localhost:${httpPort} para ver seu token`,
+          `📱 Acesse http://${displayHost}:${httpPort} para ver seu token`,
           "info",
         );
       });
@@ -503,8 +251,14 @@ async function initServer() {
 }
 
 function setupHandlers() {
+  // Atualiza status imediatamente ao iniciar para garantir que status.json exista e esteja correto
+  updateStatusFile();
+
   // Heartbeat: verifica se clientes estão vivos a cada intervalo
   const interval = setInterval(() => {
+    // Atualiza arquivo de status local
+    updateStatusFile();
+
     wss.clients.forEach((ws) => {
       if (ws.isAlive === false) {
         log(
@@ -734,6 +488,19 @@ function setupHandlers() {
 
   function shutdown(signal) {
     log(`Sinal ${signal} recebido. Encerrando graciosamente...`, "warn");
+
+    // Atualiza status para offline no arquivo
+    try {
+      const statusFile = path.join(__dirname, "status.json");
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify(
+          { status: "offline", lastUpdated: new Date().toISOString() },
+          null,
+          2,
+        ),
+      );
+    } catch (e) {}
 
     // Fecha todas as conexões com clientes
     wss.clients.forEach((ws) => {
