@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const fsPromises = require("fs").promises;
 
 // Carregar variáveis de ambiente do arquivo .env
 const envPath = path.join(__dirname, ".env");
@@ -19,9 +20,9 @@ try {
   );
 }
 
-const url = require("url");
 const crypto = require("crypto");
 const http = require("http");
+const url = require("url");
 let WebSocket;
 
 try {
@@ -53,6 +54,8 @@ const config = {
   requireAuth: process.env.REQUIRE_AUTH !== "false", // ATIVADO POR PADRÃO
   authToken: process.env.AUTH_TOKEN || crypto.randomBytes(16).toString("hex"), // Token obrigatório
   disableDeflate: process.env.DISABLE_DEFLATE !== "false", // Proteção contra CRIME
+  maxPayload: parseInt(process.env.MAX_PAYLOAD || "65536", 10), // 64KB Max Payload (Segurança)
+  maxConnsPerIp: parseInt(process.env.MAX_CONNS_PER_IP || "20", 10), // Limite de conexões por IP
 };
 
 // ============ MÉTRICAS E MONITORAMENTO ============
@@ -89,7 +92,7 @@ Servidor: ws://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config
 }
 
 // Função para atualizar arquivo de status (Heartbeat)
-function updateStatusFile() {
+async function updateStatusFile() {
   try {
     const statusFile = path.join(__dirname, "status.json");
     const statusData = {
@@ -99,13 +102,59 @@ function updateStatusFile() {
       uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
       lastUpdated: new Date().toISOString(),
     };
-    fs.writeFileSync(statusFile, JSON.stringify(statusData, null, 2));
+    // Uso de versão assíncrona para não bloquear o Event Loop
+    await fsPromises.writeFile(statusFile, JSON.stringify(statusData, null, 2));
   } catch (e) {
     console.error("Erro ao atualizar status.json:", e.message);
   }
 }
 
-// Função auxiliar para logs com timestamp
+// ============ SISTEMA DE LOGS ROTATIVO ============
+const LOG_DIR = path.join(__dirname, "logs");
+const LOG_FILE = path.join(LOG_DIR, "server.log");
+const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_LOG_BACKUPS = 5;
+
+// Garante que o diretório de logs existe
+if (!fs.existsSync(LOG_DIR)) {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+  } catch (e) {
+    console.error("Erro ao criar diretório de logs:", e.message);
+  }
+}
+
+function rotateLogs() {
+  try {
+    if (!fs.existsSync(LOG_FILE)) return;
+
+    const stats = fs.statSync(LOG_FILE);
+    if (stats.size < MAX_LOG_SIZE) return;
+
+    // Remove o backup mais antigo
+    const oldestBackup = path.join(LOG_DIR, `server.log.${MAX_LOG_BACKUPS}`);
+    if (fs.existsSync(oldestBackup)) {
+      fs.unlinkSync(oldestBackup);
+    }
+
+    // Rotaciona os backups existentes
+    for (let i = MAX_LOG_BACKUPS - 1; i >= 1; i--) {
+      const current = path.join(LOG_DIR, `server.log.${i}`);
+      const next = path.join(LOG_DIR, `server.log.${i + 1}`);
+      if (fs.existsSync(current)) {
+        fs.renameSync(current, next);
+      }
+    }
+
+    // Rotaciona o atual
+    const firstBackup = path.join(LOG_DIR, "server.log.1");
+    fs.renameSync(LOG_FILE, firstBackup);
+  } catch (e) {
+    console.error("Erro na rotação de logs:", e.message);
+  }
+}
+
+// Função auxiliar para logs com timestamp e persistência em arquivo
 function log(message, level = "info") {
   const timestamp = new Date().toISOString();
   const prefix =
@@ -115,7 +164,16 @@ function log(message, level = "info") {
       error: "❌",
       debug: "🔍",
     }[level] || "📌";
-  console.log(`[${timestamp}] ${prefix} ${message}`);
+
+  const logMessage = `[${timestamp}] ${prefix} ${message}`;
+  console.log(logMessage);
+
+  try {
+    rotateLogs();
+    fs.appendFileSync(LOG_FILE, logMessage + "\n");
+  } catch (e) {
+    console.error("Falha ao escrever log em arquivo:", e.message);
+  }
 }
 
 // Handler compartilhado para servir a página de token e API (funciona no Render e Local)
@@ -123,7 +181,10 @@ const requestHandler = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
 
-  if (req.url === "/status") {
+  const parsedUrl = url.parse(req.url, true);
+  const pathname = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+
+  if (pathname === "/status") {
     try {
       const statusFile = path.join(__dirname, "status.json");
       if (fs.existsSync(statusFile)) {
@@ -138,7 +199,7 @@ const requestHandler = (req, res) => {
     return;
   }
 
-  if (req.url === "/token") {
+  if (pathname === "/token") {
     res.writeHead(200);
     res.end(
       JSON.stringify({
@@ -147,6 +208,12 @@ const requestHandler = (req, res) => {
         port: config.port,
       }),
     );
+    return;
+  }
+
+  if (pathname === "/health") {
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: "ok" }));
     return;
   }
 
@@ -173,6 +240,7 @@ function createServer(port) {
 
       const server = new WebSocket.Server({
         server: httpServer, // Anexa ao servidor HTTP
+        maxPayload: config.maxPayload, // Proteção contra ataques de memória (DoS)
         perMessageDeflate: config.disableDeflate
           ? false // Desabilita compressão para prevenir CRIME
           : {
@@ -295,7 +363,24 @@ function setupHandlers() {
     }, 60000); // A cada 1 minuto
   }
 
+  // Map para controle de conexões por IP
+  const ipConnections = new Map();
+
   wss.on("connection", (ws, req) => {
+    // Rate Limiting por IP (Segurança contra Connection Flooding)
+    const ip = req.socket.remoteAddress;
+    const currentIpConns = ipConnections.get(ip) || 0;
+
+    if (currentIpConns >= config.maxConnsPerIp) {
+      log(
+        `IP ${ip} excedeu o limite de conexões (${config.maxConnsPerIp}). Rejeitando.`,
+        "warn",
+      );
+      ws.close(1008, "Muitas conexões deste IP");
+      return;
+    }
+    ipConnections.set(ip, currentIpConns + 1);
+
     // Verifica limite máximo de clientes
     if (clients.size >= config.maxClients) {
       log(
@@ -483,6 +568,11 @@ function setupHandlers() {
         `Cliente ${id} desconectado (Total: ${clients.size}/${config.maxClients})`,
         "info",
       );
+
+      // Decrementar contador de IP
+      const count = ipConnections.get(ip) || 1;
+      if (count <= 1) ipConnections.delete(ip);
+      else ipConnections.set(ip, count - 1);
     });
 
     ws.on("error", (error) => {
@@ -504,6 +594,7 @@ function setupHandlers() {
     // Atualiza status para offline no arquivo
     try {
       const statusFile = path.join(__dirname, "status.json");
+      // Aqui usamos sync pois o processo está morrendo e queremos garantir a escrita
       fs.writeFileSync(
         statusFile,
         JSON.stringify(

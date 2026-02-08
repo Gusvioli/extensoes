@@ -907,82 +907,6 @@ function createDashboardServer(httpPort) {
       return;
     }
 
-    // ===== SOCIAL LOGIN (SIMULADO/MOCK) =====
-    // GET /auth/google
-    if (normalizedPath === "/auth/google" && req.method === "GET") {
-      // Simulação criativa: Se não tiver chaves reais, simula o login
-      const mockUser = {
-        username: "google_user",
-        name: "Google User",
-        role: "user",
-        id: "user-google-mock",
-      };
-
-      // Verifica se usuário mock já existe, senão cria
-      const existing = await db.getUserByUsername(mockUser.username);
-      if (!existing) {
-        await db.saveUser({
-          ...mockUser,
-          password: crypto.randomBytes(16).toString("hex"), // Senha aleatória
-          createdAt: new Date().toISOString(),
-        });
-      }
-
-      // Cria sessão
-      const token = createSession(
-        mockUser.username,
-        req.socket.remoteAddress,
-        req.headers["user-agent"],
-      );
-      const secureFlag =
-        process.env.NODE_ENV === "production" ? "; Secure" : "";
-      res.setHeader(
-        "Set-Cookie",
-        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}${secureFlag}`,
-      );
-
-      // Redireciona para home com delay para simular rede
-      setTimeout(() => {
-        res.writeHead(302, { Location: "/" });
-        res.end();
-      }, 800);
-      return;
-    }
-
-    // GET /auth/github
-    if (normalizedPath === "/auth/github" && req.method === "GET") {
-      const mockUser = {
-        username: "github_user",
-        name: "GitHub User",
-        role: "user",
-        id: "user-github-mock",
-      };
-
-      const existing = await db.getUserByUsername(mockUser.username);
-      if (!existing) {
-        await db.saveUser({
-          ...mockUser,
-          password: crypto.randomBytes(16).toString("hex"),
-          createdAt: new Date().toISOString(),
-        });
-      }
-
-      const token = createSession(
-        mockUser.username,
-        req.socket.remoteAddress,
-        req.headers["user-agent"],
-      );
-      const secureFlag =
-        process.env.NODE_ENV === "production" ? "; Secure" : "";
-      res.setHeader(
-        "Set-Cookie",
-        `session_token=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_SEC}${secureFlag}`,
-      );
-      res.writeHead(302, { Location: "/" });
-      res.end();
-      return;
-    }
-
     // GET /auth/verify → Verificar sessão
     if (normalizedPath === "/auth/verify" && req.method === "GET") {
       if (req.user) {
@@ -1150,6 +1074,38 @@ function createDashboardServer(httpPort) {
             return;
           }
 
+          // Verificação de duplicidade (Host + Porta)
+          const allServers = await db.getAllServers();
+
+          // Verificação de duplicidade de Nome
+          const duplicateName = allServers.find(
+            (s) => s.name.toLowerCase() === serverData.name.toLowerCase(),
+          );
+
+          if (duplicateName) {
+            res.writeHead(409, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: `Já existe um servidor com o nome '${serverData.name}'.`,
+              }),
+            );
+            return;
+          }
+
+          const duplicate = allServers.find(
+            (s) => s.host === serverData.host && s.port === serverData.port,
+          );
+
+          if (duplicate) {
+            res.writeHead(409, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: `Já existe um servidor configurado com o host '${serverData.host}' e porta '${serverData.port}'.`,
+              }),
+            );
+            return;
+          }
+
           await db.saveServer(serverData);
           logAudit(req.user, "CREATE_SERVER", {
             id: serverData.id,
@@ -1219,6 +1175,41 @@ function createDashboardServer(httpPort) {
           const index = serversData.findIndex((s) => s.id === serverData.id);
 
           if (index !== -1) {
+            // Verificação de duplicidade de Nome em outros servidores
+            const duplicateName = serversData.find(
+              (s) =>
+                s.id !== serverData.id &&
+                s.name.toLowerCase() === serverData.name.toLowerCase(),
+            );
+
+            if (duplicateName) {
+              res.writeHead(409, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  error: `Já existe outro servidor com o nome '${serverData.name}'.`,
+                }),
+              );
+              return;
+            }
+
+            // Verificação de duplicidade (Host + Porta) em outros servidores
+            const duplicate = serversData.find(
+              (s) =>
+                s.id !== serverData.id &&
+                s.host === serverData.host &&
+                s.port === serverData.port,
+            );
+
+            if (duplicate) {
+              res.writeHead(409, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  error: `Já existe outro servidor configurado com o host '${serverData.host}' e porta '${serverData.port}'.`,
+                }),
+              );
+              return;
+            }
+
             await db.saveServer(serverData);
             logAudit(req.user, "UPDATE_SERVER", {
               id: serverData.id,

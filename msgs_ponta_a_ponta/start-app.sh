@@ -4,6 +4,7 @@
 BASE_DIR=$(pwd)
 SERVER_DIR="$BASE_DIR/server"
 DASHBOARD_DIR="$BASE_DIR/dashboard"
+BACKEND_DASHBOARD_DIR="$BASE_DIR/backend_dashboard"
 
 # Cores para output
 GREEN='\033[0;32m'
@@ -62,10 +63,19 @@ function start_server() {
 function start_dashboard() {
     echo -e "${GREEN}📊 Iniciando Dashboard...${NC}"
     export DATABASE_URL="postgresql://gerente:admin@localhost:5432/dashboard_p2p"
-    cd "$DASHBOARD_DIR" || { echo -e "${RED}Diretório 'dashboard' não encontrado!${NC}"; exit 1; }
+
+    # Configuração do JWT_SECRET persistente para manter sessões ativas
+    JWT_FILE="$BACKEND_DASHBOARD_DIR/.jwt_secret"
+    if [ ! -f "$JWT_FILE" ]; then
+        mkdir -p "$(dirname "$JWT_FILE")"
+        openssl rand -hex 32 > "$JWT_FILE"
+    fi
+    export JWT_SECRET=$(cat "$JWT_FILE")
+
+    cd "$BACKEND_DASHBOARD_DIR" || { echo -e "${RED}Diretório 'backend_dashboard' não encontrado!${NC}"; exit 1; }
     
     if [ ! -d "node_modules" ]; then
-        echo -e "${YELLOW}📦 Instalando dependências do dashboard...${NC}"
+        echo -e "${YELLOW}📦 Instalando dependências do backend_dashboard...${NC}"
         npm install --silent
     fi
 

@@ -21,11 +21,6 @@ console.log("Dashboard API_BASE:", API_BASE); // Log para debug
 
 function getAuthHeaders() {
   const headers = { "Content-Type": "application/json" };
-  // Dashboard usa apenas Cookies HttpOnly. Não enviar JWT para evitar bypass de verificação de sessão.
-  // const token = localStorage.getItem("auth_token");
-  // if (token) {
-  //   headers["Authorization"] = `Bearer ${token}`;
-  // }
   return headers;
 }
 
@@ -133,13 +128,6 @@ function highlightMatch(text) {
         : escapeHtml(part),
     )
     .join("");
-}
-
-async function hashPasswordFrontend(password) {
-  const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function setupPasswordToggles() {
