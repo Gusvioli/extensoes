@@ -1847,7 +1847,13 @@ async function openSettingsModal() {
       return;
     }
     const data = await response.json();
-    document.getElementById("discovery-url").value = data.discoveryUrl || "";
+    document.getElementById("discovery-url").value =
+      data.remoteRegistryUrl || "";
+
+    // Atualizar label para refletir a nova funcionalidade
+    const label = document.querySelector("label[for='discovery-url']");
+    if (label) label.textContent = "URL de Registro de Servidores (JSON)";
+
     document.getElementById("refresh-interval").value = refreshInterval;
     document.getElementById("settings-modal").classList.add("show");
   } catch (err) {
@@ -1862,7 +1868,7 @@ function closeSettingsModal() {
 
 async function saveSettings(e) {
   e.preventDefault();
-  const discoveryUrl = document.getElementById("discovery-url").value;
+  const remoteRegistryUrl = document.getElementById("discovery-url").value;
   const newInterval = parseInt(
     document.getElementById("refresh-interval").value,
   );
@@ -1878,7 +1884,7 @@ async function saveSettings(e) {
       method: "POST",
       credentials: "include",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ discoveryUrl }),
+      body: JSON.stringify({ remoteRegistryUrl }),
     });
 
     if (response.status === 401) {

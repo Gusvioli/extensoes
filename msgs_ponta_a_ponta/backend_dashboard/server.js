@@ -29,7 +29,7 @@ try {
   );
 }
 
-let settingsData = { discoveryUrl: "http://localhost:9080/token" };
+let settingsData = { remoteRegistryUrl: "http://localhost:9080/servers.json" };
 let sessionsData = {}; // Armazenar sessões ativas
 let loginRateLimit = new Map(); // Rate limiting para login
 let resendRateLimit = new Map(); // Rate limiting para reenvio de código
@@ -1478,18 +1478,15 @@ function createDashboardServer(httpPort) {
  * Monitora a porta HTTP do servidor (9080) para atualizar tokens automaticamente via rede
  */
 function startAutoSync() {
-  // ... (código de sincronização mantido, mas omitido para brevidade, pois é idêntico ao original)
-  // A lógica de sincronização não depende de caminhos de arquivo, apenas de rede e DB.
-  // Se necessário, copie a função startAutoSync do arquivo original.
   const sync = async () => {
     try {
-      const discoveryUrl = settingsData.discoveryUrl;
-      if (!discoveryUrl) return;
+      const registryUrl = settingsData.remoteRegistryUrl;
+      if (!registryUrl) return;
 
-      const parsedUrl = url.parse(discoveryUrl);
+      const parsedUrl = url.parse(registryUrl);
       const lib = parsedUrl.protocol === "https:" ? https : http;
 
-      const req = lib.get(discoveryUrl, (res) => {
+      const req = lib.get(registryUrl, (res) => {
         if (res.statusCode !== 200) {
           res.resume();
           return;
@@ -1498,56 +1495,80 @@ function startAutoSync() {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", async () => {
           try {
-            const info = JSON.parse(data);
-            if (info && info.token) {
-              const servers = await db.getAllServers();
-              let target = null;
+            const json = JSON.parse(data);
+            // Suporta array direto ou objeto com propriedade 'servers' ou objeto único
+            const remoteList = Array.isArray(json)
+              ? json
+              : Array.isArray(json.servers)
+                ? json.servers
+                : [json];
 
-              // 1. Pela porta informada no JSON
-              if (info.port) {
-                target = servers.find(
-                  (s) =>
-                    s.port === info.port &&
-                    (s.host === "localhost" ||
-                      s.host === "127.0.0.1" ||
-                      s.host === "0.0.0.0"),
-                );
-              }
+            const localServers = await db.getAllServers();
 
-              // 2. Fallback: Se discovery for localhost
-              if (
-                !target &&
-                (parsedUrl.hostname === "localhost" ||
-                  parsedUrl.hostname === "127.0.0.1")
-              ) {
-                target = servers.find(
-                  (s) => s.host === "localhost" || s.host === "127.0.0.1",
-                );
-              }
+            for (const remote of remoteList) {
+              // Validação mínima
+              if (!remote.host || !remote.port) continue;
+
+              // Tenta encontrar servidor existente por ID ou Host+Port
+              let target = localServers.find(
+                (s) =>
+                  (remote.id && s.id === remote.id) ||
+                  (s.host === remote.host && s.port === remote.port),
+              );
 
               if (target) {
+                // Atualizar existente
                 let changed = false;
-                if (target.token !== info.token) {
-                  target.token = info.token;
+                if (remote.token && target.token !== remote.token) {
+                  target.token = remote.token;
                   changed = true;
                 }
-                if (
-                  info.requiresAuth !== undefined &&
-                  target.requiresAuth !== info.requiresAuth
-                ) {
-                  target.requiresAuth = info.requiresAuth;
+                // Atualizar outros campos se necessário
+                if (remote.name && target.name !== remote.name) {
+                  target.name = remote.name;
+                  changed = true;
+                }
+                if (remote.protocol && target.protocol !== remote.protocol) {
+                  target.protocol = remote.protocol;
                   changed = true;
                 }
 
                 if (changed) {
                   await db.saveServer(target);
                   console.log(
-                    `[AUTO-SYNC] Servidor '${target.name}' atualizado via Discovery URL.`,
+                    `[AUTO-SYNC] Servidor '${target.name}' atualizado via Registro Remoto.`,
                   );
                 }
+              } else {
+                // Criar novo servidor
+                const newServer = {
+                  id:
+                    remote.id ||
+                    `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                  name: remote.name || `Servidor ${remote.host}:${remote.port}`,
+                  host: remote.host,
+                  port: remote.port,
+                  protocol: remote.protocol || "ws",
+                  token: remote.token || "",
+                  status: "active",
+                  region: remote.region || "Remoto",
+                  maxClients: remote.maxClients || 10000,
+                  createdAt: new Date().toISOString(),
+                  requiresAuth: true,
+                  manualToken: false,
+                };
+                await db.saveServer(newServer);
+                console.log(
+                  `[AUTO-SYNC] Novo servidor '${newServer.name}' adicionado via Registro Remoto.`,
+                );
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error(
+              "Erro ao processar JSON do registro remoto:",
+              e.message,
+            );
+          }
         });
       });
 
@@ -1583,15 +1604,16 @@ function send403(res) {
 // ============ MONITORAMENTO DE SERVIDORES ============
 function checkServerHealth(server) {
   return new Promise((resolve) => {
-    if (!server.host || !server.port) return resolve(false);
+    if (!server.host) return resolve(false);
 
     const isSecure = server.protocol === "wss";
     const transport = isSecure ? https : http;
+    const port = server.port || (isSecure ? 443 : 80);
 
     const req = transport.get(
       {
         hostname: server.host,
-        port: server.port,
+        port: port,
         path: "/status",
         timeout: 3000, // Aumentado para 3s para evitar falsos negativos
         rejectUnauthorized: false,
@@ -1634,33 +1656,39 @@ function checkServerHealth(server) {
 async function updateServersStatusFile() {
   try {
     const servers = await db.getAllServers();
+
+    // 1. Verificação em Paralelo (Muito mais rápido)
+    // Dispara todas as requisições de uma vez em vez de esperar uma por uma
+    const healthChecks = servers.map(async (server) => {
+      // Ignora servidores sem configuração ou em standby manual
+      if (!server.host || server.status === "standby") {
+        return { server, isOnline: null }; // null = manter estado atual
+      }
+
+      try {
+        const isOnline = await checkServerHealth(server);
+        return { server, isOnline };
+      } catch (e) {
+        return { server, isOnline: false };
+      }
+    });
+
+    // Aguarda todas as verificações terminarem (max 3s devido ao timeout)
+    const results = await Promise.all(healthChecks);
     const updatedServers = [];
 
-    for (const server of servers) {
-      try {
-        // Verifica conectividade se tiver host/porta
-        if (server.host && server.port) {
-          const isOnline = await checkServerHealth(server);
+    // 2. Atualização Sequencial (Seguro para o Banco de Dados)
+    for (const { server, isOnline } of results) {
+      if (isOnline !== null) {
+        const newStatus = isOnline ? "active" : "inactive";
 
-          // Atualiza status (exceto se estiver em standby manual)
-          if (server.status !== "standby") {
-            const newStatus = isOnline ? "active" : "inactive";
-
-            // Persistir mudança de status no banco de dados
-            if (server.status !== newStatus) {
-              server.status = newStatus;
-              await db.saveServer(server);
-              console.log(
-                `[MONITOR] Status do servidor '${server.name}' alterado para: ${newStatus.toUpperCase()}`,
-              );
-            }
-          }
+        if (server.status !== newStatus) {
+          server.status = newStatus;
+          await db.saveServer(server);
+          console.log(
+            `[MONITOR] Status do servidor '${server.name}' alterado para: ${newStatus.toUpperCase()}`,
+          );
         }
-      } catch (err) {
-        console.error(
-          `[MONITOR] Erro ao verificar servidor ${server.name}:`,
-          err.message,
-        );
       }
       updatedServers.push(server);
     }
@@ -1702,7 +1730,6 @@ async function initDashboard(dashboardPort) {
   }
 
   // Iniciar sincronização automática via HTTP
-  // startAutoSync(); // Descomente se copiar a função startAutoSync
   startAutoSync();
 
   const dashboardServer = createDashboardServer(dashboardPort);

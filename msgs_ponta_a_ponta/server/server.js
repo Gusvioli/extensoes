@@ -138,6 +138,18 @@ const requestHandler = (req, res) => {
     return;
   }
 
+  if (req.url === "/token") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        token: config.authToken,
+        requiresAuth: config.requireAuth,
+        port: config.port,
+      }),
+    );
+    return;
+  }
+
   // Rotas removidas conforme solicitado.
   res.writeHead(404);
   res.end(JSON.stringify({ error: "Not found" }));

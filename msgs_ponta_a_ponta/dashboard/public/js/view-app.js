@@ -870,7 +870,7 @@ function loadServers() {
   // Solicita todos os servidores públicos para calcular contadores corretamente
   const cleanApiBase = API_BASE.replace(/\/$/, "");
   // Usa a API dinâmica em vez do arquivo estático (que pode não ser servido pelo backend)
-  const apiUrl = `${cleanApiBase}/api/public-servers`;
+  const apiUrl = `${cleanApiBase}/api/public-servers?status=all`;
 
   return fetch(apiUrl, { credentials: "include" })
     .then((res) => {
@@ -1004,6 +1004,7 @@ function renderServers() {
                             <td style="padding: 12px 15px;">${highlightMatch(server.region || "N/A")}</td>
                             <td style="padding: 12px 15px; text-align: right;">
                                 <button class="btn-icon" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">🔗</button>
+                                <button class="btn-icon" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">⚡</button>
                                 <button class="btn-icon" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">📍</button>
                             </td>
                         </tr>
@@ -1096,13 +1097,9 @@ function renderServers() {
         )}')">
           🔗 Conectar
         </button>
-        ${
-          currentUser
-            ? `<button class="btn-edit" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência">
-              ⚡ Ping
-            </button>`
-            : ""
-        }
+        <button class="btn-edit" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência">
+          ⚡ Ping
+        </button>
         <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(
           server.host,
         )}:${server.port}', this)" title="Copiar host:porta">
