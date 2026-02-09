@@ -1452,6 +1452,18 @@ function createDashboardServer(httpPort) {
       return;
     }
 
+    // SERVIR ARQUIVOS ESTÁTICOS (Frontend)
+    if (
+      req.method === "GET" &&
+      !normalizedPath.startsWith("/api/") &&
+      !normalizedPath.startsWith("/auth/")
+    ) {
+      const publicDir = path.join(__dirname, "../dashboard/public");
+      let filePath = normalizedPath === "/" ? "/index.html" : normalizedPath;
+      const fullPath = path.join(publicDir, filePath);
+
+    }
+
     // ===== 404 =====
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(

@@ -1,7 +1,4 @@
 {
-  "status": "online",
-  "port": 8081,
-  "clientsCount": 0,
-  "uptime": 810,
-  "lastUpdated": "2026-02-08T21:30:52.133Z"
+  "status": "offline",
+  "lastUpdated": "2026-02-09T00:05:10.445Z"
 }
