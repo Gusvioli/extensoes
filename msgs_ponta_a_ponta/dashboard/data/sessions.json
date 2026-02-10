@@ -136,5 +136,17 @@
     "expiresAt": 1773189391982,
     "ip": "127.0.0.1",
     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+  },
+  "55f4fbbbb4fae38b5016dab59c2ab94ec5a5e2396ab00f18417791e028844e92": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773281844665,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.6 Safari/537.36"
+  },
+  "81930fc261648676b64f40ff84ac073a330c9674dd83571c0b2ea675c8865989": {
+    "username": "guvieira",
+    "expiresAt": 1773282433042,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
   }
 }

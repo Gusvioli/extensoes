@@ -423,6 +423,10 @@ async function handleLoginSubmit(e) {
 
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
+  // Resetar o grid de servidores imediatamente ao carregar a página
+  const serversGrid = document.getElementById("servers-grid");
+  if (serversGrid) serversGrid.innerHTML = "";
+
   injectLoader();
   injectLoginModal();
   injectForgotPasswordModal();
@@ -1871,3 +1875,5 @@ function setupPasswordStrengthMeters() {
     });
   });
 }
+
+viewSearch.reset(); // Limpa o campo de pesquisa

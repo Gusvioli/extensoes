@@ -29,7 +29,7 @@ try {
   );
 }
 
-let settingsData = { remoteRegistryUrl: "http://localhost:9080/servers.json" };
+let settingsData = { remoteRegistryUrl: "" };
 let sessionsData = {}; // Armazenar sessões ativas
 let loginRateLimit = new Map(); // Rate limiting para login
 let resendRateLimit = new Map(); // Rate limiting para reenvio de código
