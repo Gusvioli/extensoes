@@ -301,11 +301,26 @@ function injectForgotPasswordModal() {
     <div id="forgot-password-modal" class="modal">
       <div class="modal-content" style="max-width: 400px; text-align: center;">
         <h2 style="margin-bottom: 15px;">Redefinir Senha 🔐</h2>
+      <div class="modal-content" style="max-width: 400px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px 20px; text-align: center;">
+          <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">Recuperação de Conta</h2>
+          <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 0.9rem;">Redefina sua senha com segurança</p>
+        </div>
         
         <div id="forgot-step-1">
             <p style="margin-bottom: 20px; color: #666;">Digite seu e-mail para receber o código.</p>
             <div class="form-group">
                 <input type="email" id="forgot-email" class="form-control" placeholder="seu@email.com">
+        <div style="padding: 30px 25px; background: white;">
+            <div id="forgot-step-1">
+                <p style="margin-bottom: 20px; color: #4a5568; font-size: 0.95rem; line-height: 1.5; text-align: center;">
+                  Digite seu e-mail cadastrado para receber o código de verificação.
+                </p>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">E-mail</label>
+                    <input type="email" id="forgot-email" class="form-control" placeholder="seu@email.com" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; transition: border-color 0.2s;">
+                </div>
+                <button id="forgot-send-btn" class="btn-primary" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; transition: transform 0.1s;">Enviar Código</button>
             </div>
             <button id="forgot-send-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Enviar Código</button>
         </div>
@@ -316,12 +331,30 @@ function injectForgotPasswordModal() {
             <div class="form-group">
                 <input type="text" id="forgot-code" class="form-control" placeholder="Código (6 dígitos)" maxlength="6" style="text-align: center; letter-spacing: 3px; margin-bottom: 10px;">
             </div>
+            <div id="forgot-step-2" style="display: none;">
+                <div style="background-color: #ebf8ff; color: #2b6cb0; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; text-align: center; border: 1px solid #bee3f8;">
+                    ✉️ Código enviado! Verifique seu e-mail.
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Código de Verificação</label>
+                    <input type="text" id="forgot-code" class="form-control" placeholder="000000" maxlength="6" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; letter-spacing: 5px; font-size: 1.2rem; font-weight: 700; color: #4a5568;">
+                </div>
 
             <div class="form-group">
                 <input type="password" id="forgot-new-pass" class="form-control" placeholder="Nova Senha">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Nova Senha</label>
+                    <input type="password" id="forgot-new-pass" class="form-control" placeholder="••••••••" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                </div>
+
+                <button id="forgot-reset-btn" class="btn-primary" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer;">Redefinir Senha</button>
             </div>
 
             <button id="forgot-reset-btn" class="btn-primary" style="width: 100%; margin-top: 10px;">Redefinir Senha</button>
+            <div id="forgot-error" class="alert-box error" style="display: none; margin-top: 15px; color: #c53030; background-color: #fff5f5; padding: 10px; border-radius: 6px; font-size: 0.9rem; text-align: center; border: 1px solid #feb2b2;"></div>
+            
+            <button id="forgot-cancel-btn" class="btn-secondary" style="width: 100%; margin-top: 15px; background: transparent; border: none; color: #718096; cursor: pointer; font-size: 0.9rem; font-weight: 500;">Cancelar</button>
         </div>
 
         <div id="forgot-error" class="alert-box error" style="display: none; margin-top: 10px;"></div>
