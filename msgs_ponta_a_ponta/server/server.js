@@ -9,7 +9,7 @@ const envPath = path.join(__dirname, ".env");
 try {
   if (fs.existsSync(envPath)) {
     require("dotenv").config({ path: envPath });
-    console.log("✅ Variáveis de ambiente carregadas de .env");
+    console.log(`✅ Variáveis de ambiente carregadas de: ${envPath}`);
   }
 } catch (e) {
   console.warn(

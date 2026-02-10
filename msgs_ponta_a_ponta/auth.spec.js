@@ -4,47 +4,68 @@ const fs = require("fs");
 
 const authFile = path.join(__dirname, "../playwright/.auth/admin.json");
 
-test("autenticar como admin e salvar estado", async ({ page }) => {
+test("autenticar como admin via API e salvar estado", async ({ request }) => {
   // Garante que o diretório de auth existe
   const authDir = path.dirname(authFile);
   if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
   }
 
-  // Acessa a raiz (deve redirecionar para login se não autenticado)
-  await page.goto("/");
+  // Realiza login via API (mais rápido e robusto)
+  const response = await request.post("/auth/login", {
+    data: {
+      username: "adminGusvioli",
+      password: "@Gus1593572846000",
+    },
+  });
 
-  // Verifica se estamos na tela de login procurando por um campo de senha
-  const passwordInput = page.locator('input[type="password"]');
+  expect(response.ok()).toBeTruthy();
+  const responseBody = await response.json();
+  expect(responseBody.success).toBeTruthy();
 
-  if (await passwordInput.isVisible()) {
-    console.log("🔐 Realizando login...");
+  // Extrair cookies do cabeçalho Set-Cookie para montar o storageState manualmente
+  const headers = response.headersArray();
+  const cookieHeaders = headers.filter(
+    (h) => h.name.toLowerCase() === "set-cookie",
+  );
+  const cookies = [];
 
-    // Preenche usuário (tenta seletores comuns)
-    const userInput = page
-      .locator(
-        'input[name="username"], input[name="email"], input[type="text"]',
-      )
-      .first();
-    await userInput.fill("adminGusvioli");
+  cookieHeaders.forEach((header) => {
+    const [nameVal] = header.value.split(";");
+    const [name, value] = nameVal.split("=");
+    if (name && value) {
+      cookies.push({
+        name: name.trim(),
+        value: value.trim(),
+        domain: "127.0.0.1", // Deve corresponder ao baseURL do playwright.config
+        path: "/",
+        httpOnly: true,
+        secure: false,
+        sameSite: "Lax",
+        expires: Date.now() / 1000 + 86400 * 30,
+      });
+    }
+  });
 
-    // Preenche senha
-    await passwordInput.fill("@Gus1593572846000");
+  // Salva o estado (cookies) para reuso nos outros testes
+  const state = {
+    cookies,
+    origins: [],
+  };
 
-    // Clica no botão de entrar
-    const submitBtn = page
-      .locator(
-        'button[type="submit"], button:has-text("Entrar"), button:has-text("Login")',
-      )
-      .first();
-    await submitBtn.click();
-
-    // Aguarda elemento que confirme o login (ex: título Dashboard ou botão de Sair)
-    await expect(page.getByText(/Dashboard|Sair|Logout/i).first()).toBeVisible({
-      timeout: 15000,
+  // Adiciona localStorage se necessário (opcional, baseado na resposta do login)
+  if (responseBody.user) {
+    state.origins.push({
+      origin: "http://127.0.0.1:3000",
+      localStorage: [
+        {
+          name: "user_info",
+          value: JSON.stringify(responseBody.user),
+        },
+      ],
     });
   }
 
-  // Salva o estado (cookies/localStorage) para reuso nos outros testes
-  await page.context().storageState({ path: authFile });
+  fs.writeFileSync(authFile, JSON.stringify(state, null, 2));
+  console.log("✅ Estado de autenticação salvo via API.");
 });

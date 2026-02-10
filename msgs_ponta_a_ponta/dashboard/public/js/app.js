@@ -772,7 +772,13 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.value = ""; // Limpar ao carregar a página
     searchTerm = "";
     searchInput.setAttribute("autocomplete", "off");
+    // Hack para evitar que navegadores preencham automaticamente com o nome de usuário
+    searchInput.setAttribute("readonly", "true");
     searchInput.setAttribute("name", "dashboard_search_query");
+    searchInput.addEventListener("focus", () => {
+      searchInput.removeAttribute("readonly");
+    });
+
     searchInput.addEventListener("input", (e) => {
       searchTerm = e.target.value.toLowerCase();
       if (clearBtn) clearBtn.style.display = searchTerm ? "block" : "none";

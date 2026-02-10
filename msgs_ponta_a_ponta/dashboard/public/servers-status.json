@@ -1,25 +1,6 @@
 {
   "servers": [
     {
-      "id": "server-1769906444387",
-      "name": "Servidor Local (Auto)",
-      "description": "Detectado automaticamente via API HTTP",
-      "host": "localhost",
-      "port": 8080,
-      "protocol": "ws",
-      "token": "7ab3841260d04ef521e4dbe1ddc5b7e3",
-      "status": "inactive",
-      "region": "Local",
-      "maxClients": 2,
-      "createdAt": "2026-02-01T00:40:44.387Z",
-      "notes": "Sincronizado automaticamente via rede",
-      "requiresAuth": true,
-      "manualToken": false,
-      "clientsCount": 0,
-      "lastSeen": null,
-      "urltoken": ""
-    },
-    {
       "id": "server-1769736401886",
       "name": "servers-w3fc.onrender.com",
       "description": "Servidor hospedado no Render",
@@ -37,7 +18,26 @@
       "clientsCount": 0,
       "lastSeen": null,
       "urltoken": ""
+    },
+    {
+      "id": "server-1769906444387",
+      "name": "Servidor Local (Auto)",
+      "description": "Detectado automaticamente via API HTTP",
+      "host": "localhost",
+      "port": 8080,
+      "protocol": "ws",
+      "token": "7ab3841260d04ef521e4dbe1ddc5b7e3",
+      "status": "active",
+      "region": "Local",
+      "maxClients": 2,
+      "createdAt": "2026-02-01T00:40:44.387Z",
+      "notes": "Sincronizado automaticamente via rede",
+      "requiresAuth": true,
+      "manualToken": false,
+      "clientsCount": 0,
+      "lastSeen": null,
+      "urltoken": ""
     }
   ],
-  "lastUpdated": "2026-02-10T05:32:49.113Z"
+  "lastUpdated": "2026-02-10T23:43:57.677Z"
 }

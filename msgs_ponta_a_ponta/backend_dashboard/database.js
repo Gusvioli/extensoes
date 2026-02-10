@@ -4,6 +4,8 @@ const { Pool } = require("pg");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const config = require("./config");
+const logger = require("./logger");
 
 // Funções de Criptografia
 function hashPassword(password) {
@@ -21,18 +23,14 @@ function verifyPassword(password, storedPassword) {
 }
 
 // Configuração do banco de dados
-// Você deve definir a variável de ambiente DATABASE_URL
-// Exemplo: postgres://usuario:senha@localhost:5432/dashboard_db
-const connectionString =
-  process.env.DATABASE_URL ||
-  "postgresql://gerente:admin@localhost:5432/dashboard_p2p";
+const connectionString = config.DATABASE_URL;
 
 const pool = new Pool({
   connectionString,
 });
 
 // Adjusted path: points to ../dashboard/data
-const dataDir = path.join(__dirname, "../dashboard/data");
+const dataDir = config.DATA_DIR;
 const jsonConfigPath = path.join(dataDir, "servers-config.json");
 const jsonUsersPath = path.join(dataDir, "users.json");
 
@@ -51,15 +49,15 @@ async function init() {
       isConnected = true;
       break;
     } catch (err) {
-      console.log(
+      logger.info(
         `⏳ Aguardando banco de dados PostgreSQL... (${retries} tentativas restantes)`,
       );
       retries--;
       if (retries === 0) {
-        console.error(
+        logger.error(
           "\n❌ AVISO: Não foi possível conectar ao PostgreSQL em 127.0.0.1:5432.",
         );
-        console.warn(
+        logger.warn(
           "⚠️  Ativando modo de fallback: Usando arquivo JSON local (servers-config.json) para persistência.\n",
         );
         isConnected = false;
@@ -135,7 +133,7 @@ async function init() {
     const count = parseInt(res.rows[0].count);
 
     if (count === 0 && fs.existsSync(jsonConfigPath)) {
-      console.log(
+      logger.info(
         "📂 Migrando dados de servers-config.json para PostgreSQL...",
       );
       try {
@@ -153,12 +151,12 @@ async function init() {
             await saveSetting(key, value);
           }
         }
-        console.log("✅ Migração concluída com sucesso.");
+        logger.info("✅ Migração concluída com sucesso.");
       } catch (e) {
-        console.error("❌ Erro na migração:", e);
+        logger.error("❌ Erro na migração:", e);
       }
     } else {
-      console.log("✅ Banco de dados PostgreSQL conectado e inicializado.");
+      logger.info("✅ Banco de dados PostgreSQL conectado e inicializado.");
     }
 
     // Migração de Usuários
@@ -167,7 +165,7 @@ async function init() {
 
     if (countUsers === 0) {
       if (fs.existsSync(jsonUsersPath)) {
-        console.log("📂 Migrando dados de users.json para PostgreSQL...");
+        logger.info("📂 Migrando dados de users.json para PostgreSQL...");
         try {
           const content = fs.readFileSync(jsonUsersPath, "utf-8");
           const config = JSON.parse(content);
@@ -188,12 +186,12 @@ async function init() {
               );
             }
           }
-          console.log("✅ Migração de usuários concluída com sucesso.");
+          logger.info("✅ Migração de usuários concluída com sucesso.");
         } catch (e) {
-          console.error("❌ Erro na migração de usuários:", e);
+          logger.error("❌ Erro na migração de usuários:", e);
         }
       } else {
-        console.log("👤 Criando usuários padrão (admin/gerente)...");
+        logger.info("👤 Criando usuários padrão (admin/gerente)...");
         const now = new Date().toISOString();
         try {
           // Admin (Acesso Total)
@@ -235,18 +233,18 @@ async function init() {
               "usuario@local.host",
             ],
           );
-          console.log("✅ Usuários padrão criados.");
+          logger.info("✅ Usuários padrão criados.");
         } catch (e) {
-          console.error("❌ Erro ao criar usuários padrão:", e);
+          logger.error("❌ Erro ao criar usuários padrão:", e);
         }
       }
     }
   } catch (err) {
-    console.error("❌ Erro ao conectar ou inicializar PostgreSQL:", err);
-    console.error(
+    logger.error("❌ Erro ao conectar ou inicializar PostgreSQL:", err);
+    logger.error(
       "Dica: Verifique se a variável de ambiente DATABASE_URL está correta.",
     );
-    console.error(
+    logger.error(
       "Exemplo: DATABASE_URL=postgresql://user:pass@localhost:5432/db_name",
     );
   }
@@ -259,7 +257,7 @@ function loadJsonConfig() {
       return JSON.parse(fs.readFileSync(jsonConfigPath, "utf-8"));
     }
   } catch (e) {
-    console.error("Erro ao ler JSON:", e);
+    logger.error("Erro ao ler JSON:", e);
   }
   return { servers: [], settings: {} };
 }
@@ -268,7 +266,7 @@ function saveJsonConfig(data) {
   try {
     fs.writeFileSync(jsonConfigPath, JSON.stringify(data, null, 2));
   } catch (e) {
-    console.error("Erro ao salvar JSON:", e);
+    logger.error("Erro ao salvar JSON:", e);
   }
 }
 

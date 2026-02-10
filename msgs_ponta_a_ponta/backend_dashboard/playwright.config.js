@@ -10,13 +10,13 @@ module.exports = defineConfig({
   reporter: [["list"], ["html"]],
   use: {
     /* URL base para page.goto e request */
-    baseURL: "http://localhost:3000",
+    baseURL: "http://127.0.0.1:3000",
     trace: "on-first-retry",
   },
   /* Iniciar o servidor de desenvolvimento antes dos testes */
   webServer: {
     command: "npm start",
-    url: "http://localhost:3000/api/hello",
+    url: "http://127.0.0.1:3000/api/hello",
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
@@ -24,9 +24,6 @@ module.exports = defineConfig({
     {
       name: "setup",
       testMatch: /auth\.spec\.js/,
-      use: {
-        ...devices["Desktop Chrome"],
-      },
     },
     {
       name: "e2e",

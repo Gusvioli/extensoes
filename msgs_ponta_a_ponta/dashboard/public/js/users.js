@@ -64,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadUsers();
       }
     });
+  injectEmailInput();
   setupPasswordToggles();
   injectToastStyles();
   setupPasswordStrengthMeters();
@@ -77,6 +78,42 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function injectEmailInput() {
+  const loginInput = document.getElementById("userLogin");
+  if (
+    loginInput &&
+    loginInput.parentElement &&
+    !document.getElementById("userEmail")
+  ) {
+    const wrapper = document.createElement("div");
+    wrapper.className = loginInput.parentElement.className || "form-group";
+    wrapper.style.marginBottom = "15px";
+
+    const label = document.createElement("label");
+    label.innerText = "E-mail";
+    label.htmlFor = "userEmail";
+    label.style.display = "block";
+    label.style.marginBottom = "5px";
+
+    const input = document.createElement("input");
+    input.type = "email";
+    input.id = "userEmail";
+    input.className = "form-control";
+    input.style.width = "100%";
+    input.style.padding = "10px";
+    input.style.border = "1px solid #ddd";
+    input.style.borderRadius = "4px";
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(input);
+
+    loginInput.parentElement.parentNode.insertBefore(
+      wrapper,
+      loginInput.parentElement.nextSibling,
+    );
+  }
 }
 
 function setupPasswordToggles() {
@@ -232,7 +269,10 @@ async function loadUsers() {
         <td>
           <div class="user-info">
             <img src="https://i.pravatar.cc/40?u=${escapeHtml(user.username)}" alt="" class="avatar" />
-            <span>${escapeHtml(user.name)}</span>
+            <div style="display: flex; flex-direction: column;">
+              <span>${escapeHtml(user.name)}</span>
+              <span style="font-size: 0.8em; color: #666;">${escapeHtml(user.email || "")}</span>
+            </div>
           </div>
         </td>
         <td>${escapeHtml(user.username)}</td>
@@ -243,6 +283,7 @@ async function loadUsers() {
                   aria-label="Editar usuário ${escapeHtml(user.name)}"
                   data-user-id="${user.id}"
                   data-user-name="${escapeHtml(user.name)}"
+                  data-user-email="${escapeHtml(user.email || "")}"
                   data-user-username="${escapeHtml(user.username)}"
                   data-user-role="${user.role}">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -277,8 +318,9 @@ async function loadUsers() {
 function handleTableActions(event) {
   const editBtn = event.target.closest(".edit-user-btn");
   if (editBtn) {
-    const { userId, userName, userUsername, userRole } = editBtn.dataset;
-    editUser(userId, userName, userUsername, userRole);
+    const { userId, userName, userUsername, userRole, userEmail } =
+      editBtn.dataset;
+    editUser(userId, userName, userUsername, userRole, userEmail);
     return;
   }
 
@@ -295,6 +337,8 @@ function handleTableActions(event) {
 function openModal() {
   document.getElementById("modalTitle").innerText = "Novo Usuário";
   document.getElementById("userId").value = "";
+  if (document.getElementById("userEmail"))
+    document.getElementById("userEmail").value = "";
   form.reset();
   modal.classList.add("show");
 }
@@ -303,10 +347,13 @@ function closeModal() {
   modal.classList.remove("show");
 }
 
-function editUser(id, name, username, role) {
+function editUser(id, name, username, role, email) {
   document.getElementById("modalTitle").innerText = "Editar Usuário";
   document.getElementById("userId").value = id;
   document.getElementById("userName").value = name;
+  if (document.getElementById("userEmail")) {
+    document.getElementById("userEmail").value = email || "";
+  }
   document.getElementById("userLogin").value = username;
   document.getElementById("userRole").value = role;
   document.getElementById("userPass").value = ""; // Senha não é preenchida por segurança
@@ -376,6 +423,9 @@ form.addEventListener("submit", async (e) => {
   const id = document.getElementById("userId").value;
   const name = document.getElementById("userName").value;
   const username = document.getElementById("userLogin").value;
+  const email = document.getElementById("userEmail")
+    ? document.getElementById("userEmail").value
+    : "";
   const password = document.getElementById("userPass").value;
   const passwordConfirm = document.getElementById("userPassConfirm")
     ? document.getElementById("userPassConfirm").value
@@ -397,7 +447,7 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
-  const payload = { name, username, role };
+  const payload = { name, username, role, email };
   if (id) payload.id = id;
   if (password) payload.password = password;
 
