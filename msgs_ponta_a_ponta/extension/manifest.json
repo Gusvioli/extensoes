@@ -2,25 +2,19 @@
   "manifest_version": 3,
   "name": "P2P Secure Chat",
   "version": "1.0.0",
-  "description": "Comunicação P2P com criptografia de ponta a ponta (E2EE).",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "ws://*/*",
-    "wss://*/*"
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
+  "description": "Cliente seguro para comunicação P2P via WebSocket",
+  "permissions": ["storage", "activeTab", "sidePanel", "notifications"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://localhost:* ws://localhost:* wss://localhost:* ws://* wss://*;"
   },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "P2P Secure Chat"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   }
 }

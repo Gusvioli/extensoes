@@ -24,7 +24,7 @@
       "name": "Servidor Local (Auto)",
       "description": "Detectado automaticamente via API HTTP",
       "host": "localhost",
-      "port": 8080,
+      "port": 8081,
       "protocol": "ws",
       "token": "7ab3841260d04ef521e4dbe1ddc5b7e3",
       "status": "active",
@@ -39,5 +39,5 @@
       "urltoken": ""
     }
   ],
-  "lastUpdated": "2026-02-10T23:44:27.470Z"
+  "lastUpdated": "2026-02-11T12:26:16.757Z"
 }

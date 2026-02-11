@@ -253,7 +253,13 @@ async function loadUsers() {
 
     users.forEach((user) => {
       const tr = document.createElement("tr");
-      const date = new Date(user.createdAt).toLocaleDateString("pt-BR");
+
+      const dateObj = new Date(user.createdAt);
+      const isValidDate =
+        user.createdAt &&
+        !isNaN(dateObj.getTime()) &&
+        dateObj.getFullYear() > 2000;
+      const date = isValidDate ? dateObj.toLocaleDateString("pt-BR") : "-";
 
       let badgeClass = "badge-user";
       let roleLabel = "Usuário";

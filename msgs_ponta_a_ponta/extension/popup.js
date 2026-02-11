@@ -1,503 +1,679 @@
-// extension/popup.js
-
 document.addEventListener("DOMContentLoaded", () => {
-  // const SIGNALING_SERVER_URL = 'stun.l.google.com:19302';
+  // Configuração da API do Dashboard
+  const API_BASE = "http://localhost:3000";
 
-  // --- Elementos da UI ---
-  const myIdDisplaySpan = document.querySelector("#my-id-display span");
-  const peerStatus = document.getElementById("peer-status");
-  const setupView = document.getElementById("setup-view");
-  const chatView = document.getElementById("chat-view");
-  const peerIdInput = document.getElementById("peer-id-input");
-  const connectBtn = document.getElementById("connect-btn");
-  const messagesDiv = document.getElementById("messages");
-  const messageInput = document.getElementById("message-input");
-  const sendBtn = document.getElementById("send-btn");
-  const disconnectBtn = document.getElementById("disconnect-btn");
-  const imageInput = document.getElementById("image-input");
-  const contactNicknameInput = document.getElementById("contact-nickname");
-  const saveContactBtn = document.getElementById("save-contact-btn");
-  const contactsList = document.getElementById("contacts-list");
-  const contactIdToSaveInput = document.getElementById("contact-id-to-save");
-  const pinBtn = document.getElementById("pin-btn");
-  const conversationInfo = document.getElementById("conversation-info");
+  // Elementos da UI
+  const ui = {
+    views: {
+      login: document.getElementById("view-login"),
+      servers: document.getElementById("view-servers"),
+      chat: document.getElementById("view-chat"),
+    },
+    login: {
+      user: document.getElementById("login-username"),
+      pass: document.getElementById("login-password"),
+      btn: document.getElementById("btn-login"),
+      error: document.getElementById("login-error"),
+    },
+    servers: {
+      list: document.getElementById("servers-list-container"),
+      refresh: document.getElementById("btn-refresh-servers"),
+      logout: document.getElementById("btn-logout"),
+      welcome: document.getElementById("user-welcome"),
+    },
+    chat: {
+      disconnect: document.getElementById("btn-disconnect"),
+      myId: document.getElementById("my-id-display"),
+      targetId: document.getElementById("target-id"),
+      msgList: document.getElementById("messages-list"),
+      msgInput: document.getElementById("message-input"),
+      btnSend: document.getElementById("btn-send"),
+      btnGenKeys: document.getElementById("btn-gen-keys"),
+      btnExchKeys: document.getElementById("btn-exchange-keys"),
+      cryptoStatus: document.getElementById("crypto-status"),
+      typingIndicator: document.getElementById("typing-indicator"),
+    },
+    status: document.getElementById("connection-status"),
+  };
 
-  const signalingUrlInput = document.getElementById("signaling-url-input");
+  // Estado da Aplicação
+  let state = {
+    user: null,
+    servers: [],
+    currentServer: null,
+    myId: null,
+    lastLoadedKey: null,
+    typingTimeout: null,
+    isTyping: false,
+    typingUsers: {}, // Para gerenciar quem está digitando
+    keys: {
+      public: null,
+      private: null,
+      shared: null, // Chave compartilhada com o destinatário atual
+    },
+  };
 
-  // --- Estado da Aplicação ---
-  let myId = null;
-  let peerId = null;
-  let signalingSocket = null;
-  let keyPair = null;
-  let sharedSecretKey = null;
-  let rtcHandler = null;
+  let ws = null;
 
-  // =================================================================================
-  // 1. INICIALIZAÇÃO E SINALIZAÇÃO (WEBSOCKET)
-  // =================================================================================
-
-  function connectToSignaling() {
-    let baseUrl = signalingUrlInput.value.trim();
-
-    // Se estiver vazio ou for o endereço STUN (que não é WebSocket), usa localhost
-    if (!baseUrl || baseUrl.includes("stun.l.google.com")) {
-      baseUrl = "ws://localhost:8080";
-      signalingUrlInput.value = baseUrl;
+  // --- HELPERS DE CRIPTOGRAFIA ---
+  function arrayBufferToBase64(buffer) {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
     }
+    return window.btoa(binary);
+  }
 
-    if (!baseUrl.startsWith("ws://") && !baseUrl.startsWith("wss://")) {
-      if (baseUrl.startsWith("localhost") || baseUrl.startsWith("127.0.0.1")) {
-        baseUrl = `ws://${baseUrl}`;
+  function base64ToArrayBuffer(base64) {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  // --- NAVEGAÇÃO ---
+  function showView(viewName) {
+    Object.values(ui.views).forEach((el) => el.classList.remove("active"));
+    ui.views[viewName].classList.add("active");
+  }
+
+  // --- INICIALIZAÇÃO ---
+  // Verifica se já existe usuário logado no storage
+  chrome.storage.local.get(["user", "lastTarget"], (res) => {
+    if (res.user) {
+      state.user = res.user;
+      ui.servers.welcome.textContent = `Olá, ${state.user.name}`;
+      fetchServers();
+      showView("servers");
+    } else {
+      showView("login");
+    }
+    if (res.lastTarget) ui.chat.targetId.value = res.lastTarget;
+  });
+
+  // --- LOGIN ---
+  ui.login.btn.addEventListener("click", async () => {
+    const username = ui.login.user.value.trim();
+    const password = ui.login.pass.value;
+
+    if (!username || !password) return;
+
+    ui.login.btn.disabled = true;
+    ui.login.btn.textContent = "Entrando...";
+    ui.login.error.style.display = "none";
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        state.user = data.user;
+        // Salva sessão
+        chrome.storage.local.set({ user: state.user });
+        ui.servers.welcome.textContent = `Olá, ${state.user.name}`;
+        fetchServers();
+        showView("servers");
       } else {
-        baseUrl = `wss://${baseUrl}`;
+        throw new Error(data.error || "Falha no login");
       }
-      signalingUrlInput.value = baseUrl;
+    } catch (err) {
+      ui.login.error.textContent = err.message;
+      ui.login.error.style.display = "block";
+    } finally {
+      ui.login.btn.disabled = false;
+      ui.login.btn.textContent = "Entrar";
     }
-    chrome.storage.local.set({ signalingUrl: baseUrl });
+  });
 
-    const url = baseUrl;
-    signalingSocket = new WebSocket(url);
-    signalingSocket.onmessage = handleSignalingMessage;
-    signalingSocket.onopen = () =>
-      console.log("🔗 Conectado ao servidor de sinalização.");
-    signalingSocket.onclose = () => {
-      console.log("🔌 Desconectado do servidor de sinalização.");
-      displaySystemMessage(
-        "Desconectado do servidor. Tentando reconectar...",
-        "warning",
-      );
-      updatePeerStatus("Offline", "offline");
-      setTimeout(connectToSignaling, 3000);
-    };
-    signalingSocket.onerror = () => {
-      console.error("❌ Erro no WebSocket.");
-      displaySystemMessage(
-        "Falha ao conectar ao servidor. Verifique se ele está rodando e a URL está correta.",
-        "warning",
-      );
-    };
-  }
+  ui.servers.logout.addEventListener("click", () => {
+    chrome.storage.local.remove("user");
+    state.user = null;
+    showView("login");
+  });
 
-  function sendSignalingMessage(type, payload) {
-    if (
-      signalingSocket &&
-      signalingSocket.readyState === WebSocket.OPEN &&
-      peerId
-    ) {
-      signalingSocket.send(JSON.stringify({ target: peerId, type, payload }));
+  // --- LISTA DE SERVIDORES ---
+  async function fetchServers() {
+    ui.servers.list.innerHTML =
+      '<div style="text-align:center; padding:10px;">Carregando...</div>';
+
+    try {
+      // Busca servidores públicos (o backend já filtra os ativos)
+      const response = await fetch(
+        `${API_BASE}/api/public-servers?status=active`,
+        { credentials: "include" },
+      );
+      const data = await response.json();
+
+      renderServers(data.servers || []);
+    } catch (err) {
+      ui.servers.list.innerHTML = `<div class="error-msg" style="display:block">Erro ao buscar servidores: ${err.message}</div>`;
     }
   }
 
-  async function handleSignalingMessage(event) {
-    const msg = JSON.parse(event.data);
+  ui.servers.refresh.addEventListener("click", fetchServers);
 
-    switch (msg.type) {
-      case "your-id":
-        myId = msg.id;
-        myIdDisplaySpan.textContent = myId;
-        break;
-
-      case "key-exchange":
-        peerId = msg.from;
-        initializeWebRTCHandler();
-        keyPair = await CryptoHandler.generateKeys();
-        sharedSecretKey = await CryptoHandler.deriveSharedSecret(
-          keyPair.privateKey,
-          msg.payload.publicKey,
-        );
-
-        const myPublicKey = await CryptoHandler.exportPublicKey(
-          keyPair.publicKey,
-        );
-        sendSignalingMessage("key-exchange-reply", { publicKey: myPublicKey });
-        break;
-
-      case "key-exchange-reply":
-        sharedSecretKey = await CryptoHandler.deriveSharedSecret(
-          keyPair.privateKey,
-          msg.payload.publicKey,
-        );
-        const offer = await rtcHandler.createOffer();
-        sendSignalingMessage("webrtc-offer", offer);
-        break;
-
-      case "webrtc-offer":
-        const answer = await rtcHandler.createAnswer(msg.payload);
-        sendSignalingMessage("webrtc-answer", answer);
-        break;
-
-      case "webrtc-answer":
-        await rtcHandler.handleAnswer(msg.payload);
-        break;
-
-      case "ice-candidate":
-        if (rtcHandler) {
-          await rtcHandler.addIceCandidate(msg.payload);
-        }
-        break;
-    }
-  }
-
-  // =================================================================================
-  // 2. LÓGICA P2P (WEBRTC) E CRIPTOGRAFIA
-  // =================================================================================
-
-  function initializeWebRTCHandler() {
-    rtcHandler = WebRTCHandler(
-      handleDataChannelMessage,
-      handleConnectionStateChange,
-      (candidate) => sendSignalingMessage("ice-candidate", candidate),
-      activateChat,
-    );
-  }
-
-  async function handleDataChannelMessage(encryptedData) {
-    const decryptedData = await CryptoHandler.decrypt(
-      sharedSecretKey,
-      encryptedData,
-    );
-    if (!decryptedData) {
-      displaySystemMessage(
-        "Falha ao descriptografar mensagem recebida.",
-        "error",
-      );
+  function renderServers(servers) {
+    ui.servers.list.innerHTML = "";
+    if (servers.length === 0) {
+      const div = document.createElement("div");
+      div.textContent = "Nenhum servidor ativo encontrado.";
+      ui.servers.list.appendChild(div);
       return;
     }
 
-    try {
-      const payloadString = new TextDecoder().decode(decryptedData);
-      const payload = JSON.parse(payloadString);
+    servers.forEach((server) => {
+      const div = document.createElement("div");
+      div.className = "server-item";
 
-      if (payload.type === "text") {
-        displayMessage(payload.content, "received");
-      } else if (payload.type === "file" && payload.content) {
-        const byteString = atob(payload.content);
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i);
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "server-name";
+      nameDiv.textContent = server.name;
+
+      const metaDiv = document.createElement("div");
+      metaDiv.className = "server-meta";
+      metaDiv.textContent = `${server.host}${server.port ? ":" + server.port : ""} | ${server.clientsCount || 0} online`;
+
+      div.appendChild(nameDiv);
+      div.appendChild(metaDiv);
+
+      div.addEventListener("click", () => connectToServer(server));
+      ui.servers.list.appendChild(div);
+    });
+  }
+
+  // --- WEBSOCKET & CHAT ---
+  async function connectToServer(server) {
+    state.currentServer = server;
+
+    // Se não tiver token, tenta buscar diretamente do servidor (fallback)
+    if (!state.currentServer.token) {
+      try {
+        const httpProtocol = server.protocol === "wss" ? "https" : "http";
+        // Corrige 0.0.0.0 para localhost, pois fetch falha em 0.0.0.0 no Windows/Chrome
+        const fetchHost = server.host === "0.0.0.0" ? "localhost" : server.host;
+        const portPart = server.port ? `:${server.port}` : "";
+        const tokenUrl = `${httpProtocol}://${fetchHost}${portPart}/token`;
+
+        const res = await fetch(tokenUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            state.currentServer.token = data.token;
+          }
         }
-        const blob = new Blob([ab], { type: payload.mimeType });
-        displayImage(URL.createObjectURL(blob), "received");
+      } catch (e) {
+        console.warn("Falha ao buscar token automaticamente:", e);
+      }
+    }
+
+    const portPart = server.port ? `:${server.port}` : "";
+    const wsUrl = `${server.protocol}://${server.host}${portPart}`;
+
+    ui.status.textContent = "Conectando...";
+    showView("chat");
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        ui.status.textContent = "Conectado (Autenticando...)";
+        ui.status.className = "status-indicator status-online";
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWsMessage(data);
+        } catch (e) {
+          console.error("Erro JSON:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        ui.status.textContent = "Desconectado";
+        ui.status.className = "status-indicator status-offline";
+        addLog("Conexão perdida.", "system");
+        // Não volta automaticamente para a lista para permitir ler logs
+      };
+
+      ws.onerror = (err) => {
+        console.error("WS Erro:", err);
+        ui.status.textContent = "Erro de Conexão";
+      };
+    } catch (e) {
+      alert("Erro ao criar WebSocket: " + e.message);
+      showView("servers");
+    }
+  }
+
+  ui.chat.disconnect.addEventListener("click", () => {
+    if (ws) ws.close();
+    showView("servers");
+  });
+
+  ui.chat.targetId.addEventListener("blur", () => {
+    chrome.storage.local.set({ lastTarget: ui.chat.targetId.value });
+    loadHistory();
+  });
+
+  ui.chat.msgInput.addEventListener("input", () => {
+    const target = ui.chat.targetId.value.trim();
+    if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    clearTimeout(state.typingTimeout);
+
+    if (!state.isTyping) {
+      ws.send(
+        JSON.stringify({ type: "typing_start", target: target, payload: {} }),
+      );
+      state.isTyping = true;
+    }
+
+    state.typingTimeout = setTimeout(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "typing_stop",
+            target: target,
+            payload: {},
+          }),
+        );
+      }
+      state.isTyping = false;
+    }, 3000); // 3 segundos de inatividade para parar
+  });
+
+  ui.chat.myId.addEventListener("click", () => {
+    if (state.myId) {
+      navigator.clipboard.writeText(state.myId);
+      const originalText = ui.chat.myId.textContent;
+      ui.chat.myId.textContent = "Copiado!";
+      setTimeout(() => {
+        ui.chat.myId.textContent = originalText;
+      }, 1000);
+    }
+  });
+
+  function handleWsMessage(data) {
+    console.log("WS Recebido:", data);
+
+    switch (data.type) {
+      case "your-id":
+        state.myId = data.id;
+        ui.chat.myId.textContent = `Meu ID: ${data.id}`;
+
+        if (ui.chat.targetId.value) {
+          loadHistory();
+        }
+
+        // Autenticação automática usando o token fornecido pelo Dashboard
+        if (data.requiresAuth) {
+          if (state.currentServer.token) {
+            ws.send(
+              JSON.stringify({
+                type: "authenticate",
+                token: state.currentServer.token,
+              }),
+            );
+          } else {
+            addLog(
+              "⚠️ Erro: Servidor pede autenticação mas não tenho token.",
+              "error",
+            );
+            ui.status.textContent = "Erro: Sem Token";
+          }
+        }
+        break;
+
+      case "authenticated":
+        ui.status.textContent = "Online e Seguro";
+        addLog("Autenticado no servidor.", "system");
+        break;
+
+      case "message":
+        // Se for uma troca de chave pública
+        if (
+          typeof data.payload === "string" &&
+          data.payload.startsWith("KEY::")
+        ) {
+          handlePublicKeyReceived(data.from, data.payload.replace("KEY::", ""));
+        } else {
+          // Mensagem normal (tentar descriptografar se tiver chave)
+          displayReceivedMessage(data);
+          // Para o indicador de digitação do remetente
+          if (state.typingUsers[data.from]) {
+            clearTimeout(state.typingUsers[data.from].timeoutId);
+            delete state.typingUsers[data.from];
+            updateTypingIndicator();
+          }
+          playNotificationSound();
+        }
+        break;
+
+      case "typing_start":
+        // Se já existe um timeout para este usuário, limpa para resetar
+        if (state.typingUsers[data.from]) {
+          clearTimeout(state.typingUsers[data.from].timeoutId);
+        }
+        // Define um novo timeout. Se não recebermos 'typing_stop' ou outra msg,
+        // o indicador some sozinho após 5 segundos.
+        state.typingUsers[data.from] = {
+          timeoutId: setTimeout(() => {
+            delete state.typingUsers[data.from];
+            updateTypingIndicator();
+          }, 5000),
+        };
+        updateTypingIndicator();
+        break;
+
+      case "typing_stop":
+        if (state.typingUsers[data.from]) {
+          clearTimeout(state.typingUsers[data.from].timeoutId);
+          delete state.typingUsers[data.from];
+          updateTypingIndicator();
+        }
+        break;
+
+      case "error":
+        addLog(`Erro: ${data.message}`, "system");
+        break;
+    }
+  }
+
+  // --- CRIPTOGRAFIA (Integração CryptoHandler) ---
+
+  ui.chat.btnGenKeys.addEventListener("click", async () => {
+    try {
+      const keys = await CryptoHandler.generateKeys();
+      state.keys.public = keys.publicKey;
+      state.keys.private = keys.privateKey;
+
+      ui.chat.cryptoStatus.textContent = "Chaves geradas! Pronto para troca.";
+      ui.chat.cryptoStatus.style.color = "green";
+      ui.chat.btnExchKeys.disabled = false;
+      ui.chat.btnGenKeys.disabled = true;
+      addLog("Par de chaves criptográficas gerado.", "system");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao gerar chaves.");
+    }
+  });
+
+  ui.chat.btnExchKeys.addEventListener("click", async () => {
+    const target = ui.chat.targetId.value.trim();
+    if (!target || !state.keys.public) return;
+
+    // Exportar chave pública para JWK
+    const jwk = await CryptoHandler.exportPublicKey(state.keys.public);
+    const payload = "KEY::" + JSON.stringify(jwk);
+
+    ws.send(
+      JSON.stringify({
+        type: "message",
+        target: target,
+        payload: payload,
+      }),
+    );
+    addLog(`Chave pública enviada para ${target}`, "system");
+  });
+
+  async function handlePublicKeyReceived(fromId, jwkString) {
+    try {
+      const jwk = JSON.parse(jwkString);
+      if (!state.keys.private) {
+        addLog(
+          `Recebi chave de ${fromId}, mas não gerei as minhas ainda!`,
+          "error",
+        );
+        return;
+      }
+
+      // Derivar segredo compartilhado
+      state.keys.shared = await CryptoHandler.deriveSharedSecret(
+        state.keys.private,
+        jwk,
+      );
+
+      ui.chat.cryptoStatus.textContent = `🔒 Canal Seguro com ${fromId.substr(0, 4)}`;
+      addLog(`Canal E2EE estabelecido com ${fromId}`, "system");
+
+      // Atualiza o target ID automaticamente se estiver vazio
+      if (!ui.chat.targetId.value) ui.chat.targetId.value = fromId;
+    } catch (e) {
+      console.error("Erro ao processar chave pública", e);
+      addLog("Erro ao processar chave de criptografia.", "error");
+    }
+  }
+
+  // --- ENVIO E RECEBIMENTO DE MENSAGENS ---
+
+  function playNotificationSound() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      // Som suave de notificação ("Ding")
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(500, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+      console.error("Erro de áudio:", e);
+    }
+  }
+
+  // --- HISTÓRICO ---
+  function getHistoryKey() {
+    if (!state.currentServer || !state.myId) return null;
+    const target = ui.chat.targetId.value.trim();
+    if (!target) return null;
+    const serverKey = `${state.currentServer.host}:${state.currentServer.port}`;
+    return `chat_history_${serverKey}_${state.myId}_${target}`;
+  }
+
+  async function loadHistory() {
+    const key = getHistoryKey();
+    if (!key) return;
+    if (key === state.lastLoadedKey) return; // Evita recarregar se for o mesmo chat
+    state.lastLoadedKey = key;
+
+    ui.chat.msgList.innerHTML = "";
+
+    try {
+      const result = await chrome.storage.local.get(key);
+      const history = result[key] || [];
+
+      if (history.length > 0) {
+        const div = document.createElement("div");
+        div.className = "msg system";
+        div.textContent = "--- Histórico Carregado ---";
+        ui.chat.msgList.appendChild(div);
+
+        history.forEach((msg) => {
+          addLog(msg.text, msg.type, msg.timestamp, false);
+        });
+
+        ui.chat.msgList.scrollTop = ui.chat.msgList.scrollHeight;
       }
     } catch (e) {
-      console.error("Erro ao processar payload recebido:", e);
-      displaySystemMessage("Recebida mensagem em formato inválido.", "warning");
+      console.error("Erro ao carregar histórico:", e);
     }
   }
 
-  function handleConnectionStateChange(state) {
-    console.log("Estado da conexão WebRTC:", state);
-    if (state === "connected") {
-      updatePeerStatus("Conectado (Seguro)", "online");
-      if (myId && peerId) {
-        conversationInfo.textContent = `${myId} <--> ${peerId}`;
-        conversationInfo.style.display = "block";
-      } else {
-        conversationInfo.style.display = "none";
+  function addLog(text, type = "system", timestamp = null, save = true) {
+    const div = document.createElement("div");
+    div.className = `msg ${type}`;
+
+    const contentSpan = document.createElement("span");
+    contentSpan.textContent = text;
+    div.appendChild(contentSpan);
+
+    const timeStr =
+      timestamp ||
+      new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "msg-time";
+    timeSpan.textContent = timeStr;
+    div.appendChild(timeSpan);
+
+    ui.chat.msgList.appendChild(div);
+    ui.chat.msgList.scrollTop = ui.chat.msgList.scrollHeight;
+
+    // Salvar no histórico se for mensagem de chat e flag save for true
+    if (save && (type === "sent" || type === "received")) {
+      const key = getHistoryKey();
+      if (key) {
+        chrome.storage.local.get(key, (res) => {
+          const history = res[key] || [];
+          history.push({ text, type, timestamp: timeStr });
+          // Limite de 100 mensagens por chat para economizar storage
+          if (history.length > 100) history.shift();
+          chrome.storage.local.set({ [key]: history });
+        });
       }
-      activateChat();
-    } else if (["disconnected", "failed", "closed"].includes(state)) {
-      resetState();
     }
   }
 
-  // =================================================================================
-  // 3. AÇÕES E MANIPULAÇÃO DA UI
-  // =================================================================================
+  async function displayReceivedMessage(data) {
+    let content = data.payload;
+    let from = `[${data.from.substr(0, 4)}]`;
+    let logType = "received";
 
-  function loadContacts() {
-    chrome.storage.local.get(["contacts"], (result) => {
-      const contacts = result.contacts || [];
-      renderContacts(contacts);
-    });
-  }
-
-  function saveContact() {
-    const id = contactIdToSaveInput.value.trim() || peerIdInput.value.trim();
-    const nickname = contactNicknameInput.value.trim() || id;
-
-    if (!id) {
-      displaySystemMessage("Digite um ID para salvar.", "error");
-      return;
-    }
-
-    chrome.storage.local.get(["contacts"], (result) => {
-      // Garante que contacts seja um array
-      const contacts = Array.isArray(result.contacts) ? result.contacts : [];
-      const existingIndex = contacts.findIndex((c) => c.id === id);
-      if (existingIndex >= 0) {
-        contacts[existingIndex].nickname = nickname;
-      } else {
-        contacts.push({ id, nickname });
-      }
-
-      chrome.storage.local.set({ contacts }, () => {
-        if (chrome.runtime.lastError) {
-          console.error("Erro ao salvar contato:", chrome.runtime.lastError);
-          displaySystemMessage("Erro ao salvar contato.", "error");
-        } else {
-          loadContacts();
-          contactNicknameInput.value = "";
-          contactIdToSaveInput.value = "";
-          displaySystemMessage("Contato salvo com sucesso!", "success");
+    // Verifica se a mensagem está criptografada
+    if (typeof content === "object" && content !== null && content.encrypted) {
+      if (state.keys.shared) {
+        try {
+          const encryptedBuffer = base64ToArrayBuffer(content.data);
+          const decryptedBuffer = await CryptoHandler.decrypt(
+            state.keys.shared,
+            encryptedBuffer,
+          );
+          content = new TextDecoder().decode(decryptedBuffer);
+          from = `🔒 ${from}`; // Adiciona ícone de cadeado seguro
+        } catch (e) {
+          console.error("Falha na descriptografia:", e);
+          content = "⚠️ Falha ao descriptografar mensagem!";
+          logType = "error";
         }
-      });
-    });
-  }
-
-  function deleteContact(id) {
-    chrome.storage.local.get(["contacts"], (result) => {
-      let contacts = result.contacts || [];
-      contacts = contacts.filter((c) => c.id !== id);
-      chrome.storage.local.set({ contacts }, () => loadContacts());
-    });
-  }
-
-  function renderContacts(contacts) {
-    contactsList.innerHTML = "";
-    if (contacts.length === 0) {
-      contactsList.innerHTML =
-        '<li style="color: #999; font-size: 12px; text-align: center;">Nenhum contato salvo.</li>';
-      return;
-    }
-    contacts.forEach((contact) => {
-      const li = document.createElement("li");
-      li.style.cssText =
-        "display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #f0f0f0;";
-
-      const span = document.createElement("span");
-      span.style.cssText = "cursor: pointer; font-weight: 500; flex-grow: 1;";
-      span.title = contact.id;
-      span.textContent = contact.nickname; // Prevenção de XSS
-      span.onclick = () => {
-        peerIdInput.value = contact.id;
-      };
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "delete-btn";
-      deleteBtn.style.cssText =
-        "padding: 2px 6px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;";
-      deleteBtn.textContent = "×";
-      deleteBtn.onclick = (e) => {
-        e.stopPropagation();
-        deleteContact(contact.id);
-      };
-
-      li.appendChild(span);
-      li.appendChild(deleteBtn);
-      contactsList.appendChild(li);
-    });
-  }
-
-  async function startConnection() {
-    const id = peerIdInput.value.trim();
-    if (!id) {
-      displaySystemMessage("Por favor, insira o ID do outro usuário.", "error");
-      return;
-    }
-    peerId = id;
-
-    initializeWebRTCHandler();
-    keyPair = await CryptoHandler.generateKeys();
-    const myPublicKey = await CryptoHandler.exportPublicKey(keyPair.publicKey);
-    sendSignalingMessage("key-exchange", { publicKey: myPublicKey });
-  }
-
-  async function sendMessage() {
-    const text = messageInput.value;
-    if (!text) return;
-    if (!sharedSecretKey) {
-      displaySystemMessage(
-        "Erro: Chave de criptografia não estabelecida.",
-        "error",
-      );
-      return;
-    }
-
-    try {
-      const payload = { type: "text", content: text };
-      const payloadString = JSON.stringify(payload);
-      const encryptedMessage = await CryptoHandler.encrypt(
-        sharedSecretKey,
-        payloadString,
-      );
-      rtcHandler.send(encryptedMessage);
-
-      displayMessage(text, "sent");
-      messageInput.value = "";
-    } catch (error) {
-      console.error("Falha ao enviar mensagem:", error);
-      displaySystemMessage("Falha ao enviar a mensagem.", "error");
-    }
-  }
-
-  function sendFile(file) {
-    if (!file) return;
-    if (!sharedSecretKey) {
-      displaySystemMessage(
-        "Erro: Chave de criptografia não estabelecida.",
-        "error",
-      );
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const base64Content = e.target.result.split(",")[1];
-        const payload = {
-          type: "file",
-          content: base64Content,
-          mimeType: file.type,
-          name: file.name,
-        };
-        const payloadString = JSON.stringify(payload);
-        const encryptedFile = await CryptoHandler.encrypt(
-          sharedSecretKey,
-          payloadString,
-        );
-        rtcHandler.send(encryptedFile);
-        displayImage(URL.createObjectURL(file), "sent");
-      } catch (error) {
-        console.error("Falha ao enviar arquivo:", error);
-        displaySystemMessage("Falha ao enviar o arquivo.", "error");
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function resetState() {
-    if (rtcHandler) rtcHandler.close();
-
-    updatePeerStatus("Offline", "offline");
-    chatView.classList.add("hidden");
-    setupView.classList.remove("hidden");
-    messagesDiv.innerHTML = "";
-    peerIdInput.value = "";
-    conversationInfo.textContent = "";
-    conversationInfo.style.display = "none";
-
-    peerId = null;
-    keyPair = null;
-    sharedSecretKey = null;
-    rtcHandler = null;
-  }
-
-  function updatePeerStatus(text, className) {
-    peerStatus.textContent = text;
-    peerStatus.className = className;
-  }
-
-  function displayMessage(text, className) {
-    const el = document.createElement("div");
-    el.className = `message ${className}`;
-    el.textContent = text;
-    messagesDiv.appendChild(el);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }
-
-  function displayImage(url, className) {
-    const el = document.createElement("div");
-    el.className = `message ${className}`;
-    const img = document.createElement("img");
-    img.src = url;
-    el.appendChild(img);
-    messagesDiv.appendChild(el);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }
-
-  function displaySystemMessage(text, type = "info") {
-    console.log(`SYSTEM [${type}]: ${text}`);
-    if (chatView.classList.contains("hidden")) {
-      const setupMessages = document.getElementById("setup-messages");
-      if (setupMessages) {
-        setupMessages.innerHTML = "";
-        const el = document.createElement("div");
-        el.className = `message system ${type}`;
-        el.textContent = text;
-        el.style.margin = "0 auto";
-        setupMessages.appendChild(el);
+      } else {
+        content =
+          "⚠️ Mensagem criptografada recebida, mas não há chave compartilhada.";
+        logType = "error";
       }
     } else {
-      const el = document.createElement("div");
-      el.className = `message system ${type}`;
-      el.textContent = text;
-      messagesDiv.appendChild(el);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      // Mensagem em texto plano
+      from = `🔓 ${from}`; // Adiciona ícone de cadeado aberto
+    }
+
+    addLog(`${from}: ${content}`, logType);
+
+    if (!document.hasFocus()) {
+      showSystemNotification(
+        `Nova mensagem de ${data.from.substr(0, 4)}`,
+        content,
+      );
     }
   }
 
-  function activateChat() {
-    // Garante que a troca de view só aconteça uma vez
-    if (chatView.classList.contains("hidden")) {
-      setupView.classList.add("hidden");
-      chatView.classList.remove("hidden");
-      messageInput.focus();
+  function updateTypingIndicator() {
+    const users = Object.keys(state.typingUsers);
+    const indicator = ui.chat.typingIndicator;
+
+    if (users.length === 0) {
+      indicator.style.opacity = 0;
+      return;
     }
-  }
 
-  // --- Lógica de Fixar Janela (Pop-out) ---
-  const isPinned = window.location.search.includes("pinned=true");
-
-  if (isPinned) {
-    pinBtn.textContent = "❌";
-    pinBtn.title = "Desfixar (Fechar janela)";
-    // Tenta prevenir fechamento acidental
-    window.onbeforeunload = (e) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-  }
-
-  pinBtn.addEventListener("click", () => {
-    if (isPinned) {
-      window.close();
+    indicator.style.opacity = 1;
+    if (users.length === 1) {
+      indicator.textContent = `${users[0].substr(0, 4)}... está digitando...`;
+    } else if (users.length === 2) {
+      indicator.textContent = `${users[0].substr(0, 4)} e ${users[1].substr(0, 4)} estão digitando...`;
     } else {
-      chrome.windows.create({
-        url: chrome.runtime.getURL("popup.html?pinned=true"),
-        type: "popup",
-        width: 380,
-        height: 600,
-      });
+      indicator.textContent = "Várias pessoas estão digitando...";
     }
-  });
+  }
 
-  // --- Event Listeners ---
-  connectBtn.addEventListener("click", startConnection);
-  if (saveContactBtn) saveContactBtn.addEventListener("click", saveContact);
-  sendBtn.addEventListener("click", sendMessage);
-  messageInput.addEventListener(
-    "keypress",
-    (e) => e.key === "Enter" && sendMessage(),
-  );
-  disconnectBtn.addEventListener("click", resetState);
-  imageInput.addEventListener(
-    "change",
-    (e) => e.target.files[0] && sendFile(e.target.files[0]),
-  );
-  myIdDisplaySpan.addEventListener("click", () => {
-    if (!myId) return;
-    navigator.clipboard.writeText(myId).then(() => {
-      const originalText = myIdDisplaySpan.textContent;
-      myIdDisplaySpan.textContent = "Copiado!";
-      setTimeout(() => (myIdDisplaySpan.textContent = originalText), 1500);
+  function showSystemNotification(title, message) {
+    // Ícone genérico (azul) em base64 para garantir funcionamento imediato sem arquivos externos
+    const iconUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAcElEQVRoge3QwQ2AIBRE0Z+F2W0di0W5tQ0j8RElJp4zJ2TzYwIAAAAAAABgx0qS1pI070l6z3496yVpX5K27Nez3pL2JGnLfj3rJWlPkrbs17NekvYkact+PeslaU+StuzXs14AAAAAAADw5gJqCg2h211W9AAAAABJRU5ErkJggg==";
+
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: iconUrl,
+      title: title,
+      message: message,
+      priority: 2,
     });
-  });
+  }
 
-  // --- Inicialização da Aplicação ---
-  chrome.storage.local.get(["signalingUrl"], (result) => {
-    // Carrega a URL salva, exceto se for o endereço STUN incorreto (correção de legado)
-    if (
-      result.signalingUrl &&
-      !result.signalingUrl.includes("stun.l.google.com")
-    ) {
-      signalingUrlInput.value = result.signalingUrl;
-    } else {
-      signalingUrlInput.value = "ws://localhost:8080";
+  ui.chat.btnSend.addEventListener("click", async () => {
+    const target = ui.chat.targetId.value.trim();
+    const text = ui.chat.msgInput.value.trim();
+
+    if (!target || !text) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    let logText = `🔓 Eu: ${text}`;
+    const msg = {
+      type: "message",
+      target: target,
+      payload: text, // Padrão é texto plano
+    };
+
+    // Se tiver chave compartilhada, criptografa a mensagem
+    if (state.keys.shared) {
+      const encryptedBuffer = await CryptoHandler.encrypt(
+        state.keys.shared,
+        text,
+      );
+      msg.payload = {
+        encrypted: true,
+        data: arrayBufferToBase64(encryptedBuffer),
+      };
+      logText = `🔒 Eu: ${text}`;
     }
-    connectToSignaling();
+
+    // Para o indicador de "digitando" imediatamente ao enviar
+    if (state.isTyping) {
+      clearTimeout(state.typingTimeout);
+      ws.send(
+        JSON.stringify({ type: "typing_stop", target: target, payload: {} }),
+      );
+      state.isTyping = false;
+    }
+
+    ws.send(JSON.stringify(msg));
+    addLog(logText, "sent");
+    ui.chat.msgInput.value = "";
+    chrome.storage.local.set({ lastTarget: target });
   });
-  updatePeerStatus("Offline", "offline");
-  loadContacts();
 });

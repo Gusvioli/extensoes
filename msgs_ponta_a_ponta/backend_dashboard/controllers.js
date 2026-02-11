@@ -1081,6 +1081,11 @@ const saveUser = async (req, res) => {
       // MERGE INTELIGENTE: Mantém dados antigos (isVerified, codes, etc) e sobrescreve com novos
       userToSave = { ...existingUser, ...userData };
 
+      // Garante que createdAt exista (correção para usuários antigos/migrados)
+      if (!userToSave.createdAt) {
+        userToSave.createdAt = new Date().toISOString();
+      }
+
       // Tratamento especial para senha (só hash se mudou)
       if (userData.password && userData.password.trim() !== "") {
         userToSave.password = db.hashPassword(userData.password);
