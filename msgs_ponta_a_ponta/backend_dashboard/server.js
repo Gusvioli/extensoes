@@ -161,6 +161,18 @@ function createDashboardServer(httpPort) {
       return;
     }
 
+    // GET /api/logs (PROTEGIDO - ADMIN)
+    if (normalizedPath === "/api/logs" && req.method === "GET") {
+      controllers.getAuditLogs(req, res);
+      return;
+    }
+
+    // GET /api/logs/download (PROTEGIDO - ADMIN)
+    if (normalizedPath === "/api/logs/download" && req.method === "GET") {
+      controllers.downloadLogs(req, res);
+      return;
+    }
+
     // ===== 404 =====
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(

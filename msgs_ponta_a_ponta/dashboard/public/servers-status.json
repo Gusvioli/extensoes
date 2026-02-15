@@ -1,28 +1,9 @@
 {
   "servers": [
     {
-      "id": "server-1769736401886",
-      "name": "servers-w3fc.onrender.com",
-      "description": "Servidor hospedado no Render",
-      "host": "servers-w3fc.onrender.com",
-      "port": null,
-      "protocol": "wss",
-      "token": "35993df72e0007e93b531ead6e9d869c",
-      "status": "active",
-      "region": "USA",
-      "maxClients": 100,
-      "createdAt": "2026-01-30T01:26:41.886Z",
-      "notes": "",
-      "requiresAuth": true,
-      "manualToken": false,
-      "clientsCount": 0,
-      "lastSeen": null,
-      "urltoken": ""
-    },
-    {
       "id": "server-1769906444387",
-      "name": "Servidor Local (Auto)",
-      "description": "Detectado automaticamente via API HTTP",
+      "name": "Servidor Local Auto",
+      "description": "Esta é uma cópia de um aviso de segurança enviado para dev.gusvioli.dev@gmail.com. gustavovieiradeoliveira@gmail.com é o e-mail de recuperação dessa conta. Se você não reconhece a conta, remova seu e-mail...",
       "host": "localhost",
       "port": 8081,
       "protocol": "ws",
@@ -31,7 +12,26 @@
       "region": "Local",
       "maxClients": 2,
       "createdAt": "2026-02-01T00:40:44.387Z",
-      "notes": "Sincronizado automaticamente via rede",
+      "notes": "Esta é uma cópia de um aviso de segurança enviado para dev.gusvioli.dev@gmail.com. gustavovieiradeoliveira@gmail.com é o e-mail de recuperação dessa conta. Se você não reconhece a conta, remova seu e-mail.",
+      "requiresAuth": true,
+      "manualToken": false,
+      "clientsCount": 2,
+      "lastSeen": null,
+      "urltoken": ""
+    },
+    {
+      "id": "server-1769736401886",
+      "name": "servers-w3fc.onrender.com",
+      "description": "Servidor hospedado no Render de baixo consumo e de alto rendimento",
+      "host": "servers-w3fc.onrender.com",
+      "port": null,
+      "protocol": "wss",
+      "token": "35993df72e0007e93b531ead6e9d869c",
+      "status": "active",
+      "region": "USA",
+      "maxClients": 100,
+      "createdAt": "2026-01-30T01:26:41.886Z",
+      "notes": "URL de Registro de Servidores (JSON)",
       "requiresAuth": true,
       "manualToken": false,
       "clientsCount": 0,
@@ -39,5 +39,5 @@
       "urltoken": ""
     }
   ],
-  "lastUpdated": "2026-02-11T12:26:16.757Z"
+  "lastUpdated": "2026-02-15T00:52:26.076Z"
 }

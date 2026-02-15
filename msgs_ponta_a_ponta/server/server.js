@@ -54,7 +54,7 @@ const config = {
   requireAuth: process.env.REQUIRE_AUTH !== "false", // ATIVADO POR PADRÃO
   authToken: process.env.AUTH_TOKEN || crypto.randomBytes(16).toString("hex"), // Token obrigatório
   disableDeflate: process.env.DISABLE_DEFLATE !== "false", // Proteção contra CRIME
-  maxPayload: parseInt(process.env.MAX_PAYLOAD || "65536", 10), // 64KB Max Payload (Segurança)
+  maxPayload: parseInt(process.env.MAX_PAYLOAD || "10485760", 10), // 10MB Max Payload (Aumentado para suportar imagens)
   maxConnsPerIp: parseInt(process.env.MAX_CONNS_PER_IP || "20", 10), // Limite de conexões por IP
 };
 
@@ -206,6 +206,7 @@ const requestHandler = (req, res) => {
         token: config.authToken,
         requiresAuth: config.requireAuth,
         port: config.port,
+        maxPayload: config.maxPayload,
       }),
     );
     return;
@@ -391,13 +392,43 @@ function setupHandlers() {
       return;
     }
 
-    // ⚠️  MUDANÇA SEGURANÇA: NÃO aceita ID via query string
-    // Gera um ID criptograficamente seguro
-    const id = generateSecureId();
+    // Log para debug: ver o que está chegando
+    log(`Conexão recebida. URL: ${req.url}`, "debug");
+
+    // Parse da URL usando API moderna (mais robusta)
+    // 'http://base' é usado apenas como base para URLs relativas, não afeta o resultado dos params
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const customId = requestUrl.searchParams.get('customId');
+
+    let id = generateSecureId(); // Padrão: Aleatório
+
+    // Verifica se há solicitação de ID Fixo
+    if (customId) {
+      const requestedId = customId.trim();
+
+      // Valida o formato (Letras, números, _, -, .)
+      if (/^[a-zA-Z0-9_.-]{3,32}$/.test(requestedId)) {
+        // Verifica se já está em uso
+        if (clients.has(requestedId)) {
+          ws.close(1008, "ID fixo já está em uso por outro usuário");
+          return;
+        }
+        id = requestedId;
+        log(`✅ ID Fixo aceito: ${id}`, "info");
+      } else {
+        log(
+          `⚠️ ID Fixo rejeitado (formato inválido): "${requestedId}"`,
+          "warn",
+        );
+      }
+    }
+
+    const sessionSecret = crypto.randomBytes(16).toString("hex"); // Segredo para provar posse do ID
 
     clients.set(id, ws);
     ws.clientId = id; // Armazena ID no socket para referência rápida
-    ws.authenticated = false; // Por padrão, não autenticado
+    ws.sessionSecret = sessionSecret; // Salva segredo no socket
+    ws.authenticated = !config.requireAuth; // Se não exigir auth, já nasce autenticado
     metrics.totalConnections++;
 
     // Heartbeat: marca como vivo quando recebe pong
@@ -413,7 +444,12 @@ function setupHandlers() {
 
     // Envia o ID gerado de volta para o cliente para que ele saiba quem é.
     ws.send(
-      JSON.stringify({ type: "your-id", id, requiresAuth: config.requireAuth }),
+      JSON.stringify({
+        type: "your-id",
+        id,
+        sessionSecret,
+        requiresAuth: config.requireAuth,
+      }),
     );
 
     ws.on("message", (messageAsString) => {
@@ -435,7 +471,11 @@ function setupHandlers() {
       }
 
       // ⚠️  MUDANÇA SEGURANÇA: Validar autenticação primeiro
-      if (!ws.authenticated && data.type !== "authenticate") {
+      if (
+        !ws.authenticated &&
+        data.type !== "authenticate" &&
+        data.type !== "reconnect"
+      ) {
         metrics.rejectedMessages++;
         log(`Cliente ${id} tentou enviar mensagem sem autenticação`, "warn");
         ws.send(
@@ -444,6 +484,41 @@ function setupHandlers() {
             message: "Autenticação obrigatória",
           }),
         );
+        return;
+      }
+
+      // --- LÓGICA DE RECONEXÃO (RESTAURAÇÃO DE SESSÃO) ---
+      if (data.type === "reconnect") {
+        const { id: oldId, sessionSecret } = data;
+        const session = disconnectedSessions.get(oldId);
+
+        if (session && session.secret === sessionSecret) {
+          clearTimeout(session.timeout);
+          disconnectedSessions.delete(oldId);
+
+          // Remove o ID temporário gerado nesta nova conexão
+          clients.delete(ws.clientId);
+          clientRateLimits.delete(ws.clientId);
+          authenticatedClients.delete(ws.clientId);
+
+          // Restaura o ID antigo no socket atual
+          ws.clientId = oldId;
+          ws.sessionSecret = sessionSecret;
+          ws.authenticated = session.authenticated;
+
+          clients.set(oldId, ws);
+          if (ws.authenticated) authenticatedClients.add(oldId);
+
+          log(
+            `Cliente ${oldId} reconectado com sucesso (Sessão restaurada)`,
+            "info",
+          );
+          ws.send(JSON.stringify({ type: "reconnected", id: oldId }));
+          return;
+        }
+
+        // Se chegou aqui, a sessão não existe ou o segredo está errado
+        ws.send(JSON.stringify({ type: "reconnect_failed" }));
         return;
       }
 
@@ -528,6 +603,16 @@ function setupHandlers() {
         targetClient.readyState !== WebSocket.OPEN ||
         !targetClient.authenticated
       ) {
+        // Se for confirmação de leitura (Visto), ignora silenciosamente se o alvo não existir
+        // Isso evita o erro "Falha: Destinatário offline" para quem RECEBE a mensagem
+        if (data.type === "message_read") {
+          return;
+        }
+        // Ignora erros de "digitando" se o alvo não existir (evita spam de erro)
+        if (data.type === "typing_start" || data.type === "typing_stop") {
+          return;
+        }
+
         metrics.rejectedMessages++;
         const reasons = [];
         if (!targetClient) reasons.push("não encontrado");
@@ -543,7 +628,7 @@ function setupHandlers() {
         ws.send(
           JSON.stringify({
             type: "error",
-            message: `Cliente alvo ${reasons.join(" e ")}`,
+            message: `Cliente alvo (${data.target}) ${reasons.join(" e ")}`,
           }),
         );
         return;
@@ -557,13 +642,35 @@ function setupHandlers() {
       // O servidor NUNCA inspeciona o conteúdo de 'payload'.
       // Ele apenas retransmite a mensagem, garantindo a privacidade.
       targetClient.send(JSON.stringify(data));
+
+      // Confirmação de entrega ao servidor (Segundo tick cinza)
+      if (data.type === "message") {
+        ws.send(
+          JSON.stringify({
+            type: "message_delivered",
+            payload: { messageId: data.id },
+            target: data.target, // Retorna o alvo para o cliente saber qual chat atualizar
+          }),
+        );
+      }
     });
 
     ws.on("close", () => {
       // Quando um cliente se desconecta, remove-o do mapa e limpa rate limit.
-      clients.delete(id);
+
+      // Salva sessão para reconexão por 60 segundos
+      disconnectedSessions.set(ws.clientId, {
+        secret: ws.sessionSecret,
+        authenticated: ws.authenticated,
+        timeout: setTimeout(() => {
+          disconnectedSessions.delete(ws.clientId);
+          authenticatedClients.delete(ws.clientId);
+        }, 60000),
+      });
+
+      clients.delete(ws.clientId);
       clientRateLimits.delete(id);
-      authenticatedClients.delete(id);
+      // authenticatedClients.delete(id); // Não deleta auth imediatamente para permitir reconexão
       log(
         `Cliente ${id} desconectado (Total: ${clients.size}/${config.maxClients})`,
         "info",
@@ -628,6 +735,7 @@ initServer();
 
 // Um Map para armazenar os clientes conectados, associando um ID único a cada socket.
 const clients = new Map();
+const disconnectedSessions = new Map(); // Armazena sessões aguardando reconexão
 
 // Map para rate limiting: armazena { lastMessageTime, count } por cliente
 const clientRateLimits = new Map();

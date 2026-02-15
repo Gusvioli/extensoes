@@ -3,206 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
     <title>P2P Chat</title>
-    <style>
-      body {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 15px;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        background-color: #f0f2f5;
-        color: #333;
-      }
-      .container {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      /* Views Management */
-      .view-section {
-        display: none;
-        animation: fadeIn 0.3s ease;
-      }
-      .view-section.active {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-
-      /* Headers */
-      h2,
-      h3 {
-        margin: 0 0 10px 0;
-        color: #1a202c;
-      }
-      .header-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-      }
-
-      /* Status e Config */
-      .status-bar {
-        font-size: 12px;
-        color: #666;
-        margin-bottom: 5px;
-        display: flex;
-        justify-content: space-between;
-      }
-      .status-indicator {
-        font-weight: bold;
-      }
-      .status-online {
-        color: green;
-      }
-      .status-offline {
-        color: red;
-      }
-
-      /* Inputs */
-      input,
-      textarea,
-      button {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        margin-bottom: 5px;
-      }
-      button {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        cursor: pointer;
-        font-weight: bold;
-        transition: background 0.2s;
-      }
-      button:hover {
-        background-color: #0056b3;
-      }
-      button:disabled {
-        background-color: #ccc;
-      }
-      .btn-secondary {
-        background-color: #6c757d;
-      }
-      .btn-secondary:hover {
-        background-color: #5a6268;
-      }
-      .btn-danger {
-        background-color: #dc3545;
-      }
-
-      /* Server List */
-      .server-item {
-        background: white;
-        padding: 10px;
-        border-radius: 6px;
-        border: 1px solid #e2e8f0;
-        cursor: pointer;
-        transition:
-          transform 0.1s,
-          box-shadow 0.1s;
-      }
-      .server-item:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        border-color: #cbd5e0;
-      }
-      .server-name {
-        font-weight: bold;
-        font-size: 14px;
-      }
-      .server-meta {
-        font-size: 11px;
-        color: #718096;
-        margin-top: 2px;
-      }
-
-      /* Chat Area */
-      .messages-box {
-        height: 300px;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        overflow-y: auto;
-        padding: 10px;
-        margin-bottom: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-      }
-
-      .msg {
-        padding: 5px 8px;
-        border-radius: 4px;
-        font-size: 13px;
-        max-width: 80%;
-        word-wrap: break-word;
-      }
-      .msg.sent {
-        align-self: flex-end;
-        background-color: #dcf8c6;
-      }
-      .msg.received {
-        align-self: flex-start;
-        background-color: #fff;
-        border: 1px solid #eee;
-      }
-      .msg.system {
-        align-self: center;
-        font-size: 11px;
-        color: #888;
-        background: none;
-        border: none;
-      }
-      .msg-time {
-        font-size: 10px;
-        margin-left: 8px;
-        float: right;
-        margin-top: 4px;
-        opacity: 0.7;
-      }
-
-      .my-id-box {
-        background: #e9ecef;
-        padding: 5px;
-        font-size: 11px;
-        text-align: center;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-
-      .error-msg {
-        color: #dc3545;
-        font-size: 12px;
-        margin-top: 5px;
-        display: none;
-      }
-    </style>
   </head>
   <body>
     <div class="container">
       <!-- VIEW 1: LOGIN (Integrado ao Dashboard) -->
       <div id="view-login" class="view-section active">
-        <div style="text-align: center; margin-bottom: 20px">
+        <div class="login-header">
           <h2>P2P Secure Chat</h2>
-          <p style="font-size: 12px; color: #666">
-            Faça login com sua conta do Dashboard
-          </p>
+          <p class="login-subtitle">Faça login com sua conta do Dashboard</p>
         </div>
 
         <input type="text" id="login-username" placeholder="Usuário" />
@@ -214,132 +24,219 @@
       <!-- VIEW 2: LISTA DE SERVIDORES -->
       <div id="view-servers" class="view-section">
         <div class="header-row">
-          <h3>Servidores Disponíveis</h3>
-          <button
-            id="btn-logout"
-            class="btn-danger"
-            style="width: auto; padding: 5px 10px; font-size: 11px"
-          >
-            Sair
-          </button>
-        </div>
-        <div
-          id="user-welcome"
-          style="font-size: 12px; color: #666; margin-bottom: 10px"
-        ></div>
-
-        <div
-          id="servers-list-container"
-          style="display: flex; flex-direction: column; gap: 8px"
-        >
-          <!-- Servidores injetados via JS -->
-          <div style="text-align: center; padding: 20px; color: #666">
-            Carregando servidores...
+          <div class="header-actions">
+            <button id="btn-open-settings" class="btn-secondary btn-sm">
+              ⚙️
+            </button>
+            <button id="btn-logout" class="btn-danger btn-xs">Sair</button>
           </div>
+          <h3>Servidores Disponíveis</h3>
+        </div>
+        <div id="user-welcome" class="user-welcome"></div>
+
+        <div id="servers-list-container" class="servers-list-container">
+          <!-- Servidores injetados via JS -->
+          <div class="loading-placeholder">Carregando servidores...</div>
         </div>
 
-        <button
-          id="btn-refresh-servers"
-          class="btn-secondary"
-          style="margin-top: 10px"
-        >
+        <button id="btn-refresh-servers" class="btn-secondary mt-10">
           Atualizar Lista
         </button>
       </div>
 
       <!-- VIEW 3: CHAT -->
       <div id="view-chat" class="view-section">
-        <div class="status-bar">
-          <span
-            >Status:
-            <span id="connection-status" class="status-indicator status-offline"
-              >Desconectado</span
-            ></span
-          >
-          <button
-            id="btn-disconnect"
-            class="btn-secondary"
-            style="width: auto; padding: 2px 8px; font-size: 10px"
-          >
-            Desconectar
-          </button>
-        </div>
-
-        <div class="my-id-box" id="my-id-display" title="Clique para copiar">
-          ID: Carregando...
-        </div>
-
-        <!-- Configuração de Criptografia (Simplificada) -->
-        <div
-          style="
-            background: #fff;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-bottom: 5px;
-          "
-        >
-          <div
-            style="
-              font-size: 11px;
-              font-weight: bold;
-              color: #555;
-              margin-bottom: 3px;
-            "
-          >
-            Segurança (E2EE)
-          </div>
-          <div style="display: flex; gap: 5px">
-            <button
-              id="btn-gen-keys"
-              style="font-size: 10px; padding: 4px; background: #28a745"
+        <!-- Chat Header Group -->
+        <div class="chat-header">
+          <div class="status-bar">
+            <span
+              >Status:
+              <span
+                id="connection-status"
+                class="status-indicator status-offline"
+                >Desconectado</span
+              ></span
             >
-              Gerar Chaves
-            </button>
-            <button
-              id="btn-exchange-keys"
-              style="font-size: 10px; padding: 4px; background: #17a2b8"
-              disabled
+            <div class="status-actions">
+              <button id="btn-reconnect" class="btn-reconnect-sm">
+                Reconectar
+              </button>
+              <button
+                id="btn-disconnect"
+                class="btn-secondary btn-disconnect-sm"
+              >
+                Desconectar
+              </button>
+            </div>
+          </div>
+          <div class="my-id-box" id="my-id-display" title="Clique para copiar">
+            ID: Carregando...
+          </div>
+          <!-- Crypto Box moved here -->
+          <div class="crypto-box crypto-header-box">
+            <span id="crypto-status" class="crypto-status-text"
+              >Chaves não geradas</span
             >
-              Trocar Chaves
-            </button>
+            <div class="crypto-actions">
+              <button id="btn-gen-keys" class="btn-crypto-sm">Gerar</button
+              ><button id="btn-exchange-keys" class="btn-crypto-sm" disabled>
+                Trocar
+              </button>
+            </div>
           </div>
-          <div
-            id="crypto-status"
-            style="font-size: 10px; color: #666; margin-top: 2px"
-          >
-            Chaves não geradas
-          </div>
+          <input
+            type="text"
+            id="target-id"
+            placeholder="ID do Destinatário"
+            class="input-target-id"
+          />
         </div>
-
-        <input
-          type="text"
-          id="target-id"
-          placeholder="ID do Destinatário (Cole aqui)"
-        />
 
         <div class="messages-box" id="messages-list">
           <!-- Mensagens aparecerão aqui -->
         </div>
 
-        <div
-          id="typing-indicator"
-          style="
-            height: 18px;
-            font-size: 12px;
-            color: #666;
-            font-style: italic;
-            padding-left: 5px;
-            transition: opacity 0.3s;
-          "
-        ></div>
+        <!-- Chat Footer Group -->
+        <div class="chat-footer">
+          <div id="typing-indicator" class="typing-indicator-footer"></div>
 
-        <textarea
-          id="message-input"
-          rows="2"
-          placeholder="Digite sua mensagem..."
-        ></textarea>
-        <button id="btn-send">Enviar</button>
+          <!-- Preview Bars (Reply/Edit) -->
+          <div id="reply-preview-bar" class="reply-preview-bar-footer">
+            <div class="reply-sender" id="reply-preview-sender">Sender</div>
+            <div class="reply-text" id="reply-preview-text">Text</div>
+            <button id="btn-cancel-reply" class="btn-close-preview">×</button>
+          </div>
+
+          <div id="edit-preview-bar" class="edit-preview-bar-footer">
+            <div class="edit-label">Editando mensagem...</div>
+            <button id="btn-cancel-edit" class="btn-close-preview">×</button>
+          </div>
+
+          <div class="chat-input-area">
+            <div id="emoji-picker" class="emoji-picker"></div>
+            <button id="btn-emoji" class="btn-secondary btn-emoji">😊</button>
+            <textarea
+              id="message-input"
+              rows="2"
+              placeholder="Digite sua mensagem..."
+              class="message-input"
+            ></textarea>
+            <button id="btn-send" class="btn-send">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: CONFIGURAÇÕES -->
+      <div id="view-settings" class="view-section">
+        <h3>⚙️ Configurações</h3>
+
+        <label for="setting-theme" class="settings-label">Tema</label>
+        <div id="theme-selector" class="theme-selector">
+          <button type="button" class="theme-btn" data-value="light">
+            <span class="theme-icon">☀️</span>
+            <span>Claro</span>
+          </button>
+          <button type="button" class="theme-btn" data-value="dark">
+            <span class="theme-icon">🌙</span>
+            <span>Escuro</span>
+          </button>
+        </div>
+
+        <hr class="settings-hr" />
+
+        <label for="setting-my-nickname" class="settings-label-sm"
+          >Meu Apelido Público</label
+        >
+        <input
+          type="text"
+          id="setting-my-nickname"
+          placeholder="Como os outros verão você (ex: Alice)"
+          maxlength="20"
+        />
+        <p class="settings-desc">
+          Este nome será enviado criptografado apenas para quem você conectar. O
+          servidor não terá acesso.
+        </p>
+
+        <hr class="settings-hr" />
+
+        <div class="checkbox-row">
+          <input
+            type="checkbox"
+            id="setting-use-fixed-id"
+            class="checkbox-input"
+          />
+          <label for="setting-use-fixed-id" class="checkbox-label"
+            >Usar Username como ID Fixo</label
+          >
+        </div>
+        <p class="settings-desc-bottom" style="color: var(--danger); margin-bottom: 15px;">
+          ⚠️ <strong>Atenção:</strong> Isso torna seu ID previsível. Qualquer pessoa que saiba seu usuário poderá tentar conectar-se com ele.
+        </p>
+
+        <div class="checkbox-row">
+          <input
+            type="checkbox"
+            id="setting-clear-exit"
+            class="checkbox-input"
+          />
+          <label for="setting-clear-exit" class="checkbox-label"
+            >Limpar histórico ao fechar</label
+          >
+        </div>
+        <p class="settings-desc-bottom">
+          Se ativado, o histórico de conversas será apagado sempre que a
+          extensão for aberta.
+        </p>
+
+        <div class="checkbox-row mb-10">
+          <input
+            type="checkbox"
+            id="setting-notifications"
+            class="checkbox-input"
+            checked
+          />
+          <label for="setting-notifications" class="checkbox-label"
+            >Receber notificações de novas mensagens</label
+          >
+        </div>
+
+        <div class="checkbox-row mb-10">
+          <input
+            type="checkbox"
+            id="setting-sounds"
+            class="checkbox-input"
+            checked
+          />
+          <label for="setting-sounds" class="checkbox-label"
+            >Reproduzir sons</label
+          >
+        </div>
+
+        <div class="checkbox-row mb-10">
+          <input
+            type="checkbox"
+            id="setting-auto-reconnect"
+            class="checkbox-input"
+            checked
+          />
+          <label for="setting-auto-reconnect" class="checkbox-label"
+            >Reconectar automaticamente</label
+          >
+        </div>
+
+        <button id="btn-clear-history" class="btn-danger">
+          🗑️ Limpar Histórico de Chats
+        </button>
+
+        <hr class="settings-hr" />
+
+        <button id="btn-save-settings">Salvar</button>
+        <button id="btn-cancel-settings" class="btn-secondary">Cancelar</button>
       </div>
     </div>
 

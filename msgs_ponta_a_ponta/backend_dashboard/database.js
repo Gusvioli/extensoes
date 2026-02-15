@@ -128,6 +128,15 @@ async function init() {
       await query(`ALTER TABLE users ADD COLUMN "verificationExpires" BIGINT`);
     } catch (e) {}
 
+    // Migração: Adicionar coluna requiresAuth na tabela servers se não existir
+    try {
+      await query(
+        `ALTER TABLE servers ADD COLUMN "requiresAuth" BOOLEAN DEFAULT TRUE`,
+      );
+    } catch (e) {
+      // Ignorar erro se a coluna já existir
+    }
+
     // Migração Automática: Se o DB estiver vazio e existir JSON, importar dados
     const res = await query("SELECT count(*) as count FROM servers");
     const count = parseInt(res.rows[0].count);
@@ -304,16 +313,68 @@ async function getAllServers() {
     return config.servers || [];
   }
   const res = await query("SELECT * FROM servers");
+
+  // DEBUG: Ver o que está vindo do banco (amostra do primeiro item)
+  if (res.rows.length > 0) {
+    const s = res.rows[0];
+    logger.info(
+      `[DEBUG] DB Read Sample: ID=${s.id}, requiresAuth=${s.requiresAuth} (Type: ${typeof s.requiresAuth})`,
+    );
+  }
+
   return res.rows.map((s) => ({
     ...s,
     port: s.port ? parseInt(s.port) : null,
     maxClients: parseInt(s.maxClients),
-    requiresAuth: s.requiresAuth === true,
+    // FIX: Aceita true, 1, 't', 'true' como verdadeiro
+    // Também verifica s.requiresauth (minúsculo) caso o driver do PG tenha normalizado o nome
+    requiresAuth:
+      s.requiresAuth === true ||
+      s.requiresAuth === 1 ||
+      s.requiresAuth === "t" ||
+      s.requiresAuth === "true" ||
+      // Fallback para coluna em minúsculo se a camelCase não existir
+      (s.requiresAuth === undefined &&
+        (s.requiresauth === true ||
+          s.requiresauth === 1 ||
+          s.requiresauth === "t" ||
+          s.requiresauth === "true")),
+
     clientsCount: parseInt(s.clientsCount || 0),
   }));
 }
 
 async function saveServer(server) {
+  logger.info(`[DEBUG] saveServer RAW input: ${JSON.stringify(server)}`);
+
+  // Normalizar requiresAuth (aceita requireAuth também) para garantir persistência correta
+  if (server.requiresAuth === undefined && server.requireAuth !== undefined) {
+    server.requiresAuth = server.requireAuth;
+  }
+
+  // FIX: Normalização robusta para Booleano (cobre strings, números e undefined)
+  if (
+    String(server.requiresAuth) === "true" ||
+    server.requiresAuth === "t" ||
+    server.requiresAuth === 1
+  ) {
+    server.requiresAuth = true;
+  } else if (
+    String(server.requiresAuth) === "false" ||
+    server.requiresAuth === "f" ||
+    server.requiresAuth === 0
+  ) {
+    server.requiresAuth = false;
+  } else if (typeof server.requiresAuth !== "boolean") {
+    // Se for undefined/null, converte para booleano (false) para evitar erro no banco
+    server.requiresAuth = Boolean(server.requiresAuth);
+  }
+
+  // Log para debug
+  logger.info(
+    `[DEBUG] saveServer PROCESSED: Privado? ${server.requiresAuth} (Type: ${typeof server.requiresAuth})`,
+  );
+
   if (!isConnected) {
     const config = loadJsonConfig();
     if (!config.servers) config.servers = [];

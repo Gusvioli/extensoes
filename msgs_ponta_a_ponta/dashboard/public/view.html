@@ -8,15 +8,36 @@
     <script src="js/config.js"></script>
     <style>
       /* Ajuste de design: Bordas levemente menos arredondadas */
-      .container, .modal-content { border-radius: 8px !important; }
-      header { border-radius: 8px 8px 0 0 !important; }
-      .card, .stat-card, .server-card { border-radius: 6px !important; }
-      .btn, .form-control, .search-input, select { border-radius: 4px !important; }
-      .status-badge { border-radius: 4px !important; }
-      footer, .app-footer { border-radius: 0 0 8px 8px !important; }
-      
+      .container,
+      .modal-content {
+        border-radius: 8px !important;
+      }
+      header {
+        border-radius: 8px 8px 0 0 !important;
+      }
+      .card,
+      .stat-card,
+      .server-card {
+        border-radius: 6px !important;
+      }
+      .btn,
+      .form-control,
+      .search-input,
+      select {
+        border-radius: 4px !important;
+      }
+      .status-badge {
+        border-radius: 4px !important;
+      }
+      footer,
+      .app-footer {
+        border-radius: 0 0 8px 8px !important;
+      }
+
       /* Botão de limpar pesquisa */
-      .search-wrapper { position: relative; }
+      .search-wrapper {
+        position: relative;
+      }
       .search-clear-btn {
         position: absolute;
         right: 10px;
@@ -31,7 +52,9 @@
         line-height: 1;
         display: none;
       }
-      .search-clear-btn:hover { color: #666; }
+      .search-clear-btn:hover {
+        color: #666;
+      }
     </style>
   </head>
   <body>
@@ -110,13 +133,33 @@
         </div>
       </div>
 
-      <div id="login-required-message" class="card" style="margin-bottom: 30px; text-align: center; padding: 40px; display: none;">
-        <h3 style="color: var(--text-secondary);">🔒 Ferramentas de Medição</h3>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">Faça login para acessar gráficos de latência e testes de velocidade.</p>
-        <button onclick="document.getElementById('login-btn').click()" class="btn btn-primary">Fazer Login</button>
+      <div
+        id="login-required-message"
+        class="card"
+        style="
+          margin-bottom: 30px;
+          text-align: center;
+          padding: 40px;
+          display: none;
+        "
+      >
+        <h3 style="color: var(--text-secondary)">🔒 Ferramentas de Medição</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px">
+          Faça login para acessar gráficos de latência e testes de velocidade.
+        </p>
+        <button
+          onclick="document.getElementById('login-btn').click()"
+          class="btn btn-primary"
+        >
+          Fazer Login
+        </button>
       </div>
 
-      <div id="latency-comparison-card" class="card" style="margin-bottom: 30px; display: none;">
+      <div
+        id="latency-comparison-card"
+        class="card"
+        style="margin-bottom: 30px; display: none"
+      >
         <div
           style="
             display: flex;
@@ -168,7 +211,13 @@
             autocomplete="off"
             name="view_search_query"
           />
-          <button id="view-search-clear" class="search-clear-btn" title="Limpar">&times;</button>
+          <button
+            id="view-search-clear"
+            class="search-clear-btn"
+            title="Limpar"
+          >
+            &times;
+          </button>
         </div>
         <div class="sort-wrapper">
           <select id="view-sort" class="sort-select">
@@ -198,34 +247,14 @@
     <div id="connect-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>🔗 Dados de Conexão</h2>
+          <h2>
+            🔗 Nomedo servidor:<br>
+            <span
+              id="modal-server-name"
+              style="color: var(--primary-blue)"
+            ></span>
+          </h2>
           <button class="close-modal-btn close-btn">×</button>
-        </div>
-        <p style="margin-bottom: 20px; color: var(--text-secondary)">
-          Copie os dados abaixo para usar na sua extensão ou aplicação.
-        </p>
-
-        <div class="form-group">
-          <label for="modal-server-name">Nome do Servidor:</label>
-          <input type="text" id="modal-server-name" readonly />
-        </div>
-
-        <div class="form-group">
-          <label for="modal-ws-url">URL WebSocket:</label>
-          <div style="display: flex; gap: 10px">
-            <input
-              type="text"
-              id="modal-ws-url"
-              readonly
-              style="flex-grow: 1"
-            />
-            <button
-              onclick="copyInput('modal-ws-url', this)"
-              class="btn btn-primary"
-            >
-              Copiar
-            </button>
-          </div>
         </div>
 
         <div id="modal-token-group" class="form-group">
@@ -246,11 +275,30 @@
           </div>
         </div>
 
-        <div id="login-alert-modal" class="card" style="display: none; margin-top: 20px; padding: 15px; text-align: center; background-color: #f8f9fa; border: 1px solid var(--border-color); box-shadow: none;">
-          <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">🔒 Faça login para acessar ferramentas de diagnóstico (Latência e Velocidade).</p>
+        <div
+          id="login-alert-modal"
+          class="card"
+          style="
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            text-align: center;
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+          "
+        >
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem">
+            🔒 Faça login para acessar ferramentas de diagnóstico (Latência e
+            Velocidade).
+          </p>
         </div>
 
-        <div id="latency-history-group" class="form-group" style="margin-top: 20px; display: none;">
+        <div
+          id="latency-history-group"
+          class="form-group"
+          style="margin-top: 20px; display: none"
+        >
           <div
             style="
               display: flex;
@@ -284,7 +332,11 @@
           </div>
         </div>
 
-        <div id="speed-test-group" class="form-group" style="margin-top: 20px; display: none;">
+        <div
+          id="speed-test-group"
+          class="form-group"
+          style="margin-top: 20px; display: none"
+        >
           <label>Teste de Velocidade:</label>
           <div
             style="

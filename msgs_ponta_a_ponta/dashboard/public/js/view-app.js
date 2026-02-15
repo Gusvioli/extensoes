@@ -11,6 +11,7 @@ let latencyInterval = null;
 let latencyHistory = [];
 let latencyComparisonData = [];
 let loginAttempts = 0;
+let currentWsUrl = ""; // Variável para armazenar a URL de conexão atual
 
 // URL Base da API (Fallback para localhost se config.js não carregar)
 const API_BASE =
@@ -272,35 +273,52 @@ function injectLoginModal() {
   if (document.getElementById("login-modal")) return;
 
   const modalHTML = `
+    <style>
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+      }
+      .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+    </style>
     <div id="login-modal" class="modal">
-      <div class="modal-content" style="max-width: 400px;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <h2 style="margin: 0;">🔐 Login</h2>
-          <button class="close-modal-btn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+      <div class="modal-content" style="max-width: 400px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; position: relative;">
+          <button class="close-modal-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">&times;</button>
+          <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 700;">Bem-vindo</h2>
+          <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 0.95rem;">Acesse sua conta para continuar</p>
         </div>
         
-        <form id="login-form" autocomplete="off">
-          <div class="form-group" style="margin-bottom: 15px;">
-            <label for="login-username" style="display: block; margin-bottom: 5px; font-weight: 500;">Usuário</label>
-            <input type="text" id="login-username" class="form-control" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-          </div>
+        <div style="padding: 30px 25px; background: white;">
+          <form id="login-form" autocomplete="off">
+            <div class="form-group" style="margin-bottom: 20px;">
+              <label for="login-username" style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Usuário</label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #a0aec0; pointer-events: none;">👤</span>
+                <input type="text" id="login-username" class="form-control" required placeholder="Seu usuário" style="width: 100%; padding: 12px 12px 12px 40px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; transition: all 0.2s; outline: none;">
+              </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label for="login-password" style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Senha</label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #a0aec0; pointer-events: none; z-index: 5;">🔒</span>
+                <input type="password" id="login-password" class="form-control" required placeholder="Sua senha" style="width: 100%; padding: 12px 40px 12px 40px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; transition: all 0.2s; outline: none;">
+              </div>
+            </div>
+
+            <div style="text-align: right; margin-bottom: 25px;">
+              <a href="#" id="login-forgot-link" style="font-size: 0.85rem; color: #667eea; text-decoration: none; font-weight: 500; transition: color 0.2s;">Esqueceu a senha?</a>
+            </div>
+
+            <div id="login-error" class="alert-box error" style="display: none; color: #c53030; background-color: #fff5f5; border: 1px solid #feb2b2; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; text-align: center;"></div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px rgba(102, 126, 234, 0.25); transition: transform 0.1s, box-shadow 0.1s;">Entrar</button>
+          </form>
           
-          <div class="form-group" style="margin-bottom: 15px;">
-            <label for="login-password" style="display: block; margin-bottom: 5px; font-weight: 500;">Senha</label>
-            <input type="password" id="login-password" class="form-control" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #edf2f7; font-size: 0.9rem; color: #718096;">
+            Não tem uma conta? <a href="/" style="color: #667eea; text-decoration: none; font-weight: 600;">Cadastre-se</a>
           </div>
-
-          <div id="login-error" class="alert-box error" style="display: none; color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
-
-          <button type="submit" class="btn-primary" style="width: 100%; padding: 10px; background-color: #667eea; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Entrar</button>
-        </form>
-        
-        <div style="text-align: right; margin-top: 10px;">
-          <a href="#" id="login-forgot-link" style="font-size: 0.9em; color: #667eea; text-decoration: none;">Esqueci minha senha</a>
-        </div>
-
-        <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
-          <p>Não tem uma conta? <a href="/" style="color: #667eea; text-decoration: none;">Cadastre-se no Painel</a></p>
         </div>
       </div>
     </div>
@@ -326,6 +344,21 @@ function injectLoginModal() {
       e.preventDefault();
       openForgotPasswordModal();
     });
+
+  // Adiciona a funcionalidade de login com a tecla "Enter"
+  const usernameInput = document.getElementById("login-username");
+  const passwordInput = document.getElementById("login-password");
+  const loginForm = document.getElementById("login-form");
+
+  const submitOnEnter = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault(); // Impede o comportamento padrão do Enter
+      loginForm.requestSubmit(); // Dispara o evento 'submit' do formulário, chamando handleLoginSubmit
+    }
+  };
+
+  usernameInput.addEventListener("keydown", submitOnEnter);
+  passwordInput.addEventListener("keydown", submitOnEnter);
 }
 
 async function handleLoginSubmit(e) {
@@ -406,11 +439,21 @@ async function handleLoginSubmit(e) {
       loginAttempts++;
       errorBox.textContent = data.error || "Erro ao entrar.";
       errorBox.style.display = "block";
+
+      const modalContent = document.querySelector(
+        "#login-modal .modal-content",
+      );
+      modalContent.classList.add("shake");
+      setTimeout(() => modalContent.classList.remove("shake"), 500);
     }
   } catch (err) {
     console.error(err);
     errorBox.innerHTML = `Erro: ${err.message}<br><span style="font-size: 0.85em; color: #666;">Backend: ${cleanApiBase || "Relativo"}</span>`;
     errorBox.style.display = "block";
+
+    const modalContent = document.querySelector("#login-modal .modal-content");
+    modalContent.classList.add("shake");
+    setTimeout(() => modalContent.classList.remove("shake"), 500);
   } finally {
     if (loginAttempts >= 3) {
       let countdown = 10;
@@ -479,19 +522,6 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <p class="mb-4" style="font-weight: 500;">Copie os dados abaixo para usar na sua extensão ou aplicação.</p>
           
-          <div class="form-group mb-4">
-            <label>Nome do Servidor:</label>
-            <input type="text" id="modal-server-name" readonly>
-          </div>
-
-          <div class="form-group mb-4">
-            <label>URL WebSocket:</label>
-            <div class="flex gap-2">
-              <input type="text" id="modal-ws-url" readonly style="flex-grow: 1;">
-              <button onclick="copyInput('modal-ws-url', this)" class="btn-copy-connection" style="padding: 0 15px;">Copiar</button>
-            </div>
-          </div>
-
           <div id="modal-token-group" class="form-group mb-4">
             <label>Token de Autenticação:</label>
             <div class="flex gap-2">
@@ -605,30 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const viewToggleBtn = document.getElementById("view-toggle-btn");
   if (viewToggleBtn) {
-    viewSearch.value = ""; // Limpar ao carregar a página
-    // Definir estado inicial
-    viewToggleBtn.innerHTML =
-      currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-
-    viewToggleBtn.addEventListener("click", () => {
-      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
-      localStorage.setItem("publicViewMode", currentViewMode);
-      viewToggleBtn.innerHTML =
-        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-
-      // Forçar limpeza e re-renderização com delay para evitar glitches visuais
-      const container = document.getElementById("servers-grid");
-      if (container) container.innerHTML = "";
-
-      setTimeout(() => {
-        currentFilter = "all";
-        document.querySelectorAll(".filter-btn").forEach((btn) => {
-          btn.classList.remove("active");
-          if (btn.dataset.filter === "all") btn.classList.add("active");
-        });
-        renderServers();
-      }, 10);
-    });
+    viewToggleBtn.style.display = "none";
   }
 
   // --- FIX: Injetar Footer se não existir ---
@@ -704,6 +711,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const refreshLatencyBtn = document.getElementById("refresh-latency-btn");
   if (refreshLatencyBtn) {
     refreshLatencyBtn.addEventListener("click", updateLatencyComparisonChart);
+  }
+
+  const startSpeedTestBtn = document.getElementById("start-speed-test-btn");
+  if (startSpeedTestBtn) {
+    startSpeedTestBtn.addEventListener("click", startSpeedTest);
   }
 
   const latencyCompCanvas = document.getElementById("latency-comparison-chart");
@@ -897,7 +909,16 @@ function loadServers() {
       return res.json();
     })
     .then((data) => {
-      servers = data.servers || [];
+      servers = (data.servers || []).map((s) => ({
+        ...s,
+        // Normalização robusta
+        requiresAuth:
+          s.requiresAuth === true ||
+          s.requiresAuth === "true" ||
+          s.requiresAuth === 1 ||
+          s.requireAuth === true ||
+          s.requiresauth === true,
+      }));
       renderServers();
       updateStats();
       updateCounts();
@@ -976,53 +997,108 @@ function renderServers() {
     return;
   }
 
-  // Configurar container baseado no modo de visualização
-  if (currentViewMode === "list") {
-    container.className = "servers-list";
-    container.style.display = "block";
-  } else {
-    container.className = "servers-grid";
-    container.style.display = "grid";
-  }
+  // Forçar modo lista
+  container.className = "servers-list";
+  container.style.display = "block";
 
-  if (currentViewMode === "list") {
-    container.innerHTML = `
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <thead style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+  container.innerHTML = `
+      <div style="background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); overflow: hidden; border: 1px solid #e2e8f0;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 900px;">
+            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                 <tr>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Status</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Nome</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Host</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Porta</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Protocolo</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Clientes</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Região</th>
-                    <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Ações</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Status</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Servidor</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Conexão</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Capacidade</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Acesso</th>
+                    <th style="padding: 16px 24px; text-align: right; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Ações</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody style="background: white;">
                 ${displayServers
                   .map((server) => {
+                    const isAdminOrManager =
+                      currentUser &&
+                      (currentUser.role === "admin" ||
+                        currentUser.role === "gerente");
+                    
+                    const loadPercentage = Math.min(100, ((server.clientsCount || 0) / server.maxClients) * 100);
+                    let loadColor = '#22c55e'; // Green
+                    if (loadPercentage > 80) loadColor = '#ef4444'; // Red
+                    else if (loadPercentage > 50) loadColor = '#f59e0b'; // Yellow
+
                     return `
-                        <tr style="border-bottom: 1px solid #e9ecef; transition: background 0.2s;">
-                            <td style="padding: 12px 15px;">
-                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 4px;">
-                                    ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
-                                </span>
+                        <tr style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
+                            <!-- Status -->
+                            <td style="padding: 16px 24px; white-space: nowrap; vertical-align: middle;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="status-dot ${server.status}"></span>
+                                    <span style="font-size: 0.875rem; font-weight: 600; color: #334155; text-transform: capitalize;">${server.status}</span>
+                                </div>
                             </td>
-                            <td style="padding: 12px 15px; font-weight: 500;">${highlightMatch(server.name)}</td>
-                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${highlightMatch(server.host)}</td>
-                            <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
-                            <td style="padding: 12px 15px;">${server.protocol}</td>
-                            <td style="padding: 12px 15px;">
-                                <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}
+                            
+                            <!-- Servidor -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                    <span style="font-size: 0.95rem; font-weight: 600; color: #1e293b;">${highlightMatch(server.name)}</span>
+                                    <span title="${escapeHtml(server.description || '')}" style="font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block;">
+                                        ${server.description || 'Sem descrição'}
+                                    </span>
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                        <span style="font-size: 0.7rem; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 4px;">${server.region || 'Global'}</span>
+                                    </div>
+                                </div>
                             </td>
-                            <td style="padding: 12px 15px;">${highlightMatch(server.region || "N/A")}</td>
-                            <td style="padding: 12px 15px; text-align: right;">
-                                <button class="btn-icon" onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(server.token || "")}')" title="Conectar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">🔗</button>
-                                <button class="btn-icon" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">⚡</button>
-                                <button class="btn-icon" onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" title="Copiar Host" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">📍</button>
+
+                            <!-- Conexão -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <code style="font-family: 'Menlo', monospace; font-size: 0.85rem; color: #334155; font-weight: 500;">${highlightMatch(server.host)}</code>
+                                        <span style="color: #cbd5e1;">:</span>
+                                        <code style="font-family: 'Menlo', monospace; font-size: 0.85rem; color: #64748b;">${server.port}</code>
+                                    </div>
+                                    <div>
+                                        <span class="badge ${server.protocol === 'wss' ? 'badge-secure' : 'badge-insecure'}" style="font-size: 0.7rem;">${server.protocol.toUpperCase()}</span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Capacidade -->
+                            <td style="padding: 16px 24px; vertical-align: middle; min-width: 140px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.75rem;">
+                                    <span style="font-weight: 600; color: #334155;">${server.clientsCount || 0}</span>
+                                    <span style="color: #94a3b8;">${server.maxClients.toLocaleString()}</span>
+                                </div>
+                                <div style="width: 100%; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden;">
+                                    <div style="width: ${loadPercentage}%; background: ${loadColor}; height: 100%; border-radius: 999px; transition: width 0.5s ease;"></div>
+                                </div>
+                            </td>
+
+                            <!-- Acesso -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div>
+                                    ${server.requiresAuth 
+                                        ? '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2;">🔒 Privado</span>' 
+                                        : '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7;">🔓 Público</span>'}
+                                </div>
+                            </td>
+
+                            <!-- Ações -->
+                            <td style="padding: 16px 24px; text-align: right; vertical-align: middle;">
+                                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                ${
+                                  server.status === "active"
+                                    ? `
+                                  <button onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(isAdminOrManager ? server.token || "" : "")}')" class="action-btn connect-btn" title="Conectar">🔗</button>
+                                  <button onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" class="action-btn ping-btn" title="Testar Latência">⚡</button>
+                                `
+                                    : `
+                                  <span title="Servidor Indisponível" style="font-size: 1.2em; margin-right: 8px; opacity: 0.5; cursor: not-allowed; display: inline-flex; align-items: center; height: 36px;">🚫</span>
+                                `
+                                }
+                                <button onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" class="action-btn copy-btn" title="Copiar Host">📍</button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -1031,107 +1107,6 @@ function renderServers() {
             </tbody>
         </table>
       </div>`;
-    return;
-  }
-
-  container.innerHTML = displayServers
-    .map((server) => {
-      return `
-    <div class="server-card ${server.status}">
-        <span class="status-badge ${server.status}">
-          ${getStatusEmoji(server.status)} ${getStatusLabel(server.status)}
-        </span>
-
-        <h3 class="server-name">${highlightMatch(server.name)}</h3>
-        <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
-
-        <div class="info-row">
-          <span class="info-label">Host:</span>
-          <span class="info-value">${highlightMatch(server.host)}</span>
-        </div>
-
-        <div class="info-row">
-          <span class="info-label">Porta:</span>
-          <span class="info-value">${server.port || "N/A"}</span>
-        </div>
-
-        <div class="info-row">
-          <span class="info-label">Protocolo:</span>
-          <span class="info-value protocol-value">${server.protocol}</span>
-        </div>
-
-        ${
-          server.region
-            ? `<div class="info-row">
-          <span class="info-label">Região:</span>
-          <span class="info-value">${highlightMatch(server.region)}</span>
-        </div>`
-            : ""
-        }
-
-        ${
-          server.maxClients
-            ? `<div class="info-row">
-          <span class="info-label">Clientes:</span>
-          <span class="info-value"><strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients}</span>
-        </div>`
-            : ""
-        }
-
-        <div class="info-row">
-          <span class="info-label">Autenticação:</span>
-          <span class="info-value">${
-            server.requiresAuth === true
-              ? "🔒 Obrigatória"
-              : server.requiresAuth === false
-                ? "🔓 Opcional"
-                : "❓ Desconhecido"
-          }</span>
-        </div>
-
-      ${
-        server.token &&
-        server.requiresAuth !== undefined &&
-        server.requiresAuth !== null
-          ? `<div class="token-display mt-2">
-              <div class="mb-2">${escapeHtml(server.token)}</div>
-              <button class="btn-copy w-full" onclick="copyToClipboard('${escapeHtml(server.token)}', this)">📋 Copiar Token</button>
-            </div>`
-          : server.requiresAuth !== undefined && server.requiresAuth !== null
-            ? `<div style="background: #fff; padding: 15px; margin: 15px 0; /* box-shadow: var(--shadow-md); */ border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);">
-        <p style="margin: 0; font-size: 0.9em; color: var(--text-main); font-weight: 600;">
-          ⚠️ Token não configurado para este servidor
-        </p>
-      </div>`
-            : ""
-      }
-
-      <div class="server-actions">
-        <button class="btn-connect" onclick="connectToServer('${escapeHtml(
-          server.host,
-        )}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(
-          server.token || "",
-        )}')">
-          🔗 Conectar
-        </button>
-        <button class="btn-edit" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" title="Testar Latência">
-          ⚡ Ping
-        </button>
-        <button class="btn-copy" onclick="copyToClipboard('${escapeHtml(
-          server.host,
-        )}:${server.port}', this)" title="Copiar host:porta">
-          📍 Host
-        </button>
-        <button class="btn-copy btn-copy-connection" onclick="copyConnection('${escapeHtml(
-          server.host,
-        )}', ${server.port}, '${server.protocol}', '${escapeHtml(server.token || "")}', this)" title="Copiar ws://host:porta + token">
-          🔐 Conexão
-        </button>
-      </div>
-    </div>
-  `;
-    })
-    .join("");
 }
 
 // ===== UPDATE COUNTS =====
@@ -1173,19 +1148,18 @@ function setupEventListeners() {
 function connectToServer(host, port, protocol, serverName, token) {
   // Constrói a URL baseada nos dados do servidor clicado
   const wsUrl = `${protocol}://${host}${port ? ":" + port : ""}`;
+  currentWsUrl = wsUrl; // Salva na variável global para uso no teste de velocidade
 
-  document.getElementById("modal-server-name").value = serverName;
-  document.getElementById("modal-ws-url").value = wsUrl;
+  const nameSpan = document.getElementById("modal-server-name");
+  if (nameSpan) nameSpan.textContent = serverName;
 
   const tokenGroup = document.getElementById("modal-token-group");
   const tokenInput = document.getElementById("modal-token");
 
-  if (token) {
-    tokenGroup.style.display = "block";
-    tokenInput.value = token;
-  } else {
-    tokenGroup.style.display = "none";
-    tokenInput.value = "";
+  if (tokenInput) tokenInput.value = token || "";
+
+  if (tokenGroup) {
+    tokenGroup.style.display = token ? "block" : "none";
   }
 
   const modal = document.getElementById("connect-modal");
@@ -1419,8 +1393,9 @@ function startSpeedTest() {
   const btn = document.getElementById("start-speed-test-btn");
   const downloadEl = document.getElementById("speed-download");
   const uploadEl = document.getElementById("speed-upload");
-  const wsUrl = document.getElementById("modal-ws-url").value;
-  const token = document.getElementById("modal-token").value;
+  const wsUrl = currentWsUrl; // Usa a variável global em vez de ler do input
+  const tokenInput = document.getElementById("modal-token");
+  const token = tokenInput ? tokenInput.value : "";
 
   if (!wsUrl) return;
 
@@ -1500,7 +1475,7 @@ function startSpeedTest() {
 
   function performUploadTest(ws, targetId) {
     return new Promise((resolve, reject) => {
-      const payload = "x".repeat(1024 * 100); // 100KB
+      const payload = "x".repeat(1024 * 1024); // 1MB
       const message = { type: "upload-test", target: targetId, payload };
       const msgString = JSON.stringify(message);
       const startTime = Date.now();
@@ -1516,23 +1491,23 @@ function startSpeedTest() {
           clearInterval(interval);
           if (timeoutId) clearTimeout(timeoutId);
           const duration = (Date.now() - startTime) / 1000;
-          const speed =
-            (msgString.length * 8) / (1024 * 1024) / (duration || 0.001);
+          const safeDuration = duration < 0.001 ? 0.001 : duration;
+          const speed = (msgString.length * 8) / (1024 * 1024) / safeDuration;
           resolve(speed);
         }
-      }, 10);
+      }, 5);
 
-      // Timeout de segurança para upload (10s)
+      // Timeout de segurança para upload (20s)
       timeoutId = setTimeout(() => {
         clearInterval(interval);
         reject(new Error("Timeout no teste de upload"));
-      }, 10000);
+      }, 20000);
     });
   }
 
   function performDownloadTest(ws, targetId) {
     return new Promise((resolve, reject) => {
-      const payload = "y".repeat(1024 * 100); // 100KB
+      const payload = "y".repeat(1024 * 1024); // 1MB
       const message = { type: "download-test", target: targetId, payload };
       const startTime = Date.now();
       ws.send(JSON.stringify(message));
@@ -1542,8 +1517,8 @@ function startSpeedTest() {
           const msg = JSON.parse(event.data);
           if (msg.type === "download-test") {
             const duration = (Date.now() - startTime) / 1000;
-            const speed =
-              (event.data.length * 8) / (1024 * 1024) / (duration || 0.001);
+            const safeDuration = duration < 0.001 ? 0.001 : duration;
+            const speed = (event.data.length * 8) / (1024 * 1024) / safeDuration;
             ws.removeEventListener("message", tempListener);
             resolve(speed);
           } else if (msg.type === "error") {
@@ -1560,7 +1535,7 @@ function startSpeedTest() {
       setTimeout(() => {
         ws.removeEventListener("message", tempListener);
         reject(new Error("Timeout no teste de download"));
-      }, 5000);
+      }, 20000);
     });
   }
 

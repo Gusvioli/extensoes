@@ -21,7 +21,7 @@ const resendRateLimit = new Map();
 
 function checkServerHealth(server) {
   return new Promise((resolve) => {
-    if (!server.host) return resolve(false);
+    if (!server.host) return resolve({ isOnline: false });
     const isSecure = server.protocol === "wss";
     const transport = isSecure ? https : http;
     const port = server.port || (isSecure ? 443 : 80);
@@ -42,23 +42,23 @@ function checkServerHealth(server) {
           res.on("end", () => {
             try {
               const json = JSON.parse(data);
-              if (json.status === "offline") resolve(false);
-              else resolve(true);
+              if (json.status === "offline") resolve({ isOnline: false });
+              else resolve({ isOnline: true, clientsCount: json.clientsCount });
             } catch (e) {
-              resolve(true);
+              resolve({ isOnline: true });
             }
           });
         } else {
           res.resume();
-          resolve(true);
+          resolve({ isOnline: true });
         }
       },
     );
     req.on("timeout", () => {
       req.destroy();
-      resolve(false);
+      resolve({ isOnline: false });
     });
-    req.on("error", () => resolve(false));
+    req.on("error", () => resolve({ isOnline: false }));
   });
 }
 
@@ -67,27 +67,40 @@ async function updateServersStatusFile() {
     const servers = await db.getAllServers();
     const healthChecks = servers.map(async (server) => {
       if (!server.host || server.status === "standby")
-        return { server, isOnline: null };
+        return { server, health: { isOnline: null } };
       try {
-        const isOnline = await checkServerHealth(server);
-        return { server, isOnline };
+        const health = await checkServerHealth(server);
+        return { server, health };
       } catch (e) {
-        return { server, isOnline: false };
+        return { server, health: { isOnline: false } };
       }
     });
 
     const results = await Promise.all(healthChecks);
     const updatedServers = [];
 
-    for (const { server, isOnline } of results) {
+    for (const { server, health } of results) {
+      const { isOnline, clientsCount } = health;
+
       if (isOnline !== null) {
         const newStatus = isOnline ? "active" : "inactive";
+        let hasChanges = false;
+
         if (server.status !== newStatus) {
           server.status = newStatus;
-          await db.saveServer(server);
+          hasChanges = true;
           logger.info(
             `[MONITOR] Status do servidor '${server.name}' alterado para: ${newStatus.toUpperCase()}`,
           );
+        }
+
+        if (clientsCount !== undefined && server.clientsCount !== clientsCount) {
+          server.clientsCount = clientsCount;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          await db.saveServer(server);
         }
       }
       updatedServers.push(server);
@@ -104,6 +117,42 @@ async function updateServersStatusFile() {
         2,
       ),
     );
+
+    // === HISTÓRICO DE CAPACIDADE (Adicionado) ===
+    try {
+      const historyPath = path.join(publicDir, "servers-history.json");
+      let historyData = {};
+      
+      // Tenta carregar histórico existente
+      if (fs.existsSync(historyPath)) {
+        try { historyData = JSON.parse(fs.readFileSync(historyPath, "utf8")); } catch (e) {}
+      }
+
+      const now = new Date().toISOString();
+      const activeIds = new Set(updatedServers.map((s) => s.id));
+
+      // Limpar dados de servidores deletados
+      Object.keys(historyData).forEach((id) => {
+        if (!activeIds.has(id)) delete historyData[id];
+      });
+
+      updatedServers.forEach((server) => {
+        if (!historyData[server.id]) historyData[server.id] = [];
+        
+        historyData[server.id].push({ t: now, c: server.clientsCount || 0 });
+        
+        // Manter apenas os últimos 60 registros (aprox. 30 min de histórico com updates a cada 30s)
+        if (historyData[server.id].length > 60) {
+          historyData[server.id] = historyData[server.id].slice(-60);
+        }
+      });
+
+      fs.writeFileSync(historyPath, JSON.stringify(historyData));
+    } catch (err) {
+      logger.error("Erro ao salvar histórico:", err.message);
+    }
+    // ============================================
+
     return updatedServers;
   } catch (error) {
     logger.error("Erro ao atualizar JSON de status:", error.message);
@@ -445,7 +494,7 @@ const authSignup = async (req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: "Falha ao enviar e-mail. Verifique os logs do servidor.",
+          error: "Falha ao enviar e-mail. Verifique se a Senha de App do Google está configurada corretamente no .env.",
         }),
       );
       return;
@@ -573,7 +622,7 @@ const authResendCode = async (req, res) => {
 
     if (!emailSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Falha ao enviar e-mail." }));
+      res.end(JSON.stringify({ error: "Falha ao enviar e-mail. Verifique as credenciais SMTP." }));
       return;
     }
 
@@ -673,7 +722,7 @@ const authForgotPassword = async (req, res) => {
 
     if (!emailSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Falha ao enviar e-mail." }));
+      res.end(JSON.stringify({ error: "Falha ao enviar e-mail. Verifique as credenciais SMTP." }));
       return;
     }
 
@@ -1017,7 +1066,7 @@ const refreshServers = async (req, res) => {
 
 const getUsers = async (req, res) => {
   if (!req.user) return utils.send401(res);
-  if (req.user.role !== "admin") return utils.send403(res);
+  if (!["admin", "gerente"].includes(req.user.role)) return utils.send403(res);
   try {
     const users = await db.getAllUsers();
     const safeUsers = users.map((u) => ({ ...u, password: "" }));
@@ -1067,10 +1116,20 @@ const saveUser = async (req, res) => {
 
       const isEditingSelf = userData.id === req.user.id;
       if (!isAdmin && !isEditingSelf) {
-        logger.audit(req.user, "UPDATE_OTHER_USER_FORBIDDEN", {
-          targetId: userData.id,
-        });
-        return utils.send403(res);
+        // Gerentes podem editar outros usuários, exceto admins
+        if (req.user.role === "gerente") {
+          if (existingUser.role === "admin") {
+            logger.audit(req.user, "UPDATE_ADMIN_FORBIDDEN", {
+              targetId: userData.id,
+            });
+            return utils.send403(res);
+          }
+        } else {
+          logger.audit(req.user, "UPDATE_OTHER_USER_FORBIDDEN", {
+            targetId: userData.id,
+          });
+          return utils.send403(res);
+        }
       }
 
       // Proteção: Não permite mudar cargo se não for admin
@@ -1127,6 +1186,101 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const getAuditLogs = async (req, res) => {
+  if (!req.user) return utils.send401(res);
+  // Apenas administradores podem ver os logs de auditoria
+  if (req.user.role !== "admin") return utils.send403(res);
+
+  try {
+    const parsedUrl = url.parse(req.url, true);
+    const limit = parseInt(parsedUrl.query.limit) || 100;
+    
+    const logs = logger.getAuditLogs(limit);
+    
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ success: true, logs }));
+  } catch (err) {
+    logger.error("Erro ao recuperar logs de auditoria:", err);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Erro interno ao ler logs." }));
+  }
+};
+
+const downloadLogs = async (req, res) => {
+  if (!req.user) return utils.send401(res);
+  if (req.user.role !== "admin") return utils.send403(res);
+
+  let archiver;
+  try {
+    archiver = require("archiver");
+  } catch (e) {
+    logger.error("Módulo 'archiver' não encontrado. Instale com: npm install archiver");
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Dependência 'archiver' não instalada no servidor." }));
+    return;
+  }
+
+  const logDir = path.join(__dirname, "logs");
+  if (!fs.existsSync(logDir)) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Diretório de logs não encontrado." }));
+    return;
+  }
+
+  const parsedUrl = url.parse(req.url, true);
+  const { startDate, endDate } = parsedUrl.query;
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `logs-${timestamp}.zip`;
+
+  res.writeHead(200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+  });
+
+  const archive = archiver("zip", {
+    zlib: { level: 9 }, // Nível máximo de compressão
+  });
+
+  archive.on("error", (err) => logger.error("Erro ao compactar logs:", err));
+  archive.pipe(res);
+
+  if (startDate || endDate) {
+    const start = startDate ? new Date(startDate).getTime() : 0;
+    const end = endDate ? new Date(endDate).setUTCHours(23, 59, 59, 999) : Date.now();
+
+    try {
+      const files = fs.readdirSync(logDir);
+      for (const file of files) {
+        const filePath = path.join(logDir, file);
+        if (fs.statSync(filePath).isDirectory()) continue;
+
+        const content = fs.readFileSync(filePath, "utf8");
+        const lines = content.split("\n");
+        const filteredLines = lines.filter((line) => {
+          if (!line.trim()) return false;
+          const match = line.match(/^\[(.*?)\]/);
+          if (match) {
+            const logTime = new Date(match[1]).getTime();
+            return logTime >= start && logTime <= end;
+          }
+          return false;
+        });
+
+        if (filteredLines.length > 0) {
+          archive.append(filteredLines.join("\n"), { name: file });
+        }
+      }
+    } catch (err) {
+      logger.error("Erro ao filtrar logs:", err);
+    }
+  } else {
+    archive.directory(logDir, false); // Adiciona conteúdo da pasta logs na raiz do zip
+  }
+
+  await archive.finalize();
+};
+
 module.exports = {
   getAuthenticatedUser,
   initSettings,
@@ -1152,4 +1306,6 @@ module.exports = {
   getUsers,
   saveUser,
   deleteUser,
+  getAuditLogs,
+  downloadLogs,
 };

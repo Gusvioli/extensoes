@@ -37,7 +37,7 @@ function readBody(req) {
 }
 
 function send401(res) {
-  logger.warn("⚠️  Acesso negado (401) - Sessão inválida ou expirada");
+  logger.debug("ℹ️  Acesso negado (401) - Sessão inválida ou expirada");
   res.setHeader(
     "Set-Cookie",
     "session_token=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",

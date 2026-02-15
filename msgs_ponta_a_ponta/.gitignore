@@ -51,6 +51,3 @@ out/
 # Testing
 coverage/
 .nyc_output/
-
-# Miscellaneous
-.env.example

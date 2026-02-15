@@ -274,13 +274,12 @@ body {
   margin-right: -20px;
   margin-bottom: -20px;
   width: calc(100% + 40px);
-  opacity: 0;
-  transform: translateY(100%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 .server-actions button, .server-actions a {
-  padding: 16px 24px;
+  padding: 10px 16px;
   /* border-radius: var(--radius-sm); */
   font-weight: 700;
   transition: all 0.2s ease;
@@ -292,7 +291,7 @@ body {
   cursor: pointer;
   color: var(--text-main);
   text-decoration: none;
-  font-size: 1rem;
+  font-size: 0.9rem;
   text-align: center;
   /* box-shadow: var(--shadow-sm); */
   background: #fff;
@@ -302,14 +301,9 @@ body {
   box-shadow: none;
 }
 
-.server-card:hover .server-actions {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
 /* Cores dos Botões */
-.btn-main, .btn-connect { grid-column: 1 / -1; background: var(--primary) !important; color: #fff !important; }
+.btn-main { grid-column: 1 / -1; background: var(--primary) !important; color: #fff !important; }
+.btn-connect { background: var(--primary) !important; color: #fff !important; }
 .btn-main:hover, .btn-connect:hover { background: var(--primary-hover) !important; }
 .btn-edit { background: #fff; }
 .btn-edit:hover { background: var(--bg-card-hover); }
@@ -457,7 +451,7 @@ main, .container, #dashboard-container, #servers-grid {
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 0px;
   box-sizing: border-box;
 }
 

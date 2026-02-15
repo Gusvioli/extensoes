@@ -3,7 +3,7 @@
 let servers = [];
 let currentFilter = "all";
 let searchTerm = "";
-let currentViewMode = localStorage.getItem("adminViewMode") || "grid";
+let currentPrivacyFilter = "all";
 let currentSort = "name";
 let editingServerId = null;
 let currentUser = null; // Armazenará o objeto do usuário: { name, username, role }
@@ -706,6 +706,109 @@ function injectToastStyles() {
   document.head.appendChild(style);
 }
 
+function injectBadgeStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    .server-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; border: 1px solid transparent; letter-spacing: 0.02em; }
+    .badge-secure { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+    .badge-insecure { background: #fef9c3; color: #a16207; border-color: #fde047; }
+    .badge-info { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .badge-success { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+    .badge-danger { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+    .badge-auth { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+    .badge-open { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+    
+    /* Status Dots */
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; position: relative; }
+    .status-dot::after { content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; border-radius: 50%; opacity: 0.3; z-index: 0; }
+    .status-dot.active { background-color: #22c55e; }
+    .status-dot.active::after { background-color: #22c55e; }
+    .status-dot.inactive { background-color: #ef4444; }
+    .status-dot.inactive::after { background-color: #ef4444; }
+    .status-dot.standby { background-color: #f59e0b; }
+    .status-dot.standby::after { background-color: #f59e0b; }
+
+    /* Action Buttons */
+    .action-btn {
+        width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e2e8f0; 
+        background: white; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+        transition: all 0.2s ease; font-size: 1.1em; color: #64748b;
+    }
+    .action-btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .edit-btn:hover { color: #3b82f6; border-color: #bfdbfe; background: #eff6ff; }
+    .history-btn:hover { color: #8b5cf6; border-color: #ddd6fe; background: #f5f3ff; }
+    .delete-btn:hover { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+
+    /* Token Button */
+    .token-btn {
+        font-size: 0.75rem; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0;
+        padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
+    }
+    .token-btn:hover { background: #e2e8f0; color: #1e293b; border-color: #cbd5e1; }
+    .token-btn:active { transform: translateY(1px); }
+  `;
+  document.head.appendChild(style);
+}
+
+function injectAccessControlUI() {
+  const tokenInput = document.getElementById('server-token');
+  // Evita duplicidade se já foi injetado
+  if (!tokenInput || document.getElementById('server-access-type')) return;
+
+  // Encontra o container do input de token (tenta achar o grupo, senão usa o próprio input)
+  const tokenGroup = tokenInput.closest('.form-group') || tokenInput;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'form-group'; // Usa a mesma classe do formulário existente
+  wrapper.style.marginBottom = '15px';
+
+  const label = document.createElement('label');
+  label.textContent = 'Tipo de Acesso';
+  label.style.display = 'block';
+  label.style.marginBottom = '5px';
+  label.style.fontWeight = '600';
+  label.style.color = '#4a5568';
+
+  const select = document.createElement('select');
+  select.id = 'server-access-type';
+  select.style.width = '100%';
+  select.style.padding = '10px';
+  select.style.border = '1px solid #e2e8f0';
+  select.style.borderRadius = '4px';
+  select.style.backgroundColor = '#fff';
+  select.style.fontSize = '1rem';
+
+  select.innerHTML = `
+    <option value="public">🔓 Público (Acesso Livre)</option>
+    <option value="private">🔒 Privado (Requer Token)</option>
+  `;
+
+  wrapper.appendChild(label);
+  wrapper.appendChild(select);
+
+  // Insere ANTES do container do token
+  if (tokenGroup.parentNode) {
+    tokenGroup.parentNode.insertBefore(wrapper, tokenGroup);
+  }
+
+  // Lógica de interação
+  select.addEventListener('change', () => {
+    const isPrivate = select.value === 'private';
+    tokenInput.placeholder = isPrivate ? "Token Obrigatório" : "Opcional (Token Admin)";
+    tokenInput.style.backgroundColor = isPrivate ? '#fff' : '#f8f9fa';
+    tokenInput.required = isPrivate;
+  });
+}
+
+function injectChartLibrary() {
+  if (document.querySelector('script[src*="chart.js"]')) return;
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+  document.head.appendChild(script);
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   // Adicionar elementos de UI dinâmicos ao corpo do documento
@@ -720,11 +823,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   injectToastStyles();
+  injectBadgeStyles();
   injectSignupConfirmField();
   injectSignupEmailField();
   injectForgotPasswordLink();
   injectSignupClearButton();
   injectForgotPasswordModal();
+  injectAccessControlUI();
+  injectChartLibrary();
 
   // Event listeners for settings
   document
@@ -825,36 +931,28 @@ document.addEventListener("DOMContentLoaded", () => {
       currentSort = e.target.value;
       renderServers();
     });
+
+    // Injetar filtro de privacidade ao lado da ordenação
+    if (!document.getElementById("server-privacy-filter")) {
+      const privacySelect = document.createElement("select");
+      privacySelect.id = "server-privacy-filter";
+      privacySelect.className = sortSelect.className;
+      privacySelect.style.cssText = sortSelect.style.cssText;
+      privacySelect.style.marginLeft = "10px";
+      privacySelect.innerHTML = `<option value="all">Todos (Acesso)</option><option value="public">🔓 Públicos</option><option value="private">🔒 Privados</option>`;
+      
+      privacySelect.addEventListener("change", (e) => {
+        currentPrivacyFilter = e.target.value;
+        renderServers();
+      });
+      sortSelect.parentNode.insertBefore(privacySelect, sortSelect.nextSibling);
+    }
   }
 
-  // Listener para toggle de visualização
+  // Remover toggle de visualização (apenas lista agora)
   const viewToggleBtn = document.getElementById("view-toggle-btn");
   if (viewToggleBtn) {
-    // Definir estado inicial
-    viewToggleBtn.innerHTML =
-      currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-
-    viewToggleBtn.addEventListener("click", () => {
-      currentViewMode = currentViewMode === "grid" ? "list" : "grid";
-      localStorage.setItem("adminViewMode", currentViewMode);
-      viewToggleBtn.innerHTML =
-        currentViewMode === "grid" ? "🔲 Grid" : "☰ Lista";
-
-      // Forçar limpeza e re-renderização com delay para evitar glitches visuais
-      const container = document.getElementById("servers-container");
-      if (container) container.innerHTML = "";
-
-      setTimeout(() => {
-        currentFilter = "all";
-        document
-          .querySelectorAll(".filter-btn:not(#add-new-btn)")
-          .forEach((btn) => {
-            btn.classList.remove("active");
-            if (btn.dataset.filter === "all") btn.classList.add("active");
-          });
-        renderServers();
-      }, 10);
-    });
+    viewToggleBtn.style.display = "none";
   }
 
   // Event Delegation for Login/Signup Modal
@@ -984,6 +1082,24 @@ function showDashboard() {
 
         const headerTitle = document.querySelector("header h1");
         if (headerTitle) headerTitle.appendChild(usersBtn);
+      }
+
+      // Injetar botão de Logs se não existir (apenas admin)
+      if (currentUser.role === "admin" && !document.getElementById("logs-btn")) {
+        const logsBtn = document.createElement("button");
+        logsBtn.id = "logs-btn";
+        logsBtn.className = "btn-secondary";
+        logsBtn.innerHTML = "📋 Logs";
+        logsBtn.title = "Visualizar logs do sistema";
+        logsBtn.style.cssText =
+          "margin-left: 10px; font-size: 14px; padding: 8px 12px; display: inline-flex; align-items: center; text-decoration: none; color: white; cursor: pointer; border: none;";
+        
+        logsBtn.onclick = () => {
+            openLogsModal();
+        };
+
+        const headerTitle = document.querySelector("header h1");
+        if (headerTitle) headerTitle.appendChild(logsBtn);
       }
     }
   }
@@ -1212,6 +1328,16 @@ function setupEventListeners() {
     newAddNewBtn.addEventListener("click", () => {
       editingServerId = null;
       document.getElementById("server-form").reset();
+      
+      // GARANTIA: Injetar UI de controle de acesso se ainda não existir
+      injectAccessControlUI();
+      
+      // Resetar o tipo de acesso para o padrão (Público)
+      const accessSelect = document.getElementById('server-access-type');
+      if (accessSelect) {
+        accessSelect.value = 'public';
+        accessSelect.dispatchEvent(new Event('change'));
+      }
 
       // FIX: Forçar o campo de token a ser editável
       const tokenInput = document.getElementById("server-token");
@@ -1305,14 +1431,46 @@ async function loadServers() {
       credentials: "include",
       headers: getAuthHeaders(),
     });
+
+    if (response.status === 401) {
+      if (loadServersInterval) clearInterval(loadServersInterval);
+      showToast("Sessão expirada. Por favor, faça login novamente.", "error");
+      showLogin();
+      return;
+    }
+
     const data = await response.json();
-    servers = data.servers || [];
+    servers = (data.servers || []).map(s => ({
+      ...s,
+      requiresAuth: s.requiresAuth !== undefined ? s.requiresAuth : (s.requireAuth !== undefined ? s.requireAuth : undefined)
+    }));
     renderServers();
     updateStats();
   } catch (error) {
     console.error("Erro ao carregar servidores:", error);
     showToast("Erro ao atualizar lista de servidores", "error");
   }
+}
+
+function getServerBadges(server) {
+  let html = '<div class="server-badges">';
+  
+  // Protocolo
+  const isSecure = server.protocol === "wss";
+  html += `<span class="badge ${isSecure ? "badge-secure" : "badge-insecure"}">${isSecure ? "🛡️ WSS" : "⚠️ WS"}</span>`;
+
+  // Autenticação
+  if (server.requiresAuth !== undefined) {
+    html += `<span class="badge ${server.requiresAuth ? "badge-auth" : "badge-open"}">${server.requiresAuth ? "🔒 Privado" : "🔓 Público"}</span>`;
+  }
+
+  // Região
+  if (server.region) {
+    html += `<span class="badge badge-info">🌍 ${escapeHtml(server.region)}</span>`;
+  }
+
+  html += '</div>';
+  return html;
 }
 
 // ===== RENDER FUNCTIONS =====
@@ -1323,6 +1481,13 @@ function renderServers() {
   let filteredServers = servers;
   if (currentFilter !== "all") {
     filteredServers = servers.filter((s) => s.status === currentFilter);
+  }
+
+  // Aplicar filtro de privacidade
+  if (currentPrivacyFilter !== "all") {
+    filteredServers = filteredServers.filter((s) => 
+      currentPrivacyFilter === "private" ? s.requiresAuth : !s.requiresAuth
+    );
   }
 
   // Aplicar filtro de pesquisa
@@ -1357,68 +1522,132 @@ function renderServers() {
     return;
   }
 
-  // Configurar container baseado no modo de visualização
-  if (currentViewMode === "list") {
-    container.className = "servers-list";
-    container.style.display = "block";
-  } else {
-    container.className = "servers-grid";
-    container.style.display = "grid";
-  }
-
+  // Forçar modo lista
+  container.className = "servers-list";
+  container.style.display = "block";
   emptyState.style.display = "none";
 
-  if (currentViewMode === "list") {
-    container.innerHTML = `
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <thead style="background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+  container.innerHTML = `
+      <div style="background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); overflow: hidden; border: 1px solid #e2e8f0;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 900px;">
+            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                 <tr>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Status</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Nome</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Host</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Porta</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Protocolo</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Clientes</th>
-                    <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Região</th>
-                    <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Ações</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Status</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Servidor</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Conexão</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Capacidade</th>
+                    <th style="padding: 16px 24px; text-align: left; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Acesso</th>
+                    <th style="padding: 16px 24px; text-align: right; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Ações</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody style="background: white;">
                 ${filteredServers
                   .map((server) => {
                     const openUrl = getOpenUrl(server);
+                    const isAdminOrManager =
+                      currentUser && (currentUser.role === "admin" || currentUser.role === "gerente");
+                    
+                    const loadPercentage = Math.min(100, ((server.clientsCount || 0) / server.maxClients) * 100);
+                    let loadColor = '#22c55e'; // Green
+                    if (loadPercentage > 80) loadColor = '#ef4444'; // Red
+                    else if (loadPercentage > 50) loadColor = '#f59e0b'; // Yellow
+
                     return `
-                        <tr style="border-bottom: 1px solid #e9ecef; transition: background 0.2s;">
-                            <td style="padding: 12px 15px;">
-                                <span class="status-badge ${server.status}" style="font-size: 0.8rem; padding: 4px 8px; border-radius: 12px;">
-                                    ${server.status === "active" ? "🟢" : server.status === "standby" ? "🟡" : "🔴"} ${server.status}
-                                </span>
+                        <tr style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
+                            <!-- Status -->
+                            <td style="padding: 16px 24px; white-space: nowrap; vertical-align: middle;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="status-dot ${server.status}"></span>
+                                    <span style="font-size: 0.875rem; font-weight: 600; color: #334155; text-transform: capitalize;">${server.status}</span>
+                                </div>
                             </td>
-                            <td style="padding: 12px 15px; font-weight: 500;">${highlightMatch(server.name)}</td>
-                            <td style="padding: 12px 15px; font-family: 'Roboto Mono', monospace; color: #666;">${highlightMatch(server.host)}</td>
-                            <td style="padding: 12px 15px;">${server.port || "N/A"}</td>
-                            <td style="padding: 12px 15px;">${escapeHtml(server.protocol)}</td>
-                            <td style="padding: 12px 15px;">
-                                <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
+                            
+                            <!-- Servidor -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                    <span style="font-size: 0.95rem; font-weight: 600; color: #1e293b;">${highlightMatch(server.name)}</span>
+                                    <span title="${escapeHtml(server.description || '')}" style="font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block;">
+                                        ${server.description || 'Sem descrição'}
+                                    </span>
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                        <span style="font-size: 0.7rem; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 4px;">${server.region || 'Global'}</span>
+                                        <span style="font-size: 0.7rem; color: #94a3b8; font-family: monospace;">${server.id}</span>
+                                    </div>
+                                    ${isAdminOrManager && server.notes ? `<div title="${escapeHtml(server.notes)}" style="font-size: 0.75em; color: #d97706; margin-top: 4px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; cursor: help;">📝 ${escapeHtml(server.notes)}</div>` : ''}
+                                </div>
                             </td>
-                            <td style="padding: 12px 15px;">${highlightMatch(server.region || "N/A")}</td>
-                            <td style="padding: 12px 15px; text-align: right;">
-                                <a href="${openUrl}" target="_blank" class="btn-icon" title="Abrir URL Token" style="text-decoration: none; margin-right: 8px; font-size: 1.2em;">🔗</a>
+
+                            <!-- Conexão -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <code style="font-family: 'Menlo', monospace; font-size: 0.85rem; color: #334155; font-weight: 500;">${highlightMatch(server.host)}</code>
+                                        <span style="color: #cbd5e1;">:</span>
+                                        <code style="font-family: 'Menlo', monospace; font-size: 0.85rem; color: #64748b;">${server.port}</code>
+                                    </div>
+                                    <div>
+                                        <span class="badge ${server.protocol === 'wss' ? 'badge-secure' : 'badge-insecure'}" style="font-size: 0.7rem;">${server.protocol.toUpperCase()}</span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Capacidade -->
+                            <td style="padding: 16px 24px; vertical-align: middle; min-width: 140px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.75rem;">
+                                    <span style="font-weight: 600; color: #334155;">${server.clientsCount || 0}</span>
+                                    <span style="color: #94a3b8;">${server.maxClients.toLocaleString()}</span>
+                                </div>
+                                <div style="width: 100%; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden;">
+                                    <div style="width: ${loadPercentage}%; background: ${loadColor}; height: 100%; border-radius: 999px; transition: width 0.5s ease;"></div>
+                                </div>
+                            </td>
+
+                            <!-- Acesso -->
+                            <td style="padding: 16px 24px; vertical-align: middle;">
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <div>
+                                        ${server.requiresAuth 
+                                            ? '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2;">🔒 Privado</span>' 
+                                            : '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7;">🔓 Público</span>'}
+                                    </div>
+                                    ${isAdminOrManager && server.token ? `
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <button onclick="copyToken('${escapeHtml(server.token)}')" class="token-btn" title="Copiar Token: ${escapeHtml(server.token)}">
+                                                🔑 Copiar Token
+                                            </button>
+                                        </div>
+                                    ` : ''}
+                                    ${isAdminOrManager && server.urltoken ? `
+                                        <div style="font-size: 0.7rem; color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                            <span>🔗</span> URL Dinâmica
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </td>
+
+                            <!-- Ações -->
+                            <td style="padding: 16px 24px; text-align: right; vertical-align: middle;">
+                                <div style="display: flex; justify-content: flex-end; gap: 8px;">
                                 ${
-                                  currentUser &&
-                                  (currentUser.role === "admin" ||
-                                    currentUser.role === "gerente")
+                                  isAdminOrManager
                                     ? `
-                                    <button class="btn-icon" onclick="editServer('${server.id}')" title="Editar" style="background: none; border: none; cursor: pointer; font-size: 1.2em; margin-right: 8px;">✏️</button>
+                                    <button onclick="editServer('${server.id}')" class="action-btn edit-btn" title="Editar Configurações">
+                                        ✏️
+                                    </button>
+                                    <button onclick="showHistory('${server.id}')" class="action-btn history-btn" title="Ver Histórico de Uso">
+                                        📈
+                                    </button>
                                 `
                                     : ""
                                 }
                                 ${
                                   currentUser && currentUser.role === "admin"
-                                    ? `<button class="btn-icon btn-delete" onclick="deleteServer('${server.id}')" title="Deletar" style="background: none; border: none; cursor: pointer; font-size: 1.2em;">🗑️</button>`
+                                    ? `<button onclick="deleteServer('${server.id}')" class="action-btn delete-btn" title="Excluir Servidor">
+                                        🗑️
+                                    </button>`
                                     : ""
                                 }
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -1427,139 +1656,6 @@ function renderServers() {
             </tbody>
         </table>
       </div>`;
-    return;
-  }
-
-  container.innerHTML = filteredServers
-    .map((server) => {
-      const openUrl = getOpenUrl(server);
-      const isAdminOrManager =
-        currentUser &&
-        (currentUser.role === "admin" || currentUser.role === "gerente");
-
-      return `
-        <div class="server-card ${server.status}">
-            <span class="status-badge ${server.status}">
-                ${server.status === "active" ? "🟢 Ativo" : server.status === "standby" ? "🟡 Em Standby" : "🔴 Inativo"}
-            </span>
-
-            <h3 class="server-name">${highlightMatch(server.name)}</h3>
-            <p class="server-description">${escapeHtml(server.description || "Sem descrição disponível.")}</p>
-
-            <div class="info-row">
-                <span class="info-label">Host:</span>
-                <span class="info-value">${highlightMatch(server.host)}</span>
-            </div>
-
-            <div class="info-row">
-                <span class="info-label">Porta:</span>
-                <span class="info-value">${server.port || "N/A"}</span>
-            </div>
-
-            <div class="info-row">
-                <span class="info-label">URL:</span>
-                <span class="info-value protocol-value">${escapeHtml(server.protocol)}://${escapeHtml(server.host)}${server.port ? ":" + server.port : ""}</span>
-            </div>
-
-            <div class="info-row">
-                <span class="info-label">Região:</span>
-                <span class="region-tag">${highlightMatch(server.region || "N/A")}</span>
-            </div>
-
-            ${
-              isAdminOrManager
-                ? `
-              <div class="info-row">
-                  <span class="info-label">Clientes:</span>
-                  <span class="info-value">
-                      <strong>${server.clientsCount !== undefined ? server.clientsCount : 0}</strong> / ${server.maxClients.toLocaleString()}
-                  </span>
-              </div>
-            `
-                : ""
-            }
-
-            <div class="info-row">
-                <span class="info-label">Autenticação:</span>
-                <span class="info-value">
-                    ${
-                      server.requiresAuth === true
-                        ? "🔒 Obrigatória"
-                        : server.requiresAuth === false
-                          ? "🔓 Opcional"
-                          : "❓ Desconhecido"
-                    }
-                </span>
-            </div>
-
-            ${
-              isAdminOrManager
-                ? `
-              <div class="info-row">
-                  <span class="info-label">Url Token:</span>
-                  <span class="info-value">${escapeHtml(server.urltoken || "N/A")}</span>
-              </div>
-            `
-                : ""
-            }
-            ${
-              server.token &&
-              server.token !== "N/A" &&
-              server.requiresAuth !== undefined &&
-              server.requiresAuth !== null
-                ? `<div class="token-display mt-2">
-                <div class="mb-2">${escapeHtml(server.token)}</div>
-                <button class="btn-copy w-full" onclick="copyToken('${server.token}')">📋 Copiar Token</button>
-            </div>`
-                : ""
-            }
-
-            ${isAdminOrManager && server.notes ? `<div class="info-row"><span class="info-label">Notas:</span><span class="info-value">${escapeHtml(server.notes)}</span></div>` : ""}
-
-            ${
-              isAdminOrManager
-                ? `
-              <div class="info-row">
-                  <span class="info-label">Criado em:</span>
-                  <span class="info-value">${new Date(server.createdAt).toLocaleDateString("pt-BR")}</span>
-              </div>
-              ${
-                server.lastSeen
-                  ? `<div class="info-row"><span class="info-label">Visto por último:</span><span class="info-value" style="font-size: 0.85em; color: #666;">${new Date(
-                      server.lastSeen,
-                    ).toLocaleString("pt-BR")}</span></div>`
-                  : ""
-              }
-            `
-                : ""
-            }
-
-            <div class="server-actions">
-                <a href="${openUrl}" target="_blank" class="btn-main">
-                    🔗 Abrir url token
-                </a>
-                <a href="#" onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this); return false;" class="btn-secondary" title="Testar Latência">
-                    ⚡ Ping
-                </a>
-                ${
-                  currentUser &&
-                  (currentUser.role === "admin" ||
-                    currentUser.role === "gerente")
-                    ? `
-                <button class="btn-edit" onclick="editServer('${server.id}')">✏️ Editar</button>
-                `
-                    : ""
-                }
-                ${
-                  currentUser && currentUser.role === "admin"
-                    ? `<button class="btn-delete" onclick="deleteServer('${server.id}')">🗑️ Deletar</button>`
-                    : ""
-                }
-            </div>
-        </div>
-    `;
-    })
-    .join("");
 }
 
 // Helper para gerar URL de abertura consistente
@@ -1616,6 +1712,9 @@ function editServer(id) {
   const server = servers.find((s) => s.id === id);
   if (!server) return;
 
+  // GARANTIA: Injetar UI de controle de acesso se ainda não existir
+  injectAccessControlUI();
+
   editingServerId = id;
   document.getElementById("server-name").value = server.name;
   document.getElementById("server-description").value = server.description;
@@ -1638,6 +1737,14 @@ function editServer(id) {
   document.getElementById("server-max-clients").value = server.maxClients;
   document.getElementById("server-status").value = server.status;
   document.getElementById("server-notes").value = server.notes || "";
+
+  // Definir o tipo de acesso baseado na propriedade requiresAuth
+  const accessSelect = document.getElementById('server-access-type');
+  if (accessSelect) {
+    // Se requiresAuth for true, é privado. Se for false ou undefined, assumimos público/misto.
+    accessSelect.value = server.requiresAuth ? 'private' : 'public';
+    accessSelect.dispatchEvent(new Event('change'));
+  }
 
   document.getElementById("modal-title").textContent = "Editar Servidor";
   document.getElementById("server-modal").classList.add("show");
@@ -1690,6 +1797,13 @@ async function saveServer(event) {
     return;
   }
 
+  // Validação de caracteres especiais (Permite letras, números, espaços, acentos, -, _ e .)
+  if (!/^[a-zA-Z0-9\u00C0-\u00FF\s\-_.]+$/.test(nameInput.value.trim())) {
+    showToast("O nome do servidor não pode conter caracteres especiais.", "error");
+    nameInput.focus();
+    return;
+  }
+
   const submitBtn = event.target.querySelector('button[type="submit"]');
   const originalBtnText = submitBtn ? submitBtn.textContent : "Salvar Servidor";
   if (submitBtn) {
@@ -1700,6 +1814,26 @@ async function saveServer(event) {
   try {
     const token = document.getElementById("server-token").value;
     const urlTokenInput = document.getElementById("server-urltoken");
+    const host = document.getElementById("server-host").value.trim();
+    const port = document.getElementById("server-port").value
+      ? parseInt(document.getElementById("server-port").value, 10)
+      : null;
+
+    if (port !== null && (port < 1 || port > 65535)) {
+      showToast("A porta deve estar entre 1 e 65535.", "error");
+      return;
+    }
+
+    // Validação de Conflito: Impede que servidores (Públicos ou Privados) compartilhem a mesma porta
+    const conflict = servers.find(
+      (s) => s.id !== editingServerId && s.host === host && s.port === port,
+    );
+
+    if (conflict) {
+      const conflictType = conflict.requiresAuth ? "Privado" : "Público";
+      showToast(`Conflito: Já existe um servidor ${conflictType} ("${conflict.name}") em ${host}:${port}.`, "error");
+      return;
+    }
 
     let processedUrlToken = urlTokenInput ? urlTokenInput.value.trim() : "";
     processedUrlToken = processedUrlToken.replace(/\/+$/, ""); // Remove barra final antes de verificar
@@ -1711,14 +1845,36 @@ async function saveServer(event) {
       ? servers.find((s) => s.id === editingServerId)
       : null;
 
+    // Capturar configuração de acesso
+    let accessSelect = document.getElementById('server-access-type');
+    
+    // Fallback: Se o seletor não existir (erro de injeção), tenta recriar
+    if (!accessSelect) {
+        console.log("Recriando UI de acesso...");
+        injectAccessControlUI();
+        accessSelect = document.getElementById('server-access-type');
+    }
+
+    // Determina se é privado. Se o seletor falhar, mantém o valor padrão (false) ou o valor atual se estiver editando
+    let isPrivate = accessSelect ? accessSelect.value === 'private' : false;
+    if ((!accessSelect || !accessSelect.value) && editingServerId) {
+        const currentServer = servers.find(s => s.id === editingServerId);
+        if (currentServer) isPrivate = Boolean(currentServer.requiresAuth);
+        console.log(`[DEBUG] UI falhou, preservando requiresAuth original: ${isPrivate}`);
+    }
+
+    // Validação extra
+    if (isPrivate && !token.trim()) {
+      showToast("Servidores privados exigem um Token de Autenticação.", "error");
+      return;
+    }
+
     const serverData = {
       id: editingServerId || `server-${Date.now()}`,
       name: document.getElementById("server-name").value,
       description: document.getElementById("server-description").value,
-      host: document.getElementById("server-host").value,
-      port: document.getElementById("server-port").value
-        ? parseInt(document.getElementById("server-port").value, 10)
-        : null,
+      host: host,
+      port: port,
       protocol: document.getElementById("server-protocol").value,
       token: token,
       region: document.getElementById("server-region").value,
@@ -1730,8 +1886,11 @@ async function saveServer(event) {
         ? existingServer.createdAt
         : new Date().toISOString(),
       urltoken: processedUrlToken,
-      // O backend irá definir 'requiresAuth' e outras propriedades
+      requiresAuth: isPrivate, // Define explicitamente se requer autenticação
+      requireAuth: isPrivate   // Envia ambos para compatibilidade com backend
     };
+
+    console.log(`[DEBUG] Enviando dados do servidor. Nome: ${serverData.name}, Privado (requiresAuth): ${serverData.requiresAuth}`);
 
     const method = editingServerId ? "PUT" : "POST";
     const response = await fetch(`${API_BASE}/api/servers`, {
@@ -1751,6 +1910,7 @@ async function saveServer(event) {
     if (response.ok) {
       const result = await response.json();
       const savedServer = result.server;
+      console.log("[DEBUG] Servidor salvo retornado pela API:", savedServer);
 
       if (editingServerId) {
         servers = servers.map((s) =>
@@ -1780,6 +1940,195 @@ async function saveServer(event) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalBtnText;
     }
+  }
+}
+
+let historyChartInstance = null;
+
+async function showHistory(serverId) {
+  // Injetar modal se não existir
+  if (!document.getElementById('history-modal')) {
+    const modalHTML = `
+      <div id="history-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+          <div class="modal-header">
+              <h2 id="history-modal-title">Histórico de Capacidade</h2>
+              <button class="close-modal-btn" onclick="document.getElementById('history-modal').classList.remove('show')">&times;</button>
+          </div>
+          <div style="padding: 20px;">
+              <canvas id="history-chart" style="max-height: 300px;"></canvas>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+  }
+
+  const modal = document.getElementById('history-modal');
+  const title = document.getElementById('history-modal-title');
+  const canvas = document.getElementById('history-chart');
+  const server = servers.find(s => s.id === serverId);
+  
+  title.textContent = `Histórico: ${server ? server.name : 'Servidor'}`;
+  modal.classList.add('show');
+
+  // Carregar dados
+  try {
+    const res = await fetch('/servers-history.json');
+    if (!res.ok) throw new Error("Histórico vazio");
+    const allHistory = await res.json();
+    const data = allHistory[serverId] || [];
+
+    if (historyChartInstance) historyChartInstance.destroy();
+
+    const ctx = canvas.getContext('2d');
+    historyChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => new Date(d.t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})),
+        datasets: [{
+          label: 'Clientes Conectados',
+          data: data.map(d => d.c),
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.2)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, suggestedMax: 10 } },
+        plugins: { legend: { display: true } }
+      }
+    });
+  } catch (e) {
+    console.log("Ainda não há histórico disponível para este servidor.");
+  }
+}
+
+async function openLogsModal() {
+  // Inject modal if not exists
+  if (!document.getElementById("logs-modal")) {
+    const modalHTML = `
+      <div id="logs-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px; width: 90%; height: 80vh; display: flex; flex-direction: column;">
+          <div class="modal-header">
+            <h2>📜 Logs de Auditoria</h2>
+            <div style="display: flex; gap: 10px;">
+                <button id="download-logs-btn" class="btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">📥 Baixar ZIP</button>
+                <button class="close-modal-btn close-btn">&times;</button>
+            </div>
+          </div>
+          <div style="padding: 0; overflow: auto; flex-grow: 1;">
+            <table id="logs-table" style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+                    <tr style="border-bottom: 2px solid #e9ecef;">
+                        <th style="padding: 12px 15px; text-align: left; color: #495057;">Data/Hora</th>
+                        <th style="padding: 12px 15px; text-align: left; color: #495057;">Usuário</th>
+                        <th style="padding: 12px 15px; text-align: left; color: #495057;">Ação</th>
+                        <th style="padding: 12px 15px; text-align: left; color: #495057;">Detalhes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4" style="text-align: center; padding: 20px;">Carregando...</td></tr>
+                </tbody>
+            </table>
+          </div>
+          <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; text-align: right;">
+             <button class="btn-secondary close-modal-btn">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", modalHTML);
+    
+    // Add listeners
+    const modal = document.getElementById("logs-modal");
+    modal.querySelectorAll(".close-modal-btn").forEach(btn => {
+        btn.onclick = () => modal.classList.remove("show");
+    });
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.classList.remove("show");
+    };
+    
+    document.getElementById("download-logs-btn").onclick = () => {
+        const cleanApiBase = API_BASE.replace(/\/$/, "");
+        window.location.href = `${cleanApiBase}/api/logs/download`;
+    };
+  }
+  
+  const modal = document.getElementById("logs-modal");
+  modal.classList.add("show");
+  
+  // Fetch logs
+  try {
+      const cleanApiBase = API_BASE.replace(/\/$/, "");
+      const res = await fetch(`${cleanApiBase}/api/logs?limit=100`, {
+          credentials: "include",
+          headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      
+      const tbody = document.querySelector("#logs-table tbody");
+      tbody.innerHTML = "";
+      
+      if (data.logs && data.logs.length > 0) {
+          data.logs.forEach(log => {
+              let user = "-", action = "-", details = "-";
+              
+              if (log.raw) {
+                  const userMatch = log.raw.match(/User: (.*?) \((.*?)\)/);
+                  const actionMatch = log.raw.match(/Action: (.*?) \|/);
+                  const detailsMatch = log.raw.match(/Details: (.*)/);
+                  
+                  if (userMatch) user = `<strong>${escapeHtml(userMatch[1])}</strong> <span style="color:#666; font-size:0.85em">(${escapeHtml(userMatch[2])})</span>`;
+                  if (actionMatch) {
+                    const act = actionMatch[1].trim();
+                    let badgeClass = "badge-info";
+                    if (act.includes("DELETE") || act.includes("FORBIDDEN")) badgeClass = "badge-danger";
+                    else if (act.includes("CREATE") || act.includes("UPDATE") || act.includes("LOGIN") || act.includes("SIGNUP")) badgeClass = "badge-success";
+                    action = `<span class="badge ${badgeClass}">${escapeHtml(act)}</span>`;
+                  }
+                  if (detailsMatch) {
+                    try {
+                      const parsed = JSON.parse(detailsMatch[1]);
+                      if (Object.keys(parsed).length > 0) {
+                        details = `<div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 0.85em;">`;
+                        for (const [k, v] of Object.entries(parsed)) {
+                          details += `<span style="font-weight:600; color:#4a5568; text-align:right;">${escapeHtml(k)}:</span> <span style="color:#2d3748; word-break: break-all;">${escapeHtml(String(v))}</span>`;
+                        }
+                        details += `</div>`;
+                      } else {
+                        details = `<span style="color:#cbd5e0; font-size:0.85em;">-</span>`;
+                      }
+                    } catch (e) {
+                      details = `<code style="font-size:0.85em; color:#d63384; background:#f8f9fa; padding:2px 4px; border-radius:4px;">${escapeHtml(detailsMatch[1])}</code>`;
+                    }
+                  }
+                  
+                  if (user === "-" && action === "-") details = escapeHtml(log.raw);
+              }
+              
+              const date = log.timestamp ? new Date(log.timestamp).toLocaleString() : "-";
+              
+              const tr = document.createElement("tr");
+              tr.style.borderBottom = "1px solid #f1f5f9";
+              tr.innerHTML = `
+                <td style="padding: 12px 15px; white-space: nowrap; color: #666;">${date}</td>
+                <td style="padding: 12px 15px;">${user}</td>
+                <td style="padding: 12px 15px;">${action}</td>
+                <td style="padding: 12px 15px; word-break: break-all;">${details}</td>
+              `;
+              tbody.appendChild(tr);
+          });
+      } else {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">Nenhum log encontrado.</td></tr>';
+      }
+  } catch (e) {
+      console.error(e);
+      const tbody = document.querySelector("#logs-table tbody");
+      if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">Erro ao carregar logs. Verifique o console.</td></tr>';
   }
 }
 
@@ -1854,8 +2203,21 @@ async function openSettingsModal() {
       return;
     }
     const data = await response.json();
-    document.getElementById("discovery-url").value =
-      data.remoteRegistryUrl || "";
+    const discoveryInput = document.getElementById("discovery-url");
+    discoveryInput.value = data.remoteRegistryUrl || "";
+
+    // Bloquear edição para não-admins (Gerentes)
+    if (currentUser && currentUser.role !== "admin") {
+      discoveryInput.disabled = true;
+      discoveryInput.style.backgroundColor = "#e9ecef";
+      discoveryInput.style.cursor = "not-allowed";
+      discoveryInput.title = "Apenas administradores podem alterar esta configuração";
+    } else {
+      discoveryInput.disabled = false;
+      discoveryInput.style.backgroundColor = "";
+      discoveryInput.style.cursor = "";
+      discoveryInput.removeAttribute("title");
+    }
 
     // Atualizar label para refletir a nova funcionalidade
     const label = document.querySelector("label[for='discovery-url']");
@@ -1885,6 +2247,13 @@ async function saveSettings(e) {
   refreshInterval = newInterval;
   if (loadServersInterval) clearInterval(loadServersInterval);
   loadServersInterval = setInterval(loadServers, refreshInterval);
+
+  // Se não for admin, não tenta salvar no backend (evita erro 403)
+  if (currentUser && currentUser.role !== "admin") {
+    showToast("Preferências locais salvas com sucesso!");
+    closeSettingsModal();
+    return;
+  }
 
   try {
     const response = await fetch(`${API_BASE}/api/settings`, {
