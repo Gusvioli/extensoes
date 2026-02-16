@@ -1,7 +1,7 @@
-// Service Worker do P2P Secure Chat
+// Service Worker do 5uv1
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("P2P Secure Chat Extension instalada com sucesso.");
+  console.log("Extensão 5uv1 instalada com sucesso.");
 
   // Inicializa storage se necessário
   chrome.storage.local.get(["serverUrl"], (result) => {

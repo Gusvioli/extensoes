@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 function print_header() {
     echo -e "${BLUE}=========================================${NC}"
-    echo -e "${BLUE}   Gerenciador P2P Secure Chat           ${NC}"
+    echo -e "${BLUE}   Gerenciador 5uv1           ${NC}"
     echo -e "${BLUE}=========================================${NC}"
 }
 

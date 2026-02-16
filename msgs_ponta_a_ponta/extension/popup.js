@@ -144,7 +144,9 @@ document.addEventListener("DOMContentLoaded", () => {
       "sessionSecret",
     ],
     (res) => {
-      if (res.apiBase) API_BASE = res.apiBase;
+      if (res.apiBase) {
+        API_BASE = res.apiBase;
+      }
       if (res.contacts) state.contacts = res.contacts;
       if (res.clearHistoryOnExit) {
         state.clearHistoryOnExit = res.clearHistoryOnExit;
@@ -328,8 +330,26 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(data.error || "Falha no login");
       }
     } catch (err) {
-      ui.login.error.textContent = err.message;
+      ui.login.error.innerHTML = err.message;
       ui.login.error.style.display = "block";
+
+      if (err.message.includes("Conta não verificada")) {
+        ui.login.error.innerHTML +=
+          '<div style="margin-top:5px"><a href="#" id="link-verify-now" style="color:var(--primary);font-weight:600;text-decoration:none;">Verificar agora →</a></div>';
+        setTimeout(() => {
+          const link = document.getElementById("link-verify-now");
+          if (link) {
+            link.addEventListener("click", (e) => {
+              e.preventDefault();
+              document.getElementById("view-login").classList.remove("active");
+              document.getElementById("view-verify").classList.add("active");
+              if (username.includes("@")) {
+                document.getElementById("verify-email").value = username;
+              }
+            });
+          }
+        }, 0);
+      }
     } finally {
       ui.login.btn.disabled = false;
       ui.login.btn.textContent = "Entrar";
@@ -402,7 +422,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (server.requiresAuth !== undefined) {
         const authBadge = document.createElement("span");
         authBadge.className = `badge ${server.requiresAuth ? "badge-auth" : "badge-open"}`;
-        authBadge.textContent = server.requiresAuth ? "🔒 Privado" : "🔓 Público";
+        authBadge.textContent = server.requiresAuth
+          ? "🔒 Privado"
+          : "🔓 Público";
         badgesDiv.appendChild(authBadge);
       }
 
@@ -503,7 +525,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Se a opção de ID Fixo estiver DESATIVADA, mas o ID atual na memória for igual ao username,
     // significa que o usuário acabou de desativar a opção.
     // Precisamos limpar o ID para garantir que um novo aleatório seja gerado e não haja reconexão.
-    else if (state.user && state.user.username && state.myId === state.user.username) {
+    else if (
+      state.user &&
+      state.user.username &&
+      state.myId === state.user.username
+    ) {
       console.log("Desativando ID Fixo: Limpando sessão antiga...");
       state.myId = null;
       state.sessionSecret = null;
@@ -646,9 +672,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderMyId() {
     if (!state.myId) return;
     const displayNick = state.myNickname ? ` (${state.myNickname})` : "";
-    
+
     // Verifica se estamos realmente usando o ID fixo (Config ligada + ID atual igual ao username)
-    const isFixedActive = state.useFixedId && state.user && state.myId === state.user.username;
+    const isFixedActive =
+      state.useFixedId && state.user && state.myId === state.user.username;
 
     if (isFixedActive) {
       ui.chat.myId.classList.add("fixed-id-active");
@@ -667,8 +694,16 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (data.type) {
       case "your-id":
         // Verifica se o ID recebido é o fixo esperado (caso o servidor tenha rejeitado)
-        if (state.useFixedId && state.user && state.user.username && data.id !== state.user.username) {
-          addLog(`⚠️ O servidor rejeitou o ID Fixo "${state.user.username}". Usando ID aleatório. (Verifique se há caracteres especiais)`, "error");
+        if (
+          state.useFixedId &&
+          state.user &&
+          state.user.username &&
+          data.id !== state.user.username
+        ) {
+          addLog(
+            `⚠️ O servidor rejeitou o ID Fixo "${state.user.username}". Usando ID aleatório. (Verifique se há caracteres especiais)`,
+            "error",
+          );
         }
 
         // Se já temos um ID e Segredo, tentamos reconectar antes de aceitar o novo ID

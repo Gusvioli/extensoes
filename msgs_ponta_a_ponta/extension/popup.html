@@ -4,21 +4,328 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css" />
-    <title>P2P Chat</title>
+    <title>5uv1</title>
+    <style>
+      /* Efeito Glitch para o título */
+      .glitch {
+        position: relative;
+        font-weight: 700;
+      }
+      .glitch::before,
+      .glitch::after {
+        content: attr(data-text);
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .glitch::before {
+        left: 2px;
+        text-shadow: -1px 0 #ff00c1;
+        clip: rect(44px, 450px, 56px, 0);
+        animation: glitch-anim-1 5s infinite linear alternate-reverse;
+      }
+      .glitch::after {
+        left: -2px;
+        text-shadow: -1px 0 #00fff9;
+        clip: rect(44px, 450px, 56px, 0);
+        animation: glitch-anim-2 5s infinite linear alternate-reverse;
+      }
+      @keyframes glitch-anim-1 {
+        0% {
+          clip: rect(30px, 9999px, 10px, 0);
+        }
+        20% {
+          clip: rect(70px, 9999px, 90px, 0);
+        }
+        40% {
+          clip: rect(20px, 9999px, 50px, 0);
+        }
+        60% {
+          clip: rect(80px, 9999px, 10px, 0);
+        }
+        80% {
+          clip: rect(10px, 9999px, 40px, 0);
+        }
+        100% {
+          clip: rect(50px, 9999px, 20px, 0);
+        }
+      }
+      @keyframes glitch-anim-2 {
+        0% {
+          clip: rect(10px, 9999px, 50px, 0);
+        }
+        20% {
+          clip: rect(60px, 9999px, 20px, 0);
+        }
+        40% {
+          clip: rect(30px, 9999px, 80px, 0);
+        }
+        60% {
+          clip: rect(90px, 9999px, 10px, 0);
+        }
+        80% {
+          clip: rect(20px, 9999px, 60px, 0);
+        }
+        100% {
+          clip: rect(70px, 9999px, 30px, 0);
+        }
+      }
+      .logo-img {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 10px;
+        border-radius: 12px;
+      }
+    </style>
   </head>
   <body>
     <div class="container">
       <!-- VIEW 1: LOGIN (Integrado ao Dashboard) -->
       <div id="view-login" class="view-section active">
         <div class="login-header">
-          <h2>P2P Secure Chat</h2>
-          <p class="login-subtitle">Faça login com sua conta do Dashboard</p>
+          <img src="icons/icon-128.png" alt="5uv1 Logo" class="logo-img" />
+          <p class="login-subtitle">Faça login com sua conta</p>
         </div>
 
-        <input type="text" id="login-username" placeholder="Usuário" />
-        <input type="password" id="login-password" placeholder="Senha" />
-        <button id="btn-login">Entrar</button>
+        <div
+          style="display: flex; flex-direction: column; gap: 12px; width: 100%"
+        >
+          <div class="input-group">
+            <span class="input-icon">👤</span>
+            <input
+              type="text"
+              id="login-username"
+              placeholder="Usuário"
+              class="input-with-icon"
+            />
+          </div>
+          <div class="input-group">
+            <span class="input-icon">🔒</span>
+            <input
+              type="password"
+              id="login-password"
+              placeholder="Senha"
+              class="input-with-icon"
+            />
+          </div>
+        </div>
+
+        <button
+          id="btn-login"
+          style="
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            border-radius: 24px;
+          "
+        >
+          Entrar
+        </button>
+        <div
+          style="margin-top: 20px; font-size: 13px; color: var(--text-muted)"
+        >
+          Não tem conta?
+          <a
+            href="#"
+            id="link-go-signup"
+            style="
+              color: var(--primary);
+              text-decoration: none;
+              font-weight: 600;
+            "
+            >Criar conta</a
+          >
+        </div>
         <div id="login-error" class="error-msg"></div>
+      </div>
+
+      <!-- VIEW 1.5: SIGNUP (Nova tela) -->
+      <div id="view-signup" class="view-section signup-content">
+        <div class="login-header">
+          <h2 class="signup-title">Criar Conta</h2>
+          <p class="login-subtitle">Junte-se ao 5uv1</p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div class="input-group">
+            <span class="input-icon">👤</span>
+            <input
+              type="text"
+              id="signup-name"
+              placeholder="Nome Completo"
+              class="input-with-icon"
+            />
+          </div>
+
+          <div class="input-group">
+            <span class="input-icon">🆔</span>
+            <input
+              type="text"
+              id="signup-username"
+              placeholder="Usuário"
+              class="input-with-icon"
+            />
+          </div>
+
+          <div class="input-group">
+            <span class="input-icon">📧</span>
+            <input
+              type="email"
+              id="signup-email"
+              placeholder="E-mail"
+              class="input-with-icon"
+            />
+          </div>
+
+          <div class="input-group">
+            <span class="input-icon">🔒</span>
+            <input
+              type="password"
+              id="signup-password"
+              placeholder="Senha"
+              class="input-with-icon input-with-icon-right"
+            />
+            <span id="toggle-signup-pass" class="password-toggle-btn">👁️</span>
+          </div>
+
+          <div id="password-strength-bar" class="strength-meter"></div>
+
+          <div class="input-group">
+            <span class="input-icon">🔐</span>
+            <input
+              type="password"
+              id="signup-confirm-password"
+              placeholder="Confirmar Senha"
+              class="input-with-icon"
+            />
+          </div>
+        </div>
+
+        <div class="terms-checkbox-container">
+          <input type="checkbox" id="signup-terms" class="terms-checkbox" />
+          <label for="signup-terms" style="cursor: pointer"
+            >Li e aceito os
+            <a
+              href="#"
+              id="link-terms"
+              style="
+                color: var(--primary);
+                text-decoration: none;
+                font-weight: 600;
+              "
+              >Termos de Uso</a
+            ></label
+          >
+        </div>
+
+        <button
+          id="btn-signup"
+          style="
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            border-radius: 24px;
+            font-weight: 600;
+          "
+        >
+          Cadastrar
+        </button>
+        <div
+          style="
+            margin-top: 20px;
+            font-size: 13px;
+            text-align: center;
+            color: var(--text-muted);
+          "
+        >
+          Já tem conta?
+          <a
+            href="#"
+            id="link-go-login"
+            style="
+              color: var(--primary);
+              text-decoration: none;
+              font-weight: 600;
+            "
+            >Fazer Login</a
+          >
+        </div>
+        <div
+          id="signup-error"
+          class="error-msg"
+          style="text-align: center"
+        ></div>
+        <div
+          id="signup-success"
+          class="error-msg"
+          style="color: var(--success); display: none; text-align: center"
+        ></div>
+      </div>
+
+      <!-- VIEW 1.6: VERIFY CODE (Nova tela) -->
+      <div id="view-verify" class="view-section signup-content">
+        <div class="login-header">
+          <h2 class="signup-title">Verificação</h2>
+          <p class="login-subtitle">Digite o código enviado ao seu e-mail</p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div class="input-group">
+            <span class="input-icon">📧</span>
+            <input
+              type="email"
+              id="verify-email"
+              placeholder="Seu E-mail"
+              class="input-with-icon"
+            />
+          </div>
+          <div class="input-group">
+            <span class="input-icon"></span>
+            <input
+              type="text"
+              id="verify-code"
+              placeholder="Código de 6 dígitos"
+              class="input-with-icon"
+              maxlength="6"
+              style="text-align: center; letter-spacing: 4px; font-weight: bold"
+            />
+          </div>
+        </div>
+
+        <button
+          id="btn-verify"
+          style="
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            border-radius: 24px;
+            font-weight: 600;
+          "
+        >
+          Verificar
+        </button>
+
+        <div style="margin-top: 20px; font-size: 13px; text-align: center">
+          <a
+            href="#"
+            id="link-back-login"
+            style="color: var(--text-muted); text-decoration: none"
+            >Voltar para Login</a
+          >
+        </div>
+
+        <div
+          id="verify-error"
+          class="error-msg"
+          style="text-align: center"
+        ></div>
+        <div
+          id="verify-success"
+          class="error-msg"
+          style="color: var(--success); display: none; text-align: center"
+        ></div>
       </div>
 
       <!-- VIEW 2: LISTA DE SERVIDORES -->
@@ -122,7 +429,12 @@
               class="message-input"
             ></textarea>
             <button id="btn-send" class="btn-send">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              <svg
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+                fill="currentColor"
+              >
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
               </svg>
             </button>
@@ -174,8 +486,12 @@
             >Usar Username como ID Fixo</label
           >
         </div>
-        <p class="settings-desc-bottom" style="color: var(--danger); margin-bottom: 15px;">
-          ⚠️ <strong>Atenção:</strong> Isso torna seu ID previsível. Qualquer pessoa que saiba seu usuário poderá tentar conectar-se com ele.
+        <p
+          class="settings-desc-bottom"
+          style="color: var(--danger); margin-bottom: 15px"
+        >
+          ⚠️ <strong>Atenção:</strong> Isso torna seu ID previsível. Qualquer
+          pessoa que saiba seu usuário poderá tentar conectar-se com ele.
         </p>
 
         <div class="checkbox-row">
@@ -242,6 +558,7 @@
 
     <!-- Scripts: Ordem importa -->
     <script src="crypto-handler.js"></script>
+    <script src="signup.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

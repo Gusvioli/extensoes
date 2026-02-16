@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * 🧪 Teste de Segurança - P2P Secure Chat
+ * 🧪 Teste de Segurança - 5uv1
  *
  * Este script valida se o servidor está implementando corretamente
  * as medidas de segurança necessárias.
@@ -266,7 +266,7 @@ class SecurityTester {
 
   async runAllTests() {
     console.log("\n" + "=".repeat(60));
-    console.log("🔐 Teste de Segurança - P2P Secure Chat");
+    console.log("🔐 Teste de Segurança - 5uv1");
     console.log("=".repeat(60) + "\n");
 
     console.log(`🌐 Servidor: ${this.url}`);

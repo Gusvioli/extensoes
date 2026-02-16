@@ -16,8 +16,8 @@ async function run() {
     console.log("🌱 Iniciando seed do usuário admin para testes...");
     await db.init();
 
-    const username = "adminGusvioli";
-    const password = "@Gus1593572846000";
+    const username = process.env.ADMIN_USERNAME || "admin";
+    const password = process.env.ADMIN_PASSWORD || "@admin123";
 
     const existing = await db.getUserByUsername(username);
     if (existing) {

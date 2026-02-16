@@ -511,7 +511,7 @@
   },
   "83f1fdb415260f6f944053c3f5e27959dee96544bd890879d528215fe55cc6a0": {
     "username": "adminGusvioli",
-    "expiresAt": 1773702249319,
+    "expiresAt": 1773791539337,
     "ip": "127.0.0.1",
     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
   },
@@ -527,9 +527,123 @@
     "ip": "127.0.0.1",
     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
   },
-  "753131eb744ed78abc8002a257f715e6933bf76ce2adcbd017dd7c115c5975a5": {
+  "e9e7ba45739de1d4931b357aa33a2b8b0ec2880baa6be4e1f5b269b8049e55d7": {
+    "username": "guvieira",
+    "expiresAt": 1773748400320,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "5598d4f875cbcd3f17b78d6ec14dc4f8e9533ef9df0a27cf7da2fce4ad6fbdd1": {
     "username": "adminGusvioli",
-    "expiresAt": 1773708469037,
+    "expiresAt": 1773790744746,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "8e5f12e748442a92be9fa8b23d498957572dede19315373e832e39a3f243f6b1": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773791304054,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "606d19e671906c5fb4f023e13fe42ed2b392910ee22865bbc7539fa0c5d059fc": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773791776509,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "6cfd1f023853e26ee4894d18b72c37637966d7436ce6245df8d8291b659a6686": {
+    "username": "guvieira",
+    "expiresAt": 1773791889610,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+  },
+  "f52963ecb7be74903258b3f224e00fcb4f51cafcd0533fd6f45dffa8679219ae": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773796654144,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "d98099bac1d2e2c7e95acd58344f1034b5ae62cd2cadf32602c29608b73c8920": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773798699838,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "6002ee5717d11c7bb883dfd621a3203fff26bbcab584bd8e3811663e0c74e108": {
+    "username": "felix",
+    "expiresAt": 1773798839255,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "2f93654c7218b96ead16b08a0dbf1945df1ed0abb08b2c663e05d5be60be2d00": {
+    "username": "felix",
+    "expiresAt": 1773798911447,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "514f66414f2ea90694d5d711b50821480cc683ed8ccb0e34e40802608d16343f": {
+    "username": "Gustavooo",
+    "expiresAt": 1773799797315,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "f2c65bccc531d37f11f661635ec4d2f221e95a70a17a4e86dc7634aed101a51b": {
+    "username": "Gustavooo",
+    "expiresAt": 1773799884545,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "e260be3d4099f436c570a0ebc8ea52d479df27180b1c888692f295db37c68b07": {
+    "username": "Gustavooo",
+    "expiresAt": 1773799891826,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "df0bdfda15142db93822a2c04cdcbf51b66d6fc65dded5d054c9f3fb389935f6": {
+    "username": "Gustavooo",
+    "expiresAt": 1773800271660,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "400b725032b6946117d92febab1a03443b9a88a0b5058f1bc0cdc4527bfc04c5": {
+    "username": "Gustavooo",
+    "expiresAt": 1773800324459,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "d2de26aeee49345bc85dbcf626618016f8359bc4eafa245c51f4cb3296e875d3": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773800355618,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "c58010208708a1466de5a8982f538ef772a139aead3d78977af175ecec9875fe": {
+    "username": "Gustavooo",
+    "expiresAt": 1773800359650,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "6aa2376a36dd16fcca6a92df72e212c61f7524ef6fde7a7f19a650f873a04a01": {
+    "username": "guvieira",
+    "expiresAt": 1773801255382,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "bc148f41bde49707cd1f9d0f1a8d764f052029086d377bab96c7b9d1d5d2b9d5": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773801683244,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "3b1708c3ed81f63c1746b6bcbf6603ce46d46d0669cdffd5da2ca51399f78c19": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773801906225,
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "406522721a96f56635adb542223e3388ed51a08a7982dbb1dc4fae30d6a49c6a": {
+    "username": "adminGusvioli",
+    "expiresAt": 1773801912227,
     "ip": "127.0.0.1",
     "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
   }

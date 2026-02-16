@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Servidores Disponíveis - P2P Secure Chat</title>
+    <title>Servidores Disponíveis - 5uv1</title>
     <link rel="stylesheet" href="css/modern-layout.css" />
+    <link rel="icon" href="favicon.ico" />
     <script src="js/config.js"></script>
     <style>
       /* Ajuste de design: Bordas levemente menos arredondadas */
@@ -60,7 +61,43 @@
   <body>
     <div class="container">
       <header>
-        <h1>🌐 Servidores Públicos</h1>
+        <div style="display: flex; align-items: center; gap: 15px">
+          <svg width="42" height="42" viewBox="0 0 128 128">
+            <defs>
+              <linearGradient
+                id="grad_header"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop
+                  offset="0%"
+                  style="stop-color: #667eea; stop-opacity: 1"
+                />
+                <stop
+                  offset="100%"
+                  style="stop-color: #764ba2; stop-opacity: 1"
+                />
+              </linearGradient>
+            </defs>
+            <rect width="128" height="128" rx="24" fill="url(#grad_header)" />
+            <text
+              x="50%"
+              y="54%"
+              font-family="sans-serif"
+              font-weight="900"
+              font-size="44"
+              fill="white"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              letter-spacing="-1"
+            >
+              5uv1
+            </text>
+          </svg>
+          <h1 style="margin: 0">Servidores Públicos</h1>
+        </div>
         <div class="header-actions">
           <span
             style="
@@ -247,13 +284,54 @@
     <div id="connect-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>
-            🔗 Nomedo servidor:<br>
-            <span
-              id="modal-server-name"
-              style="color: var(--primary-blue)"
-            ></span>
-          </h2>
+          <div style="display: flex; align-items: center; gap: 12px">
+            <svg width="36" height="36" viewBox="0 0 128 128">
+              <defs>
+                <linearGradient
+                  id="grad_modal_static"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop
+                    offset="0%"
+                    style="stop-color: #667eea; stop-opacity: 1"
+                  />
+                  <stop
+                    offset="100%"
+                    style="stop-color: #764ba2; stop-opacity: 1"
+                  />
+                </linearGradient>
+              </defs>
+              <rect
+                width="128"
+                height="128"
+                rx="24"
+                fill="url(#grad_modal_static)"
+              />
+              <text
+                x="50%"
+                y="54%"
+                font-family="sans-serif"
+                font-weight="900"
+                font-size="44"
+                fill="white"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                letter-spacing="-1"
+              >
+                5uv1
+              </text>
+            </svg>
+            <h2 style="margin: 0">
+              Conexão:
+              <span
+                id="modal-server-name"
+                style="color: var(--primary-blue)"
+              ></span>
+            </h2>
+          </div>
           <button class="close-modal-btn close-btn">×</button>
         </div>
 
@@ -391,6 +469,63 @@
           </div>
         </div>
 
+        <div
+          id="jitter-test-group"
+          class="form-group"
+          style="margin-top: 20px; display: none"
+        >
+          <label>Diagnóstico Avançado:</label>
+          <div
+            style="
+              background: #f8f9fa;
+              border: 1px solid var(--border-color);
+              border-radius: 4px;
+              padding: 15px;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="font-weight: 600; color: var(--text-secondary)"
+                >Jitter (Estabilidade):</span
+              >
+              <span id="jitter-value" style="font-weight: 700; color: #6c757d"
+                >-- ms</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="font-weight: 600; color: var(--text-secondary)"
+                >Perda de Pacotes:</span
+              >
+              <span
+                id="packet-loss-value"
+                style="font-weight: 700; color: #6c757d"
+                >-- %</span
+              >
+            </div>
+            <button
+              id="start-jitter-test-btn"
+              class="btn btn-secondary"
+              style="margin-top: 10px; width: 100%"
+            >
+              📊 Iniciar Diagnóstico
+            </button>
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button class="close-modal-btn btn btn-primary" style="width: 100%">
             Fechar
@@ -403,7 +538,7 @@
     <div id="profile-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>Meu Perfil</h2>
+          <h2>Perfil 5uv1</h2>
           <button class="close-modal-btn close-btn">×</button>
         </div>
         <form id="profile-form">
@@ -474,7 +609,57 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <footer>&copy; 2025 P2P Secure Chat. Todos os direitos reservados.</footer>
+    <footer
+      style="
+        margin-top: 40px;
+        padding: 20px 0;
+        border-top: 1px solid var(--border-color);
+        text-align: center;
+      "
+    >
+      <div
+        class="donation-banner"
+        style="
+          background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+          padding: 20px;
+          border-radius: 8px;
+          margin: 0 auto 20px;
+          max-width: 500px;
+          color: #333;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        "
+      >
+        <h3 style="margin: 0 0 10px 0; font-size: 1.2rem">
+          ☕ Gostou do projeto?
+        </h3>
+        <p style="margin: 0 0 15px 0; font-size: 0.95rem; opacity: 0.9">
+          Ajude a manter os servidores online e o desenvolvimento ativo.
+        </p>
+        <a
+          href="#"
+          class="btn"
+          style="
+            background: white;
+            color: #d35400;
+            border: none;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            display: inline-block;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          "
+          >❤️ Fazer uma Doação</a
+        >
+      </div>
+      <div style="margin-bottom: 10px;">
+        <a href="terms.html" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; margin: 0 10px;">Termos de Uso</a>
+        <a href="terms.html" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; margin: 0 10px;">Política de Privacidade</a>
+      </div>
+      <div style="color: var(--text-secondary); font-size: 0.9rem">
+        &copy; 2025 5uv1. Todos os direitos reservados.
+      </div>
+    </footer>
 
     <script src="js/view-app.js"></script>
   </body>

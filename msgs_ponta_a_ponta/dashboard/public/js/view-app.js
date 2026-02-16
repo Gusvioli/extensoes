@@ -111,7 +111,7 @@ function injectForgotPasswordModal() {
     <div id="forgot-password-modal" class="modal">
       <div class="modal-content" style="max-width: 400px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px 20px; text-align: center;">
-          <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">Recuperação de Conta</h2>
+          <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">5uv1 | Recuperação</h2>
           <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 0.9rem;">Redefina sua senha com segurança</p>
         </div>
         
@@ -285,7 +285,7 @@ function injectLoginModal() {
       <div class="modal-content" style="max-width: 400px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; position: relative;">
           <button class="close-modal-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">&times;</button>
-          <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 700;">Bem-vindo</h2>
+          <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 700;">5uv1</h2>
           <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 0.95rem;">Acesse sua conta para continuar</p>
         </div>
         
@@ -317,7 +317,7 @@ function injectLoginModal() {
           </form>
           
           <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #edf2f7; font-size: 0.9rem; color: #718096;">
-            Não tem uma conta? <a href="/" style="color: #667eea; text-decoration: none; font-weight: 600;">Cadastre-se</a>
+            Não tem uma conta? <a href="#" id="login-signup-link" style="color: #667eea; text-decoration: none; font-weight: 600;">Cadastre-se</a>
           </div>
         </div>
       </div>
@@ -343,6 +343,13 @@ function injectLoginModal() {
     .addEventListener("click", (e) => {
       e.preventDefault();
       openForgotPasswordModal();
+    });
+
+  document
+    .getElementById("login-signup-link")
+    .addEventListener("click", (e) => {
+      e.preventDefault();
+      openSignupModal();
     });
 
   // Adiciona a funcionalidade de login com a tecla "Enter"
@@ -477,6 +484,169 @@ async function handleLoginSubmit(e) {
   }
 }
 
+function injectSignupModal() {
+  if (document.getElementById("signup-modal")) return;
+
+  const modalHTML = `
+    <div id="signup-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; position: relative;">
+          <button class="close-modal-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">&times;</button>
+          <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 700;">Criar Conta</h2>
+          <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 0.95rem;">Junte-se ao 5uv1</p>
+        </div>
+        
+        <div style="padding: 30px 25px; background: white;">
+          <form id="signup-form" autocomplete="off">
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label for="signup-name" style="display: block; margin-bottom: 5px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Nome Completo</label>
+              <input type="text" id="signup-name" class="form-control" required placeholder="Seu nome" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label for="signup-username" style="display: block; margin-bottom: 5px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Usuário</label>
+              <input type="text" id="signup-username" class="form-control" required placeholder="Escolha um usuário" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label for="signup-email" style="display: block; margin-bottom: 5px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">E-mail</label>
+              <input type="email" id="signup-email" class="form-control" required placeholder="seu@email.com" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label for="signup-password" style="display: block; margin-bottom: 5px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Senha</label>
+              <input type="password" id="signup-password" class="form-control" required placeholder="Mínimo 8 caracteres" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+              <label for="signup-confirm-password" style="display: block; margin-bottom: 5px; color: #4a5568; font-weight: 600; font-size: 0.9rem;">Confirmar Senha</label>
+              <input type="password" id="signup-confirm-password" class="form-control" required placeholder="Repita a senha" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px; justify-content: center;">
+               <input type="checkbox" id="signup-terms" style="width: 16px; height: 16px; cursor: pointer; accent-color: #667eea;">
+               <label for="signup-terms" style="font-size: 0.9rem; color: #4a5568; cursor: pointer;">Li e aceito os <a href="terms.html" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 600;">Termos de Uso</a></label>
+            </div>
+
+            <div id="signup-error" class="alert-box error" style="display: none; color: #c53030; background-color: #fff5f5; border: 1px solid #feb2b2; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; text-align: center;"></div>
+            <div id="signup-success" class="alert-box success" style="display: none; color: #276749; background-color: #f0fff4; border: 1px solid #c6f6d5; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; text-align: center;"></div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 6px rgba(102, 126, 234, 0.25); transition: transform 0.1s, box-shadow 0.1s;">Cadastrar</button>
+          </form>
+          
+          <div style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #edf2f7; font-size: 0.9rem; color: #718096;">
+            Já tem uma conta? <a href="#" id="signup-login-link" style="color: #667eea; text-decoration: none; font-weight: 600;">Fazer Login</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+  const modal = document.getElementById("signup-modal");
+  const closeBtns = modal.querySelectorAll(".close-modal-btn");
+  closeBtns.forEach((btn) =>
+    btn.addEventListener("click", () => modal.classList.remove("show")),
+  );
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.remove("show");
+  });
+
+  document
+    .getElementById("signup-form")
+    .addEventListener("submit", handleSignupSubmit);
+
+  document
+    .getElementById("signup-login-link")
+    .addEventListener("click", (e) => {
+      e.preventDefault();
+      modal.classList.remove("show");
+      document.getElementById("login-modal").classList.add("show");
+    });
+}
+
+function openSignupModal() {
+  injectSignupModal();
+  setupPasswordToggles();
+  document.getElementById("login-modal").classList.remove("show");
+  document.getElementById("signup-modal").classList.add("show");
+  document.getElementById("signup-name").focus();
+}
+
+async function handleSignupSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById("signup-name").value.trim();
+  const username = document.getElementById("signup-username").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const confirmPassword = document.getElementById(
+    "signup-confirm-password",
+  ).value;
+  const termsAccepted = document.getElementById("signup-terms").checked;
+
+  const errorBox = document.getElementById("signup-error");
+  const successBox = document.getElementById("signup-success");
+  const submitBtn = e.target.querySelector("button[type='submit']");
+
+  errorBox.style.display = "none";
+  successBox.style.display = "none";
+
+  if (!name || !username || !email || !password || !confirmPassword) {
+    errorBox.textContent = "Preencha todos os campos.";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    errorBox.textContent = "As senhas não coincidem.";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  if (!termsAccepted) {
+    errorBox.textContent = "Você deve aceitar os Termos de Uso.";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Cadastrando...";
+
+  const cleanApiBase = API_BASE.replace(/\/$/, "");
+
+  try {
+    const res = await fetch(`${cleanApiBase}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, username, email, password }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      successBox.textContent =
+        "Conta criada! Verifique seu e-mail para ativar.";
+      successBox.style.display = "block";
+      e.target.reset();
+      setTimeout(() => {
+        document.getElementById("signup-modal").classList.remove("show");
+        document.getElementById("login-modal").classList.add("show");
+        showToast("Conta criada! Faça login.", "success");
+      }, 3000);
+    } else {
+      errorBox.textContent = data.error || "Erro ao criar conta.";
+      errorBox.style.display = "block";
+    }
+  } catch (err) {
+    console.error(err);
+    errorBox.textContent = "Erro de conexão.";
+    errorBox.style.display = "block";
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Cadastrar";
+  }
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener("DOMContentLoaded", () => {
   // Resetar o grid de servidores imediatamente ao carregar a página
@@ -486,6 +656,7 @@ document.addEventListener("DOMContentLoaded", () => {
   injectLoader();
   injectLoginModal();
   injectForgotPasswordModal();
+  injectSignupModal();
 
   // Carregar dados em paralelo e remover loader quando ambos terminarem
   Promise.allSettled([checkAuth(), loadServers()]).then(() => {
@@ -517,7 +688,10 @@ document.addEventListener("DOMContentLoaded", () => {
       <div id="connect-modal" class="modal">
         <div class="modal-content">
           <div class="modal-header">
-            <h2>🔗 Dados de Conexão</h2>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <svg width="36" height="36" viewBox="0 0 128 128"><defs><linearGradient id="grad_modal" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#667eea;stop-opacity:1" /><stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" /></linearGradient></defs><rect width="128" height="128" rx="24" fill="url(#grad_modal)" /><text x="50%" y="54%" font-family="sans-serif" font-weight="900" font-size="44" fill="white" text-anchor="middle" dominant-baseline="middle" letter-spacing="-1">5uv1</text></svg>
+              <h2>Conexão</h2>
+            </div>
             <button class="close-modal-btn close-btn">&times;</button>
           </div>
           <p class="mb-4" style="font-weight: 500;">Copie os dados abaixo para usar na sua extensão ou aplicação.</p>
@@ -590,6 +764,12 @@ document.addEventListener("DOMContentLoaded", () => {
     viewSearch.setAttribute("autocomplete", "off");
     viewSearch.setAttribute("name", "view_search_query");
 
+    // Hack para evitar que navegadores preencham automaticamente com o nome de usuário
+    viewSearch.setAttribute("readonly", "true");
+    viewSearch.addEventListener("focus", () => {
+      viewSearch.removeAttribute("readonly");
+    });
+
     // Forçar limpeza após delay para combater preenchimento automático do navegador ao atualizar
     setTimeout(() => {
       viewSearch.value = "";
@@ -643,7 +823,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const footerHTML = `
       <footer class="app-footer">
         <div class="footer-content">
-          <div style="font-size: 1.5rem; font-weight: 900; letter-spacing: 0.1em;">P2P SECURE CHAT</div>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px;">
+            <svg width="24" height="24" viewBox="0 0 128 128"><defs><linearGradient id="grad_footer" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#667eea;stop-opacity:1" /><stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" /></linearGradient></defs><rect width="128" height="128" rx="24" fill="url(#grad_footer)" /><text x="50%" y="54%" font-family="sans-serif" font-weight="900" font-size="44" fill="white" text-anchor="middle" dominant-baseline="middle" letter-spacing="-1">5uv1</text></svg>
+            <div style="font-size: 1.5rem; font-weight: 900; letter-spacing: 0.1em;">5uv1</div>
+          </div>
           <div style="display: flex; gap: 15px; font-weight: bold; font-size: 0.9rem;">
             <span>PUBLIC VIEW</span>
             <span>•</span>
@@ -716,6 +899,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const startSpeedTestBtn = document.getElementById("start-speed-test-btn");
   if (startSpeedTestBtn) {
     startSpeedTestBtn.addEventListener("click", startSpeedTest);
+  }
+
+  const startJitterTestBtn = document.getElementById("start-jitter-test-btn");
+  if (startJitterTestBtn) {
+    startJitterTestBtn.addEventListener("click", startJitterTest);
   }
 
   const latencyCompCanvas = document.getElementById("latency-comparison-chart");
@@ -1021,11 +1209,15 @@ function renderServers() {
                       currentUser &&
                       (currentUser.role === "admin" ||
                         currentUser.role === "gerente");
-                    
-                    const loadPercentage = Math.min(100, ((server.clientsCount || 0) / server.maxClients) * 100);
-                    let loadColor = '#22c55e'; // Green
-                    if (loadPercentage > 80) loadColor = '#ef4444'; // Red
-                    else if (loadPercentage > 50) loadColor = '#f59e0b'; // Yellow
+
+                    const loadPercentage = Math.min(
+                      100,
+                      ((server.clientsCount || 0) / server.maxClients) * 100,
+                    );
+                    let loadColor = "#22c55e"; // Green
+                    if (loadPercentage > 80)
+                      loadColor = "#ef4444"; // Red
+                    else if (loadPercentage > 50) loadColor = "#f59e0b"; // Yellow
 
                     return `
                         <tr style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
@@ -1041,11 +1233,11 @@ function renderServers() {
                             <td style="padding: 16px 24px; vertical-align: middle;">
                                 <div style="display: flex; flex-direction: column; gap: 2px;">
                                     <span style="font-size: 0.95rem; font-weight: 600; color: #1e293b;">${highlightMatch(server.name)}</span>
-                                    <span title="${escapeHtml(server.description || '')}" style="font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block;">
-                                        ${server.description || 'Sem descrição'}
+                                    <span title="${escapeHtml(server.description || "")}" style="font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block;">
+                                        ${server.description || "Sem descrição"}
                                     </span>
                                     <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
-                                        <span style="font-size: 0.7rem; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 4px;">${server.region || 'Global'}</span>
+                                        <span style="font-size: 0.7rem; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 4px;">${server.region || "Global"}</span>
                                     </div>
                                 </div>
                             </td>
@@ -1059,7 +1251,7 @@ function renderServers() {
                                         <code style="font-family: 'Menlo', monospace; font-size: 0.85rem; color: #64748b;">${server.port}</code>
                                     </div>
                                     <div>
-                                        <span class="badge ${server.protocol === 'wss' ? 'badge-secure' : 'badge-insecure'}" style="font-size: 0.7rem;">${server.protocol.toUpperCase()}</span>
+                                        <span class="badge ${server.protocol === "wss" ? "badge-secure" : "badge-insecure"}" style="font-size: 0.7rem;">${server.protocol.toUpperCase()}</span>
                                     </div>
                                 </div>
                             </td>
@@ -1078,9 +1270,11 @@ function renderServers() {
                             <!-- Acesso -->
                             <td style="padding: 16px 24px; vertical-align: middle;">
                                 <div>
-                                    ${server.requiresAuth 
-                                        ? '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2;">🔒 Privado</span>' 
-                                        : '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7;">🔓 Público</span>'}
+                                    ${
+                                      server.requiresAuth
+                                        ? '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2;">🔒 Privado</span>'
+                                        : '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; background: #f0fdf4; color: #16a34a; border: 1px solid #dcfce7;">🔓 Público</span>'
+                                    }
                                 </div>
                             </td>
 
@@ -1090,14 +1284,14 @@ function renderServers() {
                                 ${
                                   server.status === "active"
                                     ? `
-                                  <button onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(isAdminOrManager ? server.token || "" : "")}')" class="action-btn connect-btn" title="Conectar">🔗</button>
+                                  <button onclick="connectToServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', '${escapeHtml(server.name)}', '${escapeHtml(currentUser ? server.token || "" : "")}')" class="action-btn connect-btn" title="Conectar">🔗</button>
                                   <button onclick="pingServer('${escapeHtml(server.host)}', ${server.port}, '${server.protocol}', this)" class="action-btn ping-btn" title="Testar Latência">⚡</button>
                                 `
                                     : `
                                   <span title="Servidor Indisponível" style="font-size: 1.2em; margin-right: 8px; opacity: 0.5; cursor: not-allowed; display: inline-flex; align-items: center; height: 36px;">🚫</span>
                                 `
                                 }
-                                <button onclick="copyToClipboard('${escapeHtml(server.host)}:${server.port}', this)" class="action-btn copy-btn" title="Copiar Host">📍</button>
+                                <button onclick="copyServerInfo('${server.id}', this)" class="action-btn copy-btn" title="Copiar Info Server">📍</button>
                                 </div>
                             </td>
                         </tr>
@@ -1168,11 +1362,13 @@ function connectToServer(host, port, protocol, serverName, token) {
   // Lógica de exibição das ferramentas no modal
   const latencyGroup = document.getElementById("latency-history-group");
   const speedGroup = document.getElementById("speed-test-group");
+  const jitterGroup = document.getElementById("jitter-test-group");
   const loginAlert = document.getElementById("login-alert-modal");
 
   if (currentUser) {
     if (latencyGroup) latencyGroup.style.display = "block";
     if (speedGroup) speedGroup.style.display = "block";
+    if (jitterGroup) jitterGroup.style.display = "block";
     if (loginAlert) loginAlert.style.display = "none";
 
     // Iniciar monitoramento de latência
@@ -1191,9 +1387,16 @@ function connectToServer(host, port, protocol, serverName, token) {
     document.getElementById("speed-upload").textContent = "-- Mbps";
     const startSpeedBtn = document.getElementById("start-speed-test-btn");
     if (startSpeedBtn) startSpeedBtn.disabled = false;
+
+    // Resetar teste de jitter
+    document.getElementById("jitter-value").textContent = "-- ms";
+    document.getElementById("packet-loss-value").textContent = "-- %";
+    const startJitterBtn = document.getElementById("start-jitter-test-btn");
+    if (startJitterBtn) startJitterBtn.disabled = false;
   } else {
     if (latencyGroup) latencyGroup.style.display = "none";
     if (speedGroup) speedGroup.style.display = "none";
+    if (jitterGroup) jitterGroup.style.display = "none";
     if (loginAlert) loginAlert.style.display = "block";
   }
 }
@@ -1404,9 +1607,32 @@ function startSpeedTest() {
   downloadEl.textContent = "Testando...";
   uploadEl.textContent = "Aguardando...";
 
-  const ws = new WebSocket(wsUrl);
+  let ws;
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    console.error("Erro ao criar WebSocket:", e);
+    btn.disabled = false;
+    btn.textContent = "Erro na URL";
+    return;
+  }
   let myId = null;
   let testRunning = false;
+
+  // Timeout de segurança para o handshake inicial (10s)
+  const handshakeTimeout = setTimeout(() => {
+    if (!myId) {
+      if (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CONNECTING
+      )
+        ws.close();
+      btn.disabled = false;
+      btn.textContent = "Erro: Timeout";
+      downloadEl.textContent = "Timeout";
+      uploadEl.textContent = "Timeout";
+    }
+  }, 10000);
 
   ws.onopen = () => {
     // Aguarda identificação
@@ -1421,6 +1647,7 @@ function startSpeedTest() {
     }
 
     if (msg.type === "your-id") {
+      clearTimeout(handshakeTimeout);
       myId = msg.id;
       // Se requer autenticação, envia token antes de testar
       if (msg.requiresAuth && token) {
@@ -1468,8 +1695,19 @@ function startSpeedTest() {
       downloadEl.textContent = "Erro";
     } finally {
       if (ws.readyState === WebSocket.OPEN) ws.close();
-      btn.disabled = false;
-      btn.textContent = "🚀 Iniciar Teste";
+
+      let cooldown = 10;
+      btn.textContent = `Aguarde ${cooldown}s`;
+      const timer = setInterval(() => {
+        cooldown--;
+        if (cooldown <= 0) {
+          clearInterval(timer);
+          btn.disabled = false;
+          btn.textContent = "🚀 Iniciar Teste";
+        } else {
+          btn.textContent = `Aguarde ${cooldown}s`;
+        }
+      }, 1000);
     }
   }
 
@@ -1485,6 +1723,7 @@ function startSpeedTest() {
       const interval = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) {
           clearInterval(interval);
+          if (timeoutId) clearTimeout(timeoutId);
           return reject(new Error("Conexão fechada"));
         }
         if (ws.bufferedAmount === 0) {
@@ -1518,7 +1757,8 @@ function startSpeedTest() {
           if (msg.type === "download-test") {
             const duration = (Date.now() - startTime) / 1000;
             const safeDuration = duration < 0.001 ? 0.001 : duration;
-            const speed = (event.data.length * 8) / (1024 * 1024) / safeDuration;
+            const speed =
+              (event.data.length * 8) / (1024 * 1024) / safeDuration;
             ws.removeEventListener("message", tempListener);
             resolve(speed);
           } else if (msg.type === "error") {
@@ -1544,6 +1784,148 @@ function startSpeedTest() {
     btn.textContent = "Erro no Teste";
     downloadEl.textContent = "Erro";
     uploadEl.textContent = "Erro";
+  };
+}
+
+function startJitterTest() {
+  const btn = document.getElementById("start-jitter-test-btn");
+  const jitterEl = document.getElementById("jitter-value");
+  const lossEl = document.getElementById("packet-loss-value");
+  const wsUrl = currentWsUrl;
+  const tokenInput = document.getElementById("modal-token");
+  const token = tokenInput ? tokenInput.value : "";
+
+  if (!wsUrl) return;
+
+  btn.disabled = true;
+  btn.textContent = "Diagnosticando...";
+  jitterEl.textContent = "Testando...";
+  lossEl.textContent = "Testando...";
+  jitterEl.style.color = "#6c757d";
+  lossEl.style.color = "#6c757d";
+
+  let ws;
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    console.error("Erro ao criar WebSocket:", e);
+    btn.disabled = false;
+    btn.textContent = "Erro na URL";
+    return;
+  }
+  let myId = null;
+  const pings = [];
+  const PING_COUNT = 20;
+  let receivedCount = 0;
+
+  // Timeout de segurança para o handshake inicial (10s)
+  const handshakeTimeout = setTimeout(() => {
+    if (!myId) {
+      if (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CONNECTING
+      )
+        ws.close();
+      btn.disabled = false;
+      btn.textContent = "Erro: Timeout";
+      jitterEl.textContent = "Timeout";
+      lossEl.textContent = "Timeout";
+    }
+  }, 10000);
+
+  ws.onmessage = async (event) => {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (e) {
+      return;
+    }
+
+    if (msg.type === "your-id") {
+      clearTimeout(handshakeTimeout);
+      myId = msg.id;
+      if (msg.requiresAuth && token) {
+        ws.send(JSON.stringify({ type: "authenticate", token }));
+      } else if (msg.requiresAuth && !token) {
+        jitterEl.textContent = "Erro: Auth";
+        ws.close();
+        btn.disabled = false;
+        btn.textContent = "📊 Iniciar Diagnóstico";
+      } else {
+        runJitterSequence();
+      }
+    } else if (msg.type === "authenticated") {
+      runJitterSequence();
+    } else if (msg.type === "jitter-ping") {
+      const sendTime = msg.payload.timestamp;
+      const rtt = Date.now() - sendTime;
+      pings.push(rtt);
+      receivedCount++;
+    }
+  };
+
+  let testRunning = false;
+
+  async function runJitterSequence() {
+    if (testRunning) return;
+    testRunning = true;
+
+    for (let i = 0; i < PING_COUNT; i++) {
+      if (ws.readyState !== WebSocket.OPEN) break;
+      const payload = { timestamp: Date.now(), seq: i };
+      // Envia para si mesmo (echo)
+      ws.send(JSON.stringify({ type: "jitter-ping", target: myId, payload }));
+      await new Promise((r) => setTimeout(r, 100)); // 100ms entre pings
+    }
+
+    // Aguarda um pouco pelos últimos pacotes
+    await new Promise((r) => setTimeout(r, 1000));
+    ws.close();
+
+    // Cálculos
+    const loss =
+      PING_COUNT > 0 ? ((PING_COUNT - receivedCount) / PING_COUNT) * 100 : 0;
+    let jitter = 0;
+    if (pings.length > 1) {
+      let differences = 0;
+      for (let i = 0; i < pings.length - 1; i++) {
+        differences += Math.abs(pings[i + 1] - pings[i]);
+      }
+      jitter = differences / (pings.length - 1);
+    }
+
+    if (receivedCount === 0) {
+      jitterEl.textContent = "Falha";
+      lossEl.textContent = "100%";
+      jitterEl.style.color = "#ef4444";
+      lossEl.style.color = "#ef4444";
+    } else {
+      jitterEl.textContent = `${jitter.toFixed(2)} ms`;
+      lossEl.textContent = `${loss.toFixed(1)} %`;
+
+      jitterEl.style.color = jitter < 30 ? "#22c55e" : "#ef4444";
+      lossEl.style.color = loss === 0 ? "#22c55e" : "#ef4444";
+    }
+
+    let cooldown = 10;
+    btn.textContent = `Aguarde ${cooldown}s`;
+    const timer = setInterval(() => {
+      cooldown--;
+      if (cooldown <= 0) {
+        clearInterval(timer);
+        btn.disabled = false;
+        btn.textContent = "📊 Iniciar Diagnóstico";
+      } else {
+        btn.textContent = `Aguarde ${cooldown}s`;
+      }
+    }, 1000);
+  }
+
+  ws.onerror = () => {
+    btn.disabled = false;
+    btn.textContent = "Erro na Conexão";
+    jitterEl.textContent = "Erro";
+    lossEl.textContent = "Erro";
   };
 }
 
@@ -1684,6 +2066,24 @@ function drawLatencyComparisonChart(hoverIndex = -1) {
 function copyToClipboard(text, button) {
   navigator.clipboard.writeText(text).then(() => {
     showToast("✓ Copiado para a área de transferência!");
+  });
+}
+
+function copyServerInfo(id, button) {
+  const server = servers.find((s) => s.id === id);
+  if (!server) return;
+
+  const info = `Nome: ${server.name}
+Host: ${server.host}
+Porta: ${server.port}
+Protocolo: ${server.protocol}
+Região: ${server.region || "N/A"}
+Status: ${server.status}
+Capacidade: ${server.clientsCount || 0}/${server.maxClients}
+Acesso: ${server.requiresAuth ? "Privado" : "Público"}`;
+
+  navigator.clipboard.writeText(info).then(() => {
+    showToast("✓ Informações do servidor copiadas!");
   });
 }
 

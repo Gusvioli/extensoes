@@ -1,4 +1,4 @@
-# 📊 Dashboard de Servidores P2P
+# 📊 Dashboard de Servidores 5uv1
 
 Gerenciador visual e intuitivo para todos os seus servidores de sinalização WebSocket.
 
@@ -255,4 +255,4 @@ Mesmo do projeto principal
 
 ---
 
-**Dashboard de Servidores P2P - v1.0.0** ✨
+**Dashboard de Servidores 5uv1 - v1.0.0** ✨

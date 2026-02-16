@@ -131,7 +131,7 @@ async function showStatus() {
 // Mostra ajuda
 function showHelp() {
   console.log(`
-${COLORS.blue}🔧 Gerenciador de Portas - Servidor P2P Secure Chat${COLORS.reset}
+${COLORS.blue}🔧 Gerenciador de Portas - Servidor 5uv1${COLORS.reset}
 
 ${COLORS.green}Uso:${COLORS.reset}
   node manage-ports.js [comando] [porta]

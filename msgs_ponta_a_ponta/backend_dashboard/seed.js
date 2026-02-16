@@ -15,15 +15,15 @@ async function run() {
       );
       await db.saveUser({
         id: "user-seeded-admin-default",
-        username: "adminGusvioli",
-        password: db.hashPassword("@Gus1593572846000"),
+        username: process.env.ADMIN_USERNAME || "admin",
+        password: db.hashPassword(process.env.ADMIN_PASSWORD || "@admin123"),
         name: "Admin Padrão",
         email: "admin@example.com",
         role: "admin",
         isVerified: true,
         createdAt: new Date().toISOString(),
       });
-      logger.info('INFO: Usuário "adminGusvioli" criado com sucesso.');
+      logger.info(`INFO: Usuário ${process.env.ADMIN_USERNAME || "admin"} criado com sucesso.`);
     }
   } catch (e) {
     logger.error("Erro ao executar seed de usuários:", e);

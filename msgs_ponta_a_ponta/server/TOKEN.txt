@@ -1,4 +1,4 @@
-🔐 P2P SECURE CHAT - TOKEN DE AUTENTICAÇÃO
+🔐 5uv1 - TOKEN DE AUTENTICAÇÃO
 =====================================
 
 Token: 7ab3841260d04ef521e4dbe1ddc5b7e3
@@ -9,5 +9,5 @@ Instruções de Uso:
 3. Clique em "Autenticar"
 4. Conecte-se normalmente
 
-Gerado em: 2026-02-14T20:29:58.553Z
+Gerado em: 2026-02-16T00:05:46.161Z
 Servidor: ws://localhost:8081

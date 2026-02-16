@@ -16,49 +16,81 @@ const logger = require("./logger");
 const settingsData = { remoteRegistryUrl: "" };
 const loginRateLimit = new Map();
 const resendRateLimit = new Map();
+const signupRateLimit = new Map();
 
 // ============ MONITORAMENTO E BACKGROUND TASKS ============
 
 function checkServerHealth(server) {
   return new Promise((resolve) => {
     if (!server.host) return resolve({ isOnline: false });
-    const isSecure = server.protocol === "wss";
-    const transport = isSecure ? https : http;
-    const port = server.port || (isSecure ? 443 : 80);
 
-    const req = transport.get(
-      {
-        hostname: server.host,
-        port: port,
-        path: "/status",
-        timeout: 3000,
-        rejectUnauthorized: false,
-        headers: { "User-Agent": "P2P-Dashboard-Monitor" },
-      },
-      (res) => {
-        if (res.statusCode === 200) {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
+    const doRequest = (currentUrl, redirectCount = 0) => {
+      if (redirectCount > 3) return resolve({ isOnline: false });
+
+      const isSecure = currentUrl.protocol === "https:";
+      const transport = isSecure ? https : http;
+
+      const req = transport.get(
+        {
+          hostname: currentUrl.hostname,
+          port: currentUrl.port || (isSecure ? 443 : 80),
+          path: currentUrl.pathname + (currentUrl.search || ""),
+          timeout: 5000, // Aumentado para 5s
+          rejectUnauthorized: false,
+          headers: { "User-Agent": "5uv1-Dashboard-Monitor" },
+        },
+        (res) => {
+          // Redirects
+          if (
+            res.statusCode >= 300 &&
+            res.statusCode < 400 &&
+            res.headers.location
+          ) {
+            res.resume();
             try {
-              const json = JSON.parse(data);
-              if (json.status === "offline") resolve({ isOnline: false });
-              else resolve({ isOnline: true, clientsCount: json.clientsCount });
+              const nextUrl = new URL(res.headers.location, currentUrl.href);
+              return doRequest(nextUrl, redirectCount + 1);
             } catch (e) {
-              resolve({ isOnline: true });
+              return resolve({ isOnline: false });
             }
-          });
-        } else {
-          res.resume();
-          resolve({ isOnline: true });
-        }
-      },
-    );
-    req.on("timeout", () => {
-      req.destroy();
+          }
+
+          if (res.statusCode === 200) {
+            let data = "";
+            res.on("data", (chunk) => (data += chunk));
+            res.on("end", () => {
+              try {
+                const json = JSON.parse(data);
+                if (json.status === "offline") resolve({ isOnline: false });
+                else
+                  resolve({ isOnline: true, clientsCount: json.clientsCount });
+              } catch (e) {
+                resolve({ isOnline: true });
+              }
+            });
+          } else {
+            res.resume();
+            resolve({ isOnline: true });
+          }
+        },
+      );
+      req.on("timeout", () => {
+        req.destroy();
+        resolve({ isOnline: false });
+      });
+      req.on("error", () => resolve({ isOnline: false }));
+    };
+
+    try {
+      const protocol = server.protocol === "wss" ? "https:" : "http:";
+      const portPart = server.port ? `:${server.port}` : "";
+      const initialUrl = new URL(
+        `${protocol}//${server.host}${portPart}/status`,
+      );
+      doRequest(initialUrl);
+    } catch (e) {
       resolve({ isOnline: false });
-    });
-    req.on("error", () => resolve({ isOnline: false }));
+    }
   });
 }
 
@@ -94,7 +126,10 @@ async function updateServersStatusFile() {
           );
         }
 
-        if (clientsCount !== undefined && server.clientsCount !== clientsCount) {
+        if (
+          clientsCount !== undefined &&
+          server.clientsCount !== clientsCount
+        ) {
           server.clientsCount = clientsCount;
           hasChanges = true;
         }
@@ -122,10 +157,12 @@ async function updateServersStatusFile() {
     try {
       const historyPath = path.join(publicDir, "servers-history.json");
       let historyData = {};
-      
+
       // Tenta carregar histórico existente
       if (fs.existsSync(historyPath)) {
-        try { historyData = JSON.parse(fs.readFileSync(historyPath, "utf8")); } catch (e) {}
+        try {
+          historyData = JSON.parse(fs.readFileSync(historyPath, "utf8"));
+        } catch (e) {}
       }
 
       const now = new Date().toISOString();
@@ -138,9 +175,9 @@ async function updateServersStatusFile() {
 
       updatedServers.forEach((server) => {
         if (!historyData[server.id]) historyData[server.id] = [];
-        
+
         historyData[server.id].push({ t: now, c: server.clientsCount || 0 });
-        
+
         // Manter apenas os últimos 60 registros (aprox. 30 min de histórico com updates a cada 30s)
         if (historyData[server.id].length > 60) {
           historyData[server.id] = historyData[server.id].slice(-60);
@@ -320,6 +357,16 @@ const authLogin = async (req, res) => {
     const user = await db.authenticateUser(username, password);
 
     if (user) {
+      if (user.isVerified === false) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "Conta não verificada. Verifique seu e-mail.",
+          }),
+        );
+        return;
+      }
+
       loginRateLimit.delete(clientIp);
       logger.audit(user, "LOGIN", {
         ip: clientIp,
@@ -400,6 +447,29 @@ const authVerify = (req, res) => {
 
 const authSignup = async (req, res) => {
   try {
+    // Rate Limiting para Cadastro (Proteção contra Spam)
+    const clientIp = req.socket.remoteAddress;
+    const now = Date.now();
+    const limit = signupRateLimit.get(clientIp) || {
+      count: 0,
+      resetTime: now + 60 * 60 * 1000,
+    }; // 1 hora
+
+    if (now > limit.resetTime) {
+      limit.count = 0;
+      limit.resetTime = now + 60 * 60 * 1000;
+    }
+    if (limit.count >= 3) {
+      // Máximo 3 contas por IP por hora
+      res.writeHead(429, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "Muitas contas criadas. Tente novamente mais tarde.",
+        }),
+      );
+      return;
+    }
+
     const body = await utils.readBody(req);
     const { username, password, name, email } = JSON.parse(body);
     if (!username || !password || !name || !email) {
@@ -455,7 +525,7 @@ const authSignup = async (req, res) => {
     const htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">P2P Secure Chat</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">5uv1</h1>
           <p style="color: #e2e8f0; margin: 5px 0 0; font-size: 14px;">Painel Administrativo</p>
         </div>
         <div style="padding: 40px 30px; text-align: center;">
@@ -477,7 +547,7 @@ const authSignup = async (req, res) => {
         </div>
         <div style="background-color: #f7fafc; padding: 20px; text-align: center; border-top: 1px solid #edf2f7;">
           <p style="color: #cbd5e0; font-size: 12px; margin: 0;">
-            &copy; ${new Date().getFullYear()} P2P Secure Chat. Enviado automaticamente pelo sistema.
+            &copy; ${new Date().getFullYear()} 5uv1. Enviado automaticamente pelo sistema.
           </p>
         </div>
       </div>
@@ -485,7 +555,7 @@ const authSignup = async (req, res) => {
 
     const emailSent = await utils.sendEmail(
       email,
-      "✨ Verifique seu e-mail - P2P Secure Chat",
+      "✨ Verifique seu e-mail - 5uv1",
       `Seu código de verificação é: ${verificationCode}`,
       htmlContent,
     );
@@ -494,7 +564,8 @@ const authSignup = async (req, res) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: "Falha ao enviar e-mail. Verifique se a Senha de App do Google está configurada corretamente no .env.",
+          error:
+            "Falha ao enviar e-mail. Verifique se a Senha de App do Google está configurada corretamente no .env.",
         }),
       );
       return;
@@ -512,6 +583,9 @@ const authSignup = async (req, res) => {
       verificationCode,
       verificationExpires,
     };
+
+    limit.count++;
+    signupRateLimit.set(clientIp, limit);
 
     await db.saveUser(newUser);
     logger.audit({ username: newUser.username, role: "user" }, "SIGNUP", {
@@ -585,7 +659,7 @@ const authResendCode = async (req, res) => {
     const htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">P2P Secure Chat</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">5uv1</h1>
           <p style="color: #e2e8f0; margin: 5px 0 0; font-size: 14px;">Painel Administrativo</p>
         </div>
         <div style="padding: 40px 30px; text-align: center;">
@@ -607,7 +681,7 @@ const authResendCode = async (req, res) => {
         </div>
         <div style="background-color: #f7fafc; padding: 20px; text-align: center; border-top: 1px solid #edf2f7;">
           <p style="color: #cbd5e0; font-size: 12px; margin: 0;">
-            &copy; ${new Date().getFullYear()} P2P Secure Chat. Enviado automaticamente pelo sistema.
+            &copy; ${new Date().getFullYear()} 5uv1. Enviado automaticamente pelo sistema.
           </p>
         </div>
       </div>
@@ -615,14 +689,18 @@ const authResendCode = async (req, res) => {
 
     const emailSent = await utils.sendEmail(
       email,
-      "📨 Novo código de verificação - P2P Secure Chat",
+      "📨 Novo código de verificação - 5uv1",
       `Seu novo código de verificação é: ${verificationCode}`,
       htmlContent,
     );
 
     if (!emailSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Falha ao enviar e-mail. Verifique as credenciais SMTP." }));
+      res.end(
+        JSON.stringify({
+          error: "Falha ao enviar e-mail. Verifique as credenciais SMTP.",
+        }),
+      );
       return;
     }
 
@@ -685,7 +763,7 @@ const authForgotPassword = async (req, res) => {
     const htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">P2P Secure Chat</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">5uv1</h1>
           <p style="color: #e2e8f0; margin: 5px 0 0; font-size: 14px;">Painel Administrativo</p>
         </div>
         <div style="padding: 40px 30px; text-align: center;">
@@ -707,7 +785,7 @@ const authForgotPassword = async (req, res) => {
         </div>
         <div style="background-color: #f7fafc; padding: 20px; text-align: center; border-top: 1px solid #edf2f7;">
           <p style="color: #cbd5e0; font-size: 12px; margin: 0;">
-            &copy; ${new Date().getFullYear()} P2P Secure Chat. Enviado automaticamente pelo sistema.
+            &copy; ${new Date().getFullYear()} 5uv1. Enviado automaticamente pelo sistema.
           </p>
         </div>
       </div>
@@ -715,14 +793,18 @@ const authForgotPassword = async (req, res) => {
 
     const emailSent = await utils.sendEmail(
       email,
-      "🔐 Recuperação de Senha - P2P Secure Chat",
+      "🔐 Recuperação de Senha - 5uv1",
       `Seu código de verificação é: ${verificationCode}. Válido por 15 minutos.`,
       htmlContent,
     );
 
     if (!emailSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Falha ao enviar e-mail. Verifique as credenciais SMTP." }));
+      res.end(
+        JSON.stringify({
+          error: "Falha ao enviar e-mail. Verifique as credenciais SMTP.",
+        }),
+      );
       return;
     }
 
@@ -855,13 +937,30 @@ const getServers = async (req, res) => {
 
 const getPublicServers = async (req, res, parsedUrl) => {
   try {
+    // Verifica se o usuário está autenticado para decidir se mostra tokens
+    const user = req.user || (await getAuthenticatedUser(req));
+
     const serversData = await db.getAllServers();
     const statusFilter = parsedUrl.query.status || "active";
     let list = serversData;
     if (statusFilter !== "all")
       list = serversData.filter((s) => s.status === statusFilter);
+
+    // Sanitização: Remove tokens de servidores privados para visitantes
+    const safeList = list.map((server) => {
+      const s = { ...server };
+      // Se o servidor requer autenticação E o usuário não está logado
+      if (s.requiresAuth && !user) {
+        s.token = ""; // Oculta o token
+        s.urltoken = ""; // Oculta a URL dinâmica
+        s.manualToken = false;
+      }
+      // Nota: Se o servidor for público (!requiresAuth), o token é irrelevante, mas mantemos para compatibilidade
+      return s;
+    });
+
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ servers: list }));
+    res.end(JSON.stringify({ servers: safeList }));
   } catch (err) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Erro interno" }));
@@ -881,7 +980,6 @@ const createServer = async (req, res) => {
       serverData.token = crypto.randomBytes(16).toString("hex");
       isManualToken = false;
     }
-    serverData.requiresAuth = true;
     serverData.manualToken = isManualToken;
     serverData.createdAt = new Date().toISOString();
     serverData.status = serverData.status || "active";
@@ -909,15 +1007,16 @@ const createServer = async (req, res) => {
       );
       return;
     }
-    if (
-      allServers.find(
-        (s) => s.host === serverData.host && s.port === serverData.port,
-      )
-    ) {
+
+    const conflict = allServers.find(
+      (s) => s.host === serverData.host && s.port === serverData.port,
+    );
+    if (conflict) {
+      const conflictType = conflict.requiresAuth ? "Privado" : "Público";
       res.writeHead(409, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: `Já existe um servidor configurado com o host '${serverData.host}' e porta '${serverData.port}'.`,
+          error: `Conflito: O host '${serverData.host}:${serverData.port}' já está em uso por um servidor ${conflictType} ('${conflict.name}').`,
         }),
       );
       return;
@@ -953,7 +1052,6 @@ const updateServer = async (req, res) => {
       serverData.token = crypto.randomBytes(16).toString("hex");
       isManualToken = false;
     }
-    serverData.requiresAuth = true;
     serverData.manualToken = isManualToken;
 
     const validationErrors = utils.validateServerData(serverData, true);
@@ -983,6 +1081,24 @@ const updateServer = async (req, res) => {
         );
         return;
       }
+
+      const conflict = serversData.find(
+        (s) =>
+          s.id !== serverData.id &&
+          s.host === serverData.host &&
+          s.port === serverData.port,
+      );
+      if (conflict) {
+        const conflictType = conflict.requiresAuth ? "Privado" : "Público";
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: `Conflito: O host '${serverData.host}:${serverData.port}' já está em uso por um servidor ${conflictType} ('${conflict.name}').`,
+          }),
+        );
+        return;
+      }
+
       await db.saveServer(serverData);
       logger.audit(req.user, "UPDATE_SERVER", {
         id: serverData.id,
@@ -1194,9 +1310,9 @@ const getAuditLogs = async (req, res) => {
   try {
     const parsedUrl = url.parse(req.url, true);
     const limit = parseInt(parsedUrl.query.limit) || 100;
-    
+
     const logs = logger.getAuditLogs(limit);
-    
+
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ success: true, logs }));
   } catch (err) {
@@ -1214,9 +1330,15 @@ const downloadLogs = async (req, res) => {
   try {
     archiver = require("archiver");
   } catch (e) {
-    logger.error("Módulo 'archiver' não encontrado. Instale com: npm install archiver");
+    logger.error(
+      "Módulo 'archiver' não encontrado. Instale com: npm install archiver",
+    );
     res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Dependência 'archiver' não instalada no servidor." }));
+    res.end(
+      JSON.stringify({
+        error: "Dependência 'archiver' não instalada no servidor.",
+      }),
+    );
     return;
   }
 
@@ -1247,7 +1369,9 @@ const downloadLogs = async (req, res) => {
 
   if (startDate || endDate) {
     const start = startDate ? new Date(startDate).getTime() : 0;
-    const end = endDate ? new Date(endDate).setUTCHours(23, 59, 59, 999) : Date.now();
+    const end = endDate
+      ? new Date(endDate).setUTCHours(23, 59, 59, 999)
+      : Date.now();
 
     try {
       const files = fs.readdirSync(logDir);

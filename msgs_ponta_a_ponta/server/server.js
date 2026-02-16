@@ -70,7 +70,7 @@ const metrics = {
 function saveTokenToFile() {
   try {
     const tokenFile = path.join(__dirname, "TOKEN.txt");
-    const content = `🔐 P2P SECURE CHAT - TOKEN DE AUTENTICAÇÃO
+    const content = `🔐 5uv1 - TOKEN DE AUTENTICAÇÃO
 =====================================
 
 Token: ${config.authToken}
@@ -397,8 +397,11 @@ function setupHandlers() {
 
     // Parse da URL usando API moderna (mais robusta)
     // 'http://base' é usado apenas como base para URLs relativas, não afeta o resultado dos params
-    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const customId = requestUrl.searchParams.get('customId');
+    const requestUrl = new URL(
+      req.url,
+      `http://${req.headers.host || "localhost"}`,
+    );
+    const customId = requestUrl.searchParams.get("customId");
 
     let id = generateSecureId(); // Padrão: Aleatório
 

@@ -1,18 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "P2P Secure Chat",
+  "name": "5uv1",
   "version": "1.0.0",
-  "description": "Cliente seguro para comunicação P2P via WebSocket",
+  "description": "Cliente seguro 5uv1 para comunicação P2P via WebSocket",
   "permissions": ["storage", "activeTab", "sidePanel", "notifications"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://localhost:* ws://localhost:* wss://localhost:* ws://* wss://*;"
   },
   "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "P2P Secure Chat"
+    "default_title": "5uv1",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "side_panel": {
     "default_path": "popup.html"

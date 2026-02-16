@@ -1,21 +1,21 @@
 {
   "servers": [
     {
-      "id": "server-1769906444387",
-      "name": "Servidor Local Auto",
-      "description": "Esta é uma cópia de um aviso de segurança enviado para dev.gusvioli.dev@gmail.com. gustavovieiradeoliveira@gmail.com é o e-mail de recuperação dessa conta. Se você não reconhece a conta, remova seu e-mail...",
+      "id": "server-1771120967632",
+      "name": "Servidor Local - Auto",
+      "description": "Servidor de teste para uma possível implementação de pagamento de toque, quando o servidor for privado",
       "host": "localhost",
       "port": 8081,
       "protocol": "ws",
       "token": "7ab3841260d04ef521e4dbe1ddc5b7e3",
       "status": "active",
       "region": "Local",
-      "maxClients": 2,
-      "createdAt": "2026-02-01T00:40:44.387Z",
-      "notes": "Esta é uma cópia de um aviso de segurança enviado para dev.gusvioli.dev@gmail.com. gustavovieiradeoliveira@gmail.com é o e-mail de recuperação dessa conta. Se você não reconhece a conta, remova seu e-mail.",
-      "requiresAuth": true,
+      "maxClients": 10,
+      "createdAt": "2026-02-15T02:02:47.644Z",
+      "notes": "",
+      "requiresAuth": false,
       "manualToken": false,
-      "clientsCount": 2,
+      "clientsCount": 0,
       "lastSeen": null,
       "urltoken": ""
     },
@@ -32,12 +32,12 @@
       "maxClients": 100,
       "createdAt": "2026-01-30T01:26:41.886Z",
       "notes": "URL de Registro de Servidores (JSON)",
-      "requiresAuth": true,
+      "requiresAuth": false,
       "manualToken": false,
       "clientsCount": 0,
       "lastSeen": null,
       "urltoken": ""
     }
   ],
-  "lastUpdated": "2026-02-15T00:52:26.076Z"
+  "lastUpdated": "2026-02-16T02:46:54.483Z"
 }

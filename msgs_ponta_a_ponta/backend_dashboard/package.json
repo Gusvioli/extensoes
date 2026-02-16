@@ -1,7 +1,7 @@
 {
   "name": "backend-dashboard",
   "version": "1.0.0",
-  "description": "Servidor Backend para o Dashboard P2P",
+  "description": "Servidor Backend para o Dashboard 5uv1",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
