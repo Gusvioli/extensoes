@@ -251,7 +251,9 @@ PORT=9000 node src/server.js
 
 ## 📄 Licença
 
-Mesmo do projeto principal
+Este projeto é distribuído sob a licença **GNU AGPLv3**.
+
+Isso garante que o código permaneça aberto, auditável e seguro para todos os usuários. O uso comercial privado (sem abrir o código fonte) requer uma licença comercial separada.
 
 ---
 
