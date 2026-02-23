@@ -67,6 +67,7 @@ Analisa e exibe informações técnicas, de SEO e metadados da página web ativa
 - **scripting:** Essencial para a funcionalidade principal de análise. Permite que a extensão injete e execute o script (`extractPageDetails`) na página ativa para coletar metadados, informações de SEO, tecnologias utilizadas e outros dados técnicos exibidos no relatório.
 - **tabs:** Utilizada para monitorar a navegação em segundo plano (eventos `onUpdated` e `onActivated`) para atualizar o ícone da extensão (Badge), indicando visualmente se a página é suportada, e para abrir novas abas ao gerar o Relatório Completo.
 
+- **downloads**: Essencial para a funcionalidade de "Exportar JSON". Permite que a extensão salve o relatório de análise completo em um arquivo `.json` no dispositivo do usuário. Esta ação é iniciada **exclusivamente** quando o usuário clica no botão "Exportar JSON". O uso da API `chrome.downloads` é necessário para garantir que o download não seja interrompido caso o popup da extensão seja fechado (por exemplo, ao abrir a janela "Salvar como"), tornando a exportação de dados mais robusta e confiável.
 **Coleta de Dados (Data Usage):**  
 Marque as seguintes categorias de dados que a extensão processa (mesmo que localmente):
 

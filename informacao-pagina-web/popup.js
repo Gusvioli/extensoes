@@ -230,6 +230,7 @@ function analyzePage() {
       {
         target: { tabId: activeTab.id },
         func: extractPageDetails,
+        world: "MAIN",
       },
       (results) => {
         if (chrome.runtime.lastError || !results || !results[0]) {
@@ -336,6 +337,23 @@ async function extractPageDetails() {
       if (style.includes("bootstrap")) technologies.add("Bootstrap");
     });
 
+    // Verificação de variáveis globais (requer world: "MAIN")
+    try {
+      if (window.jQuery || (window.$ && window.$.fn && window.$.fn.jquery))
+        technologies.add("jQuery");
+      if (window.React || window.ReactDOM) technologies.add("React");
+      if (window.Vue || window.__VUE__) technologies.add("Vue.js");
+      if (window.angular) technologies.add("Angular");
+      if (window.bootstrap) technologies.add("Bootstrap");
+      if (window.google_tag_manager) technologies.add("Google Tag Manager");
+      if (window.ga || window.gtag) technologies.add("Google Analytics");
+      if (window.fbq) technologies.add("Facebook Pixel");
+      if (window.wp) technologies.add("WordPress");
+      if (window.Shopify) technologies.add("Shopify");
+      if (window.Next || window.__NEXT_DATA__) technologies.add("Next.js");
+      if (window.__NUXT__) technologies.add("Nuxt.js");
+    } catch (e) {}
+
     let cookiesCount = 0;
     try {
       cookiesCount = document.cookie.split(";").filter((c) => c.trim()).length;
@@ -351,6 +369,47 @@ async function extractPageDetails() {
       sessionStorageCount = sessionStorage.length;
     } catch (e) {}
 
+    // Core Web Vitals (LCP e CLS)
+    let lcp = "N/A";
+    try {
+      const lcpEntries = performance.getEntriesByType(
+        "largest-contentful-paint",
+      );
+      if (lcpEntries.length > 0) {
+        lcp = Math.round(lcpEntries.at(-1).startTime) + "ms";
+      }
+    } catch (e) {}
+
+    let cls = "N/A";
+    try {
+      const clsEntries = performance.getEntriesByType("layout-shift");
+      if (clsEntries) {
+        const clsVal = clsEntries.reduce(
+          (acc, entry) => acc + (entry.hadRecentInput ? 0 : entry.value),
+          0,
+        );
+        cls = clsVal.toFixed(3);
+      }
+    } catch (e) {}
+
+    // Análise de Scripts (Resource Timing)
+    let scriptsAnalysis = [];
+    try {
+      const resources = performance.getEntriesByType("resource");
+      scriptsAnalysis = resources
+        .filter((r) => r.initiatorType === "script" || r.name.includes(".js"))
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, 5)
+        .map((r) => {
+          const duration = Math.round(r.duration);
+          const isSlow = duration > 500; // Alerta se demorar mais de 500ms
+          return {
+            tag: duration + "ms",
+            text: (isSlow ? "⚠️ " : "") + r.name,
+          };
+        });
+    } catch (e) {}
+
     const getSafe = (fn) => {
       try {
         return fn();
@@ -363,6 +422,9 @@ async function extractPageDetails() {
       loadTime: perf.loadEventEnd
         ? Math.round(perf.loadEventEnd - perf.startTime) + "ms"
         : "N/A",
+      lcp,
+      cls,
+      scriptsAnalysis,
       cookiesCount,
       localStorageCount,
       sessionStorageCount,
@@ -474,290 +536,245 @@ async function extractPageDetails() {
     };
 
     // Análise SEO
-    const titleLen = document.title ? document.title.length : 0;
-    const descLen = allMeta.description ? allMeta.description.length : 0;
-    const h1Count = document.querySelectorAll("h1").length;
-    const imgs = document.querySelectorAll("img");
-    const imgsMissingAlt = Array.from(imgs).filter((i) => !i.alt).length;
-    const hasLang =
-      document.documentElement.lang && document.documentElement.lang.length > 0;
-    const hasOg = document.querySelector('meta[property^="og:"]') !== null;
-    const hasTwitter =
-      document.querySelector('meta[name^="twitter:"]') !== null;
-    const hasFavicon = document.querySelector('link[rel*="icon"]') !== null;
-    const robotsMeta =
-      document.querySelector('meta[name="robots"]')?.content || "";
-    const isIndexable = !robotsMeta.toLowerCase().includes("noindex");
-    const charset = document.characterSet;
-    const hasDoctype = document.doctype !== null;
-    const deprecatedTagsList = [
-      "center",
-      "font",
-      "strike",
-      "u",
-      "dir",
-      "applet",
-      "acronym",
-      "big",
-      "frame",
-      "frameset",
-      "noframes",
-      "tt",
-    ];
-    const foundDeprecated = deprecatedTagsList.filter((tag) =>
-      document.querySelector(tag),
-    );
-    const hasDeprecated = foundDeprecated.length > 0;
-
+    // Helper para pontuação
     let seoScore = 0;
-    if (titleLen >= 30 && titleLen <= 60) seoScore += 10;
-    if (descLen >= 50 && descLen <= 160) seoScore += 10;
-    if (h1Count === 1) seoScore += 10;
-    if (imgsMissingAlt === 0) seoScore += 10;
-    if (document.querySelector('link[rel="canonical"]')) seoScore += 10;
-    if (document.querySelector('meta[name="viewport"]')) seoScore += 10;
+    let maxSeoScore = 0;
 
-    if (hasLang) seoScore += 5;
-    if (hasOg) seoScore += 5;
-    if (hasTwitter) seoScore += 5;
-    if (hasFavicon) seoScore += 5;
-    if (isIndexable) seoScore += 5;
-    if (charset === "UTF-8") seoScore += 5;
-    if (hasDoctype) seoScore += 5;
-    if (!hasDeprecated) seoScore += 5;
+    const check = (condition, weight = 10) => {
+      maxSeoScore += weight;
+      if (condition) seoScore += weight;
+      return condition;
+    };
 
-    const seo = {
-      score: `${seoScore}/100`,
-      titleCheck: [
+    // --- 1. SEO ON-PAGE ---
+    const title = document.title || "";
+    const titleLen = title.length;
+    const titleOk = titleLen >= 30 && titleLen <= 60;
+    check(titleOk, 10);
+
+    const description = allMeta.description || "";
+    const descLen = description.length;
+    const descOk = descLen >= 120 && descLen <= 160;
+    check(descOk, 10);
+
+    const h1s = document.querySelectorAll("h1");
+    const h1Ok = h1s.length === 1;
+    check(h1Ok, 10);
+
+    // Densidade de Conteúdo
+    const bodyText = document.body.innerText || "";
+    const wordCount = bodyText.trim().split(/\s+/).length;
+    const contentOk = wordCount > 300;
+    check(contentOk, 5);
+
+    // Imagens
+    const imgs = Array.from(document.querySelectorAll("img"));
+    const imgsMissingAlt = imgs.filter(
+      (i) => !i.alt && i.getAttribute("role") !== "presentation",
+    ).length;
+    const imgsOk = imgs.length === 0 || imgsMissingAlt === 0;
+    check(imgsOk, 10);
+
+    const onPage = {
+      titleTag: [
         {
-          tag: "Avaliação",
-          text:
-            titleLen >= 30 && titleLen <= 60
-              ? `✅ Bom (${titleLen} caracteres)`
-              : `⚠️ Atenção (${titleLen} caracteres).`,
+          tag: "Estado",
+          text: titleOk
+            ? "✅ Otimizado"
+            : titleLen === 0
+              ? "❌ Ausente"
+              : "⚠️ Atenção",
         },
         {
-          tag: "Motivo",
-          text: "O Google exibe cerca de 60 caracteres nos resultados. Títulos muito curtos são vagos e muito longos são cortados.",
+          tag: "Análise",
+          text: `${titleLen} caracteres. (Recomendado: 30-60)`,
         },
+        { tag: "Conteúdo", text: title || "N/A" },
         {
-          tag: "Exemplo",
-          text: 'Bom: "Tênis de Corrida Nike Air Zoom - Loja Esportiva" (47 chars).',
-        },
-      ],
-      descriptionCheck: [
-        {
-          tag: "Avaliação",
-          text:
-            descLen >= 50 && descLen <= 160
-              ? `✅ Bom (${descLen} caracteres)`
-              : `⚠️ Atenção (${descLen} caracteres).`,
-        },
-        {
-          tag: "Motivo",
-          text: "Meta descriptions ideais têm entre 50 e 160 caracteres para atrair cliques e aparecerem completas nos snippets.",
-        },
-        {
-          tag: "Exemplo",
-          text: 'Bom: "Compre o Tênis Nike Air Zoom com o melhor preço. Frete grátis e parcelamento em até 10x. Confira nossa coleção completa." (128 chars).',
-        },
-      ],
-      h1Check: [
-        {
-          tag: "Avaliação",
-          text:
-            h1Count === 1
-              ? "✅ Bom (1 tag H1 encontrada)"
-              : `⚠️ Atenção (${h1Count} tags H1).`,
-        },
-        {
-          tag: "Motivo",
-          text: "Cada página deve ter apenas um H1 principal descrevendo o tópico para manter uma hierarquia semântica clara.",
-        },
-        {
-          tag: "Exemplo",
-          text: "<h1>Tênis de Corrida Nike Air Zoom</h1> (Apenas um por página).",
+          tag: "Dica",
+          text: "O título é o fator on-page mais importante. Mantenha-o conciso e inclua a palavra-chave principal no início.",
         },
       ],
-      imagesAltCheck: [
+      metaDescription: [
         {
-          tag: "Avaliação",
-          text:
-            imgsMissingAlt === 0
-              ? `✅ Bom (Todas as ${imgs.length} imagens têm alt)`
-              : `⚠️ Atenção (${imgsMissingAlt} de ${imgs.length} imagens sem alt).`,
+          tag: "Estado",
+          text: descOk
+            ? "✅ Otimizado"
+            : descLen === 0
+              ? "❌ Ausente"
+              : "⚠️ Ajustar",
         },
         {
-          tag: "Motivo",
-          text: "O texto alternativo (alt) é crucial para leitores de tela (acessibilidade) e para o SEO de imagens do Google.",
+          tag: "Análise",
+          text: `${descLen} caracteres. (Recomendado: 120-160)`,
         },
+        { tag: "Conteúdo", text: description || "N/A" },
         {
-          tag: "Exemplo",
-          text: '<img src="tenis.jpg" alt="Tênis de corrida azul da marca Nike">',
+          tag: "Dica",
+          text: "A descrição funciona como um anúncio para atrair cliques (CTR). Evite duplicidade e seja persuasivo.",
         },
       ],
-      canonicalCheck: [
+      headingStructure: [
+        { tag: "Estado", text: h1Ok ? "✅ Otimizado" : "⚠️ Verificar" },
+        { tag: "Análise", text: `${h1s.length} tags H1 encontradas.` },
+        { tag: "H1 Atual", text: h1s.length > 0 ? h1s[0].innerText : "N/A" },
         {
-          tag: "Avaliação",
-          text: document.querySelector('link[rel="canonical"]')
-            ? "✅ Presente"
-            : "⚠️ Ausente",
+          tag: "Dica",
+          text: "Use apenas um H1 por página para definir o tópico principal. Use H2-H6 para subtópicos.",
+        },
+      ],
+      contentAmount: [
+        { tag: "Estado", text: contentOk ? "✅ Bom" : "⚠️ Pouco conteúdo" },
+        { tag: "Contagem", text: `~${wordCount} palavras.` },
+        {
+          tag: "Dica",
+          text: "Páginas com conteúdo rico (>300 palavras) tendem a rankear melhor. Cubra o tópico em profundidade.",
+        },
+      ],
+      imageAlt: [
+        { tag: "Estado", text: imgsOk ? "✅ Otimizado" : "⚠️ Atenção" },
+        {
+          tag: "Análise",
+          text: `${imgsMissingAlt} de ${imgs.length} imagens sem texto alternativo (alt).`,
+        },
+        {
+          tag: "Dica",
+          text: "O atributo 'alt' é crucial para acessibilidade e SEO de imagens. Descreva a imagem de forma concisa.",
+        },
+      ],
+    };
+
+    // --- 2. SEO TÉCNICO ---
+    const canonical = document.querySelector('link[rel="canonical"]');
+    check(!!canonical, 10);
+
+    const viewport = document.querySelector('meta[name="viewport"]');
+    check(!!viewport, 10);
+
+    const robots = document.querySelector('meta[name="robots"]')?.content || "";
+    const isIndexable = !robots.toLowerCase().includes("noindex");
+    check(isIndexable, 10);
+
+    const hasLang = document.documentElement.lang;
+    check(!!hasLang, 5);
+
+    const isHttps = window.location.protocol === "https:";
+    check(isHttps, 5);
+
+    const hasJsonLd =
+      document.querySelector('script[type="application/ld+json"]') !== null;
+    check(hasJsonLd, 5);
+
+    const technicalSeo = {
+      canonicalTag: [
+        {
+          tag: "Estado",
+          text: canonical ? "✅ Presente" : "⚠️ Ausente",
         },
         {
           tag: "Motivo",
           text: "A tag canonical indica aos buscadores qual é a versão original da página, evitando punições por conteúdo duplicado.",
         },
         {
-          tag: "Exemplo",
-          text: '<link rel="canonical" href="https://www.loja.com.br/produto">',
+          tag: "Dica",
+          text: "A tag canonical evita problemas de conteúdo duplicado, indicando a versão preferida da página.",
         },
       ],
-      mobileFriendly: [
+      indexability: [
         {
-          tag: "Avaliação",
-          text: document.querySelector('meta[name="viewport"]')
-            ? "✅ Tag Viewport encontrada"
-            : "⚠️ Tag Viewport ausente",
+          tag: "Estado",
+          text: isIndexable ? "✅ Indexável" : "🚫 Bloqueado",
         },
+        { tag: "Diretiva", text: robots || "index, follow (padrão)" },
         {
-          tag: "Motivo",
-          text: "A tag viewport controla o dimensionamento em dispositivos móveis, essencial para a indexação mobile-first.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+          tag: "Dica",
+          text: "Verifique se a página deve ou não aparecer nos resultados de busca.",
         },
       ],
-      langCheck: [
+      mobileViewport: [
         {
-          tag: "Avaliação",
-          text: hasLang
-            ? `✅ Definido (${document.documentElement.lang})`
-            : "⚠️ Atributo lang ausente.",
+          tag: "Estado",
+          text: viewport ? "✅ Mobile Friendly" : "❌ Ausente",
         },
         {
-          tag: "Motivo",
-          text: "Definir o idioma no HTML ajuda navegadores e ferramentas de tradução a processar o conteúdo corretamente.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<html lang="pt-BR">',
+          tag: "Dica",
+          text: "Essencial para a experiência em dispositivos móveis e para o índice Mobile-First do Google.",
         },
       ],
-      ogCheck: [
+      httpsSecure: [
         {
-          tag: "Avaliação",
-          text: hasOg
-            ? "✅ Tags Open Graph detectadas"
-            : "⚠️ Tags sociais (OG) ausentes.",
+          tag: "Estado",
+          text: isHttps ? "✅ Seguro" : "⚠️ Inseguro (HTTP)",
         },
         {
-          tag: "Motivo",
-          text: "O protocolo Open Graph controla a imagem, título e descrição exibidos ao compartilhar o link em redes sociais.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<meta property="og:title" content="...">, <meta property="og:image" content="...">',
+          tag: "Dica",
+          text: "O Google prioriza sites seguros. Migre para HTTPS para proteger os dados dos usuários.",
         },
       ],
-      faviconCheck: [
+      htmlLang: [
         {
-          tag: "Avaliação",
-          text: hasFavicon
-            ? "✅ Favicon detectado"
-            : "⚠️ Favicon não encontrado.",
+          tag: "Estado",
+          text: hasLang ? `✅ Definido (${hasLang})` : "⚠️ Ausente",
         },
         {
-          tag: "Motivo",
-          text: "O ícone da página melhora a experiência do usuário (UX) e a identificação da marca nas abas do navegador.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<link rel="icon" href="/favicon.ico">',
+          tag: "Dica",
+          text: "Definir o idioma ajuda navegadores e ferramentas de tradução.",
         },
       ],
-      indexingCheck: [
+      structuredData: [
         {
-          tag: "Avaliação",
-          text: isIndexable ? "✅ Página indexável" : "⚠️ Bloqueada (noindex).",
+          tag: "Estado",
+          text: hasJsonLd ? "✅ Detectado (JSON-LD)" : "⚠️ Não detectado",
         },
         {
-          tag: "Motivo",
-          text: "A diretiva 'noindex' instrui os motores de busca a não incluírem esta página nos resultados da pesquisa.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<meta name="robots" content="index, follow"> (Permitido)',
-        },
-      ],
-      twitterCheck: [
-        {
-          tag: "Avaliação",
-          text: hasTwitter
-            ? "✅ Tags Twitter Card detectadas"
-            : "⚠️ Tags Twitter Card ausentes.",
-        },
-        {
-          tag: "Motivo",
-          text: "As tags Twitter Card otimizam a exibição de tweets com links para o seu conteúdo, aumentando o engajamento.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<meta name="twitter:card" content="summary_large_image">',
-        },
-      ],
-      charsetCheck: [
-        {
-          tag: "Avaliação",
-          text:
-            charset === "UTF-8"
-              ? `✅ UTF-8 detectado`
-              : `⚠️ Codificação atual: ${charset || "Desconhecida"}.`,
-        },
-        {
-          tag: "Motivo",
-          text: "UTF-8 é o padrão mundial para codificação de caracteres, garantindo que o texto seja exibido corretamente em qualquer idioma.",
-        },
-        {
-          tag: "Exemplo",
-          text: '<meta charset="UTF-8">',
-        },
-      ],
-      doctypeCheck: [
-        {
-          tag: "Avaliação",
-          text: hasDoctype
-            ? "✅ Doctype HTML5 presente"
-            : "⚠️ Doctype ausente.",
-        },
-        {
-          tag: "Motivo",
-          text: "A declaração <!DOCTYPE html> informa ao navegador para renderizar a página no modo padrão (standards mode).",
-        },
-        {
-          tag: "Exemplo",
-          text: "<!DOCTYPE html> (Na primeira linha do arquivo)",
-        },
-      ],
-      deprecatedCheck: [
-        {
-          tag: "Avaliação",
-          text: !hasDeprecated
-            ? "✅ Código limpo (sem tags obsoletas)"
-            : `⚠️ Tags obsoletas encontradas: ${foundDeprecated.join(", ")}.`,
-        },
-        {
-          tag: "Motivo",
-          text: "Tags como <font> ou <center> são obsoletas. Use CSS para estilização para manter o código semântico e moderno.",
-        },
-        {
-          tag: "Exemplo",
-          text: "Evite: <center>Texto</center>. Use CSS: text-align: center;",
+          tag: "Dica",
+          text: "Dados estruturados ajudam o Google a entender o conteúdo e gerar Rich Snippets (estrelas, preços, etc).",
         },
       ],
     };
 
-    return { metadata, content: { headers, links }, technical, hidden, seo };
+    // --- 3. SOCIAL ---
+    const hasOg = document.querySelector('meta[property^="og:"]') !== null;
+    check(hasOg, 5);
+
+    const hasTwitter =
+      document.querySelector('meta[name^="twitter:"]') !== null;
+    check(hasTwitter, 5);
+
+    const socialSeo = {
+      openGraph: [
+        { tag: "Estado", text: hasOg ? "✅ Detectado" : "⚠️ Ausente" },
+        {
+          tag: "Dica",
+          text: "O protocolo Open Graph controla como seu conteúdo aparece no Facebook, LinkedIn e outros.",
+        },
+      ],
+      twitterCards: [
+        { tag: "Estado", text: hasTwitter ? "✅ Detectado" : "⚠️ Ausente" },
+        {
+          tag: "Dica",
+          text: "Twitter Cards melhoram a visibilidade e engajamento ao compartilhar links no Twitter.",
+        },
+      ],
+    };
+
+    const finalScore =
+      maxSeoScore > 0 ? Math.round((seoScore / maxSeoScore) * 100) : 0;
+
+    const seo = {
+      score: `${finalScore}/100`,
+      onPage,
+      technicalSeo,
+      socialSeo,
+    };
+
+    return {
+      metadata,
+      content: { headers, links },
+      technical,
+      hidden,
+      seo,
+    };
   } catch (e) {
     return { error: e.toString() };
   }
@@ -784,6 +801,9 @@ function updateFieldDescriptions() {
     loadTime:
       getMsg("desc_loadTime") ||
       "Tempo total para carregar a página (navegação).",
+    lcp: getMsg("desc_lcp"),
+    cls: getMsg("desc_cls"),
+    scriptsAnalysis: getMsg("desc_scriptsAnalysis"),
     cookiesCount: "Número de cookies armazenados por este site.",
     localStorageCount: "Itens salvos no armazenamento local (persistente).",
     sessionStorageCount: "Itens salvos na sessão (apaga ao fechar).",
@@ -804,20 +824,22 @@ function updateFieldDescriptions() {
     score:
       getMsg("desc_score") ||
       "Pontuação estimada de SEO baseada nos critérios abaixo (0-100).",
-    titleCheck: "Análise do tamanho do título (SEO).",
-    descriptionCheck: "Análise do tamanho da meta descrição (SEO).",
-    h1Check: "Verificação da tag de título principal H1.",
-    imagesAltCheck: "Acessibilidade e SEO para imagens (texto alternativo).",
-    canonicalCheck: "URL canônica para evitar duplicação de conteúdo.",
-    mobileFriendly: "Verificação básica de responsividade (viewport).",
-    langCheck: "Definição do idioma da página (tag html lang).",
-    ogCheck: "Presença de meta tags para redes sociais (Open Graph).",
-    faviconCheck: "Ícone da página para abas e favoritos.",
-    indexingCheck: "Verifica se a página permite indexação por buscadores.",
-    twitterCheck: "Tags específicas para compartilhamento no Twitter.",
-    charsetCheck: "Codificação de caracteres da página (Recomendado: UTF-8).",
-    doctypeCheck: "Declaração do tipo de documento HTML.",
-    deprecatedCheck: "Verificação de tags HTML antigas/obsoletas.",
+    onPage: getMsg("seo_onPage") || "SEO On-Page",
+    technicalSeo: getMsg("seo_technicalSeo") || "SEO Técnico",
+    socialSeo: getMsg("seo_socialSeo") || "Redes Sociais",
+    titleTag: getMsg("desc_titleTag"),
+    metaDescription: getMsg("desc_metaDescription"),
+    headingStructure: getMsg("desc_headingStructure"),
+    contentAmount: getMsg("desc_contentAmount"),
+    imageAlt: getMsg("desc_imageAlt"),
+    canonicalTag: getMsg("desc_canonicalTag"),
+    indexability: getMsg("desc_indexability"),
+    mobileViewport: getMsg("desc_mobileViewport"),
+    httpsSecure: getMsg("desc_httpsSecure"),
+    htmlLang: getMsg("desc_htmlLang"),
+    openGraph: getMsg("desc_openGraph"),
+    twitterCards: getMsg("desc_twitterCards"),
+    structuredData: getMsg("desc_structuredData"),
   };
 }
 

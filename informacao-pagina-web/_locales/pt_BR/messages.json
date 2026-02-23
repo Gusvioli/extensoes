@@ -35,9 +35,53 @@
   "desc_technologies": {
     "message": "Bibliotecas ou frameworks detectados na página."
   },
-  "desc_score": {
-    "message": "Pontuação estimada de SEO baseada nos critérios abaixo (0-100)."
+  "desc_lcp": {
+    "message": "Tempo de renderização do maior elemento visível (LCP)."
   },
+  "desc_cls": {
+    "message": "Estabilidade visual: soma de mudanças de layout inesperadas (CLS)."
+  },
+  "desc_scriptsAnalysis": {
+    "message": "Top 5 scripts externos mais lentos (Resource Timing)."
+  },
+  "desc_score": {
+    "message": "Pontuação de SEO baseada em boas práticas de mercado (0-100)."
+  },
+  "seo_onPage": { "message": "SEO On-Page" },
+  "seo_technicalSeo": { "message": "SEO Técnico" },
+  "seo_socialSeo": { "message": "Redes Sociais" },
+  "desc_titleTag": {
+    "message": "Análise do título da página (fator de rankeamento crítico)."
+  },
+  "desc_metaDescription": {
+    "message": "Resumo para atrair cliques nos resultados de busca (CTR)."
+  },
+  "desc_headingStructure": {
+    "message": "Hierarquia de conteúdo (H1, H2, etc)."
+  },
+  "desc_contentAmount": {
+    "message": "Volume e densidade de conteúdo textual."
+  },
+  "desc_imageAlt": { "message": "Acessibilidade e indexação de imagens." },
+  "desc_canonicalTag": { "message": "Prevenção de conteúdo duplicado." },
+  "desc_indexability": {
+    "message": "Permissão para robôs indexarem a página."
+  },
+  "desc_mobileViewport": {
+    "message": "Configuração para dispositivos móveis."
+  },
+  "desc_httpsSecure": {
+    "message": "Segurança da conexão (fator de rankeamento)."
+  },
+  "desc_htmlLang": { "message": "Declaração de idioma do documento." },
+  "desc_openGraph": {
+    "message": "Aparência ao compartilhar no Facebook/LinkedIn."
+  },
+  "desc_twitterCards": { "message": "Aparência ao compartilhar no Twitter." },
+  "desc_structuredData": {
+    "message": "Dados estruturados (Schema.org) para rich snippets."
+  },
+
   "report_seoScore": { "message": "Pontuação de SEO" },
   "report_title": { "message": "Relatório Completo - " },
   "report_defaultTitle": { "message": "Análise de Página" },
