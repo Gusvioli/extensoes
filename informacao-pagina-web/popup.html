@@ -5,43 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Analisador de Página Web</title>
     <link rel="stylesheet" href="popup.css" />
-    <style>
-      body {
-        min-height: 600px;
-      }
-    </style>
   </head>
   <body>
     <div class="tab">
-      <button class="tablinks" data-tab="metadata">Metadados</button>
-      <button class="tablinks" data-tab="content">Conteúdo</button>
-      <button class="tablinks" data-tab="technical">Técnico</button>
-      <button class="tablinks" data-tab="hidden">Oculto</button>
-      <button class="tablinks" data-tab="seo">SEO</button>
+      <button class="tablinks" data-tab="metadata" data-i18n="tabMetadata">
+        Metadados
+      </button>
+      <button class="tablinks" data-tab="content" data-i18n="tabContent">
+        Conteúdo
+      </button>
+      <button class="tablinks" data-tab="technical" data-i18n="tabTechnical">
+        Técnico
+      </button>
+      <button class="tablinks" data-tab="hidden" data-i18n="tabHidden">
+        Oculto
+      </button>
+      <button class="tablinks" data-tab="seo" data-i18n="tabSeo">SEO</button>
     </div>
 
     <div id="metadata" class="tabcontent">
-      <div id="metadata-content">Analisando...</div>
+      <div id="metadata-content">
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <div data-i18n="analyzing">Analisando...</div>
+        </div>
+      </div>
     </div>
 
     <div id="content" class="tabcontent">
-      <div id="content-content">Analisando...</div>
+      <div id="content-content">
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <div data-i18n="analyzing">Analisando...</div>
+        </div>
+      </div>
     </div>
 
     <div id="technical" class="tabcontent">
-      <div id="technical-content">Analisando...</div>
+      <div id="technical-content">
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <div data-i18n="analyzing">Analisando...</div>
+        </div>
+      </div>
     </div>
 
     <div id="hidden" class="tabcontent">
-      <div id="hidden-content">Analisando...</div>
+      <div id="hidden-content">
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <div data-i18n="analyzing">Analisando...</div>
+        </div>
+      </div>
     </div>
 
     <div id="seo" class="tabcontent">
-      <div id="seo-content">Analisando...</div>
+      <div id="seo-content">
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <div data-i18n="analyzing">Analisando...</div>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
-      <button id="export-json">Exportar JSON</button>
+      <select
+        id="language-select"
+        style="
+          margin-right: 10px;
+          padding: 6px;
+          border-radius: 4px;
+          border: 1px solid #ccc;
+        "
+      >
+        <option value="pt_BR">Português</option>
+        <option value="en">English</option>
+      </select>
+      <button id="copy-json" data-i18n="btnCopy">Copiar JSON</button>
+      <button id="export-json" data-i18n="btnExport">Exportar JSON</button>
     </div>
 
     <script src="popup.js"></script>

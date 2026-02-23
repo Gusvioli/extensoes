@@ -1,0 +1,52 @@
+{
+  "appName": { "message": "Analisador de Página Web" },
+  "appDesc": {
+    "message": "Analisa a página ativa para extrair metadados, SEO, tecnologias e dados técnicos."
+  },
+  "tabMetadata": { "message": "Metadados" },
+  "tabContent": { "message": "Conteúdo" },
+  "tabTechnical": { "message": "Técnico" },
+  "tabHidden": { "message": "Oculto" },
+  "tabSeo": { "message": "SEO" },
+  "btnExport": { "message": "Exportar JSON" },
+  "btnCopy": { "message": "Copiar JSON" },
+  "msgCopied": { "message": "Copiado!" },
+  "btnReport": { "message": "Ver Relatório Completo" },
+  "btnDonate": { "message": "☕ Apoiar com PayPal" },
+  "donateTitle": { "message": "Apoie o desenvolvimento" },
+  "donateDesc": {
+    "message": "Sua contribuição incentiva a criação de novos recursos e ajuda a manter o projeto vivo!"
+  },
+  "donateBtnLabel": { "message": "Doar com PayPal" },
+  "donateThanks": { "message": "Obrigado pelo seu apoio! ❤️" },
+  "scanQr": { "message": "Escanear" },
+  "analyzing": { "message": "Analisando..." },
+  "desc_title": { "message": "Título principal exibido na aba do navegador." },
+  "desc_description": {
+    "message": "Resumo do conteúdo utilizado por motores de busca."
+  },
+  "desc_keywords": {
+    "message": "Palavras-chave definidas para indexação (SEO)."
+  },
+  "desc_author": { "message": "Autor ou responsável pelo conteúdo da página." },
+  "desc_loadTime": {
+    "message": "Tempo total para carregar a página (navegação)."
+  },
+  "desc_technologies": {
+    "message": "Bibliotecas ou frameworks detectados na página."
+  },
+  "desc_score": {
+    "message": "Pontuação estimada de SEO baseada nos critérios abaixo (0-100)."
+  },
+  "report_seoScore": { "message": "Pontuação de SEO" },
+  "report_title": { "message": "Relatório Completo - " },
+  "report_defaultTitle": { "message": "Análise de Página" },
+  "report_analysisTitle": { "message": "Relatório de Análise: " },
+  "report_pageDefault": { "message": "Página Web" },
+  "report_sectionContent": { "message": "Conteúdo Completo" },
+  "report_sectionTechnical": { "message": "Informações Técnicas" },
+  "report_sectionHidden": { "message": "Elementos Ocultos" },
+  "report_sectionSeo": { "message": "Análise SEO Avançada" },
+  "report_footer": { "message": "Gerado por Analisador de Página Web em " },
+  "report_chartTitle": { "message": "Distribuição de Cabeçalhos (H1-H6)" }
+}

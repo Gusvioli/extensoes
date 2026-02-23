@@ -10,7 +10,7 @@ Esta é uma extensão para o Google Chrome que extrai e exibe informações deta
 - **Elementos Ocultos:** Revela inputs ocultos, comentários HTML, dados estruturados (JSON-LD), iframes e regras de robots.txt.
 - **Análise SEO:** Sistema de pontuação (0-100) com verificação de boas práticas, acessibilidade, meta tags e dicas educativas com exemplos.
 - **Relatórios:** Gera um relatório completo em HTML e permite a exportação dos dados.
-- **Exportar para JSON:** Permite exportar todas as informações coletadas para um arquivo JSON.
+- **Exportação de Dados:** Permite exportar todas as informações coletadas para um arquivo JSON ou copiar para a área de transferência.
 
 ## Como Usar
 
@@ -27,6 +27,26 @@ Esta é uma extensão para o Google Chrome que extrai e exibe informações deta
 3. Faça suas alterações e commit: `git commit -m 'Adiciona minha feature'`
 4. Envie para a branch original: `git push origin minha-feature`
 5. Crie um pull request.
+
+## Histórico de Versões (Changelog)
+
+### v1.1.5 (21/01/2026)
+
+- **Correção:** Resolução do problema de fechamento do navegador ao exportar arquivos JSON grandes (processamento movido para background).
+- **Funcionalidade:** Adicionado botão para copiar o JSON diretamente para a área de transferência.
+- **Melhorias:** Ajustes nas permissões do manifesto e otimização do processo de download.
+
+### v1.1 (21/01/2026)
+
+- **Internacionalização:** Suporte completo para Português (pt_BR) e Inglês (en), com seletor de idioma dinâmico.
+- **Doações:** Integração com PayPal e geração de QR Code para facilitar o apoio ao desenvolvimento.
+- **Interface:** Adicionado indicador de carregamento (spinner) para melhor feedback visual.
+- **Correções:** Tratamento de erros para URLs restritas (`chrome://`, `chrome-extension://`) e correções na estrutura de pastas (`_locales`).
+- **Relatórios:** Adicionado gráfico visual de distribuição de cabeçalhos (H1-H6) no relatório completo.
+
+### v1.0
+
+- Lançamento inicial com análise de metadados, SEO, conteúdo técnico e elementos ocultos.
 
 ## Criador
 

@@ -1,4 +1,54 @@
-document.addEventListener("DOMContentLoaded", () => {
+let currentTranslations = {};
+let currentLang = localStorage.getItem("preferred_language") || "pt_BR";
+
+// Função auxiliar para pegar texto traduzido
+function getMsg(key) {
+  return (
+    (currentTranslations[key] && currentTranslations[key].message) ||
+    chrome.i18n.getMessage(key) ||
+    ""
+  );
+}
+
+// Carregar traduções e atualizar interface
+async function setLanguage(lang) {
+  try {
+    const url = chrome.runtime.getURL(`_locales/${lang}/messages.json`);
+    const response = await fetch(url);
+    currentTranslations = await response.json();
+    currentLang = lang;
+    localStorage.setItem("preferred_language", lang);
+
+    // Atualizar textos estáticos
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const key = el.getAttribute("data-i18n");
+      const msg = getMsg(key);
+      if (msg) el.textContent = msg;
+    });
+
+    // Atualizar descrições e re-renderizar se houver dados
+    updateFieldDescriptions();
+    if (extractedData) {
+      displayResults(extractedData);
+    }
+  } catch (e) {
+    console.error("Erro ao carregar idioma:", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // Configurar seletor de idioma
+  const langSelect = document.getElementById("language-select");
+  if (langSelect) {
+    langSelect.value = currentLang;
+    langSelect.addEventListener("change", (e) => {
+      setLanguage(e.target.value);
+    });
+  }
+
+  // Carregar idioma inicial
+  await setLanguage(currentLang);
+
   // Configurar abas
   const tabs = document.querySelectorAll(".tablinks");
   tabs.forEach((tab) => {
@@ -16,86 +66,89 @@ document.addEventListener("DOMContentLoaded", () => {
   const exportBtn = document.getElementById("export-json");
   exportBtn.addEventListener("click", exportJson);
 
+  // Configurar botão de copiar JSON
+  const copyBtn = document.getElementById("copy-json");
+  copyBtn.addEventListener("click", copyJsonToClipboard);
+
   // Criar botão para visualizar relatório completo
   const viewBtn = document.createElement("button");
-  viewBtn.textContent = "Ver Relatório Completo";
+  viewBtn.textContent = getMsg("btnReport") || "Ver Relatório Completo";
   viewBtn.id = "view-report";
   viewBtn.className = exportBtn.className; // Herda classes do botão existente
   viewBtn.style.marginTop = "10px";
   viewBtn.style.width = "100%";
   viewBtn.style.cursor = "pointer";
+  viewBtn.setAttribute("data-i18n", "btnReport"); // Para atualização dinâmica
 
   viewBtn.addEventListener("click", viewReport);
   exportBtn.parentNode.insertBefore(viewBtn, exportBtn.nextSibling);
 
-  // Configurar botão de doação PIX
+  // Configurar botão de doação PayPal
   const donateBtn = document.createElement("button");
-  donateBtn.textContent = "☕ Apoiar com PIX";
+  donateBtn.textContent = getMsg("btnDonate") || "☕ Apoiar com PayPal";
+  donateBtn.setAttribute("data-i18n", "btnDonate"); // Para atualização dinâmica
   donateBtn.style.marginTop = "10px";
   donateBtn.style.marginBottom = "10px";
   donateBtn.style.width = "100%";
   donateBtn.style.cursor = "pointer";
-  donateBtn.style.backgroundColor = "#32bcad"; // Cor característica do PIX
+  donateBtn.style.backgroundColor = "#0070ba"; // Cor característica do PayPal
   donateBtn.style.color = "#fff";
   donateBtn.style.border = "none";
   donateBtn.style.padding = "10px";
   donateBtn.style.borderRadius = "4px";
   donateBtn.style.fontWeight = "bold";
 
-  const pixContainer = document.createElement("div");
-  pixContainer.style.display = "none";
-  pixContainer.style.marginTop = "10px";
-  pixContainer.style.marginBottom = "10px";
-  pixContainer.style.padding = "15px";
-  pixContainer.style.backgroundColor = "#e0f2f1";
-  pixContainer.style.borderRadius = "8px";
-  pixContainer.style.textAlign = "center";
-  pixContainer.style.fontSize = "14px";
-  pixContainer.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+  const paypalContainer = document.createElement("div");
+  paypalContainer.style.display = "none";
+  paypalContainer.style.marginTop = "10px";
+  paypalContainer.style.marginBottom = "10px";
+  paypalContainer.style.padding = "15px";
+  paypalContainer.style.backgroundColor = "#e3f2fd";
+  paypalContainer.style.borderRadius = "8px";
+  paypalContainer.style.textAlign = "center";
+  paypalContainer.style.fontSize = "14px";
+  paypalContainer.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
 
-  // SUBSTITUA AQUI PELA SUA CHAVE PIX REAL
-  const pixKey = "750ad87e-13b9-4b4d-b8bf-4639289dd196";
+  // Link do PayPal com o ID do botão hospedado
+  const paypalUrl =
+    "https://www.paypal.com/donate?hosted_button_id=VQ9ETZ87DJW38";
+  const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(paypalUrl)}&size=120x120&margin=0`;
 
-  pixContainer.innerHTML = `
-    <div style="margin-bottom:10px; font-weight:bold; color:#00695c; font-size:1.1em;">Chave PIX para doação:</div>
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <input id="pix-input" type="text" value="${pixKey}" readonly style="width:100%; box-sizing:border-box; padding:10px; border:2px solid #b2dfdb; border-radius:6px; text-align:center; color:#333; font-family:monospace; font-size:1.1em; background:#fff;">
-      <button id="pix-copy-btn" style="background:#00796b; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold; transition:0.2s;">Copiar Chave</button>
+  paypalContainer.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <div style="text-align: center;">
+        <img src="${qrCodeApiUrl}" alt="QR Code para doação" style="width: 120px; height: 120px; border-radius: 6px; background: white; padding: 5px; border: 1px solid #b0bec5;">
+        <div style="font-size: 0.8em; color: #003087; margin-top: 4px;" data-i18n="scanQr">${getMsg("scanQr")}</div>
+      </div>
+      <div style="flex: 1;">
+        <div style="font-weight:bold; color:#003087; font-size:1.1em;" data-i18n="donateTitle">${getMsg("donateTitle")}</div>
+        <p style="margin: 5px 0 15px; font-size: 0.9em; color: #003087; line-height: 1.4;">
+          <span data-i18n="donateDesc">${getMsg("donateDesc")}</span>
+        </p>
+        <button id="paypal-btn" style="background:#ffc439; color:#003087; border:none; padding:10px 20px; border-radius:20px; cursor:pointer; font-weight:bold; width:100%; font-size:1em; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" data-i18n="donateBtnLabel">${getMsg("donateBtnLabel")}</button>
+      </div>
     </div>
-    <div id="pix-feedback" style="margin-top:8px; font-size:0.9em; color:#004d40; min-height:1.2em;">Obrigado por apoiar o desenvolvimento!</div>
+    <div style="margin-top:12px; font-size:0.85em; color:#003087; text-align: center;" data-i18n="donateThanks">${getMsg("donateThanks")}</div>
   `;
 
   donateBtn.addEventListener("click", () => {
-    const isHidden = pixContainer.style.display === "none";
-    pixContainer.style.display = isHidden ? "block" : "none";
+    const isHidden = paypalContainer.style.display === "none";
+    paypalContainer.style.display = isHidden ? "block" : "none";
     if (isHidden) {
       setTimeout(
-        () => pixContainer.scrollIntoView({ behavior: "smooth" }),
+        () => paypalContainer.scrollIntoView({ behavior: "smooth" }),
         100,
       );
     }
   });
 
-  const copyBtn = pixContainer.querySelector("#pix-copy-btn");
-  const pixInput = pixContainer.querySelector("#pix-input");
-  const feedback = pixContainer.querySelector("#pix-feedback");
-
-  copyBtn.addEventListener("click", () => {
-    pixInput.select();
-    pixInput.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(pixKey).then(() => {
-      const originalText = "Obrigado por apoiar o desenvolvimento!";
-      feedback.textContent = "Chave copiada com sucesso! ✅";
-      copyBtn.style.backgroundColor = "#004d40";
-      setTimeout(() => {
-        feedback.textContent = originalText;
-        copyBtn.style.backgroundColor = "#00796b";
-      }, 3000);
-    });
+  const openPaypalBtn = paypalContainer.querySelector("#paypal-btn");
+  openPaypalBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: paypalUrl });
   });
 
   document.body.insertBefore(donateBtn, document.body.firstChild);
-  document.body.insertBefore(pixContainer, donateBtn.nextSibling);
+  document.body.insertBefore(paypalContainer, donateBtn.nextSibling);
 
   // Iniciar análise da página
   analyzePage();
@@ -116,7 +169,29 @@ function openTab(evt, tabName) {
   evt.currentTarget.className += " active";
 }
 
+function showLoading() {
+  const msg = getMsg("analyzing") || "Analisando...";
+  const html = `
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <div data-i18n="analyzing">${msg}</div>
+    </div>
+  `;
+
+  [
+    "metadata-content",
+    "content-content",
+    "technical-content",
+    "hidden-content",
+    "seo-content",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
 function analyzePage() {
+  showLoading();
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const activeTab = tabs[0];
 
@@ -124,6 +199,7 @@ function analyzePage() {
     if (
       !activeTab.url ||
       activeTab.url.startsWith("chrome://") ||
+      activeTab.url.startsWith("chrome-extension://") ||
       activeTab.url.startsWith("about:") ||
       activeTab.url.includes("chrome.google.com/webstore") ||
       activeTab.url.includes("chromewebstore.google.com")
@@ -142,7 +218,11 @@ function analyzePage() {
         </div>
       `;
       document.body.appendChild(msg);
-      updateBadge(activeTab.id, "unsupported");
+      chrome.runtime.sendMessage({
+        type: "UPDATE_BADGE",
+        status: "unsupported",
+        tabId: activeTab.id,
+      });
       return;
     }
 
@@ -159,7 +239,11 @@ function analyzePage() {
           console.error("Falha na execução:", errorMsg);
           document.getElementById("metadata-content").innerHTML =
             "<div style='padding:20px; text-align:center; color:#5f6368;'>Não foi possível ler os dados desta página.<br><small>Tente recarregar a página.</small></div>";
-          updateBadge(activeTab.id, "error");
+          chrome.runtime.sendMessage({
+            type: "UPDATE_BADGE",
+            status: "error",
+            tabId: activeTab.id,
+          });
           return;
         }
 
@@ -167,17 +251,29 @@ function analyzePage() {
         if (!extractedData) {
           document.getElementById("metadata-content").innerHTML =
             "<div style='padding:20px; text-align:center; color:#5f6368;'>Não foi possível obter os dados da página.</div>";
-          updateBadge(activeTab.id, "error");
+          chrome.runtime.sendMessage({
+            type: "UPDATE_BADGE",
+            status: "error",
+            tabId: activeTab.id,
+          });
           return;
         }
         if (extractedData && extractedData.error) {
           document.getElementById("metadata-content").innerHTML =
             "<div style='padding:20px; text-align:center; color:#5f6368;'>Informações indisponíveis no momento.</div>";
-          updateBadge(activeTab.id, "error");
+          chrome.runtime.sendMessage({
+            type: "UPDATE_BADGE",
+            status: "error",
+            tabId: activeTab.id,
+          });
           return;
         }
         displayResults(extractedData);
-        updateBadge(activeTab.id, "success");
+        chrome.runtime.sendMessage({
+          type: "UPDATE_BADGE",
+          status: "success",
+          tabId: activeTab.id,
+        });
       },
     );
   });
@@ -667,47 +763,63 @@ async function extractPageDetails() {
   }
 }
 
-const fieldDescriptions = {
-  title: "Título principal exibido na aba do navegador.",
-  description: "Resumo do conteúdo utilizado por motores de busca.",
-  keywords: "Palavras-chave definidas para indexação (SEO).",
-  author: "Autor ou responsável pelo conteúdo da página.",
-  headersCount: "Quantidade total de títulos (H1 a H6) encontrados.",
-  linksCount: "Quantidade total de links (hiperligações) na página.",
-  headersSample: "Amostra dos primeiros títulos encontrados.",
-  linksSample: "Amostra dos primeiros links encontrados.",
-  loadTime: "Tempo total para carregar a página (navegação).",
-  cookiesCount: "Número de cookies armazenados por este site.",
-  localStorageCount: "Itens salvos no armazenamento local (persistente).",
-  sessionStorageCount: "Itens salvos na sessão (apaga ao fechar).",
-  userAgent: "Identificação do seu navegador e sistema operacional.",
-  language: "Idioma preferido configurado no navegador.",
-  platform: "Plataforma do sistema operacional (ex: Win32, Linux).",
-  referrer: "Endereço da página anterior que levou a esta.",
-  technologies: "Bibliotecas ou frameworks detectados na página.",
-  hiddenInputs: "Campos ocultos de formulários (tokens, IDs, etc).",
-  comments: "Comentários HTML no código-fonte.",
-  jsonLd: "Dados estruturados JSON-LD para motores de busca.",
-  iframes: "Conteúdo externo carregado via iframe.",
-  accessRestrictions: "Regras de permissão e bloqueio para robôs/usuários.",
-  robotsTxt: "Arquivo de regras para indexadores (crawlers).",
-  metaRobots: "Instruções diretas para robôs (ex: noindex, nofollow).",
-  score: "Pontuação estimada de SEO baseada nos critérios abaixo (0-100).",
-  titleCheck: "Análise do tamanho do título (SEO).",
-  descriptionCheck: "Análise do tamanho da meta descrição (SEO).",
-  h1Check: "Verificação da tag de título principal H1.",
-  imagesAltCheck: "Acessibilidade e SEO para imagens (texto alternativo).",
-  canonicalCheck: "URL canônica para evitar duplicação de conteúdo.",
-  mobileFriendly: "Verificação básica de responsividade (viewport).",
-  langCheck: "Definição do idioma da página (tag html lang).",
-  ogCheck: "Presença de meta tags para redes sociais (Open Graph).",
-  faviconCheck: "Ícone da página para abas e favoritos.",
-  indexingCheck: "Verifica se a página permite indexação por buscadores.",
-  twitterCheck: "Tags específicas para compartilhamento no Twitter.",
-  charsetCheck: "Codificação de caracteres da página (Recomendado: UTF-8).",
-  doctypeCheck: "Declaração do tipo de documento HTML.",
-  deprecatedCheck: "Verificação de tags HTML antigas/obsoletas.",
-};
+let fieldDescriptions = {};
+
+function updateFieldDescriptions() {
+  fieldDescriptions = {
+    title:
+      getMsg("desc_title") || "Título principal exibido na aba do navegador.",
+    description:
+      getMsg("desc_description") ||
+      "Resumo do conteúdo utilizado por motores de busca.",
+    keywords:
+      getMsg("desc_keywords") ||
+      "Palavras-chave definidas para indexação (SEO).",
+    author:
+      getMsg("desc_author") || "Autor ou responsável pelo conteúdo da página.",
+    headersCount: "Quantidade total de títulos (H1 a H6) encontrados.",
+    linksCount: "Quantidade total de links (hiperligações) na página.",
+    headersSample: "Amostra dos primeiros títulos encontrados.",
+    linksSample: "Amostra dos primeiros links encontrados.",
+    loadTime:
+      getMsg("desc_loadTime") ||
+      "Tempo total para carregar a página (navegação).",
+    cookiesCount: "Número de cookies armazenados por este site.",
+    localStorageCount: "Itens salvos no armazenamento local (persistente).",
+    sessionStorageCount: "Itens salvos na sessão (apaga ao fechar).",
+    userAgent: "Identificação do seu navegador e sistema operacional.",
+    language: "Idioma preferido configurado no navegador.",
+    platform: "Plataforma do sistema operacional (ex: Win32, Linux).",
+    referrer: "Endereço da página anterior que levou a esta.",
+    technologies:
+      getMsg("desc_technologies") ||
+      "Bibliotecas ou frameworks detectados na página.",
+    hiddenInputs: "Campos ocultos de formulários (tokens, IDs, etc).",
+    comments: "Comentários HTML no código-fonte.",
+    jsonLd: "Dados estruturados JSON-LD para motores de busca.",
+    iframes: "Conteúdo externo carregado via iframe.",
+    accessRestrictions: "Regras de permissão e bloqueio para robôs/usuários.",
+    robotsTxt: "Arquivo de regras para indexadores (crawlers).",
+    metaRobots: "Instruções diretas para robôs (ex: noindex, nofollow).",
+    score:
+      getMsg("desc_score") ||
+      "Pontuação estimada de SEO baseada nos critérios abaixo (0-100).",
+    titleCheck: "Análise do tamanho do título (SEO).",
+    descriptionCheck: "Análise do tamanho da meta descrição (SEO).",
+    h1Check: "Verificação da tag de título principal H1.",
+    imagesAltCheck: "Acessibilidade e SEO para imagens (texto alternativo).",
+    canonicalCheck: "URL canônica para evitar duplicação de conteúdo.",
+    mobileFriendly: "Verificação básica de responsividade (viewport).",
+    langCheck: "Definição do idioma da página (tag html lang).",
+    ogCheck: "Presença de meta tags para redes sociais (Open Graph).",
+    faviconCheck: "Ícone da página para abas e favoritos.",
+    indexingCheck: "Verifica se a página permite indexação por buscadores.",
+    twitterCheck: "Tags específicas para compartilhamento no Twitter.",
+    charsetCheck: "Codificação de caracteres da página (Recomendado: UTF-8).",
+    doctypeCheck: "Declaração do tipo de documento HTML.",
+    deprecatedCheck: "Verificação de tags HTML antigas/obsoletas.",
+  };
+}
 
 function escapeHtml(text) {
   if (typeof text !== "string") return text;
@@ -837,7 +949,7 @@ function displayResults(data) {
 
       seoHtml += `
         <div style="text-align: center; padding: 15px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e0e0;">
-            <div style="font-size: 1.1em; font-weight: bold; color: #202124; margin-bottom: 8px;">Pontuação de SEO</div>
+            <div style="font-size: 1.1em; font-weight: bold; color: #202124; margin-bottom: 8px;">${getMsg("report_seoScore")}</div>
             ${desc ? `<div style="font-size:0.8em; color:#5f6368; margin-bottom:12px;">${desc}</div>` : ""}
             <div style="background-color: #e9ecef; border-radius: 20px; overflow: hidden; border: 1px solid #dee2e6;">
                 <div style="width: ${percentage}%; background-color: ${color}; padding: 4px 0; transition: width 0.5s ease-out;"></div>
@@ -858,19 +970,26 @@ function displayResults(data) {
 function exportJson() {
   if (!extractedData) return;
 
-  const blob = new Blob([JSON.stringify(extractedData, null, 2)], {
-    type: "application/json",
+  // Envia os dados para o background script iniciar o download.
+  // Isso impede que o download falhe caso o popup feche (ex: ao abrir "Salvar como").
+  chrome.runtime.sendMessage({
+    type: "DOWNLOAD_DATA",
+    data: extractedData,
   });
-  const url = URL.createObjectURL(blob);
+}
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `analise-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
+function copyJsonToClipboard() {
+  if (!extractedData) return;
 
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const jsonString = JSON.stringify(extractedData, null, 2);
+  navigator.clipboard.writeText(jsonString).then(() => {
+    const btn = document.getElementById("copy-json");
+    const originalText = btn.textContent;
+    btn.textContent = getMsg("msgCopied") || "Copiado!";
+    setTimeout(() => {
+      btn.textContent = getMsg("btnCopy") || "Copiar JSON";
+    }, 2000);
+  });
 }
 
 function viewReport() {
@@ -892,7 +1011,7 @@ function viewReport() {
 
         seoHtml += `
           <div style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0; max-width: 500px; margin-left: auto; margin-right: auto;">
-              <div style="font-size: 1.4em; font-weight: bold; color: #202124; margin-bottom: 10px;">Pontuação de SEO</div>
+              <div style="font-size: 1.4em; font-weight: bold; color: #202124; margin-bottom: 10px;">${getMsg("report_seoScore")}</div>
               <div style="background-color: #e9ecef; border-radius: 20px; overflow: hidden; border: 1px solid #dee2e6; height: 15px;">
                   <div style="width: ${percentage}%; background-color: ${color}; height: 100%;"></div>
               </div>
@@ -905,13 +1024,50 @@ function viewReport() {
     seoHtml += renderWithExplanations(otherSeoData);
   }
 
+  // Gráfico de distribuição de headers (H1-H6)
+  let headerChartHtml = "";
+  if (extractedData.content && extractedData.content.headers) {
+    const headerCounts = { H1: 0, H2: 0, H3: 0, H4: 0, H5: 0, H6: 0 };
+    extractedData.content.headers.forEach((h) => {
+      const tag = h.tag.toUpperCase();
+      if (headerCounts[tag] !== undefined) headerCounts[tag]++;
+    });
+
+    const maxCount = Math.max(...Object.values(headerCounts));
+
+    headerChartHtml = `
+      <div style="margin-bottom: 30px; padding: 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 10px;">${getMsg("report_chartTitle") || "Distribuição de Cabeçalhos (H1-H6)"}</h3>
+          <div style="display: flex; align-items: flex-end; height: 160px; gap: 15px; padding: 0 10px;">
+    `;
+
+    for (let i = 1; i <= 6; i++) {
+      const tag = `H${i}`;
+      const count = headerCounts[tag];
+      const heightPct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+      const barColor = count > 0 ? "#1a73e8" : "#e0e0e0";
+
+      headerChartHtml += `
+          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%;">
+              <div style="flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px;">
+                  <div style="width: 100%; max-width: 40px; background-color: ${barColor}; border-radius: 4px 4px 0 0; height: ${heightPct}%; min-height: ${count > 0 ? 4 : 1}px; position: relative;">
+                      ${count > 0 ? `<span style="position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #555; font-weight: bold;">${count}</span>` : ""}
+                  </div>
+              </div>
+              <div style="font-weight: bold; color: #5f6368; font-size: 13px; border-top: 1px solid #eee; width: 100%; text-align: center; padding-top: 5px;">${tag}</div>
+          </div>
+        `;
+    }
+    headerChartHtml += `</div></div>`;
+  }
+
   const reportHtml = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Relatório Completo - ${escapeHtml(extractedData.metadata.title || "Análise de Página")}</title>
+      <title>${getMsg("report_title")}${escapeHtml(extractedData.metadata.title || getMsg("report_defaultTitle"))}</title>
       <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f8f9fa; color: #333; margin: 0; }
         .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -932,35 +1088,36 @@ function viewReport() {
     </head>
     <body>
       <div class="container">
-        <h1>Relatório de Análise: ${escapeHtml(extractedData.metadata.title || "Página Web")}</h1>
+        <h1>${getMsg("report_analysisTitle")}${escapeHtml(extractedData.metadata.title || getMsg("report_pageDefault"))}</h1>
         
         <div class="section">
-          <h2>Metadados</h2>
+          <h2>${getMsg("tabMetadata")}</h2>
+          ${headerChartHtml}
           ${renderWithExplanations(extractedData.metadata)}
         </div>
 
         <div class="section">
-          <h2>Conteúdo Completo</h2>
+          <h2>${getMsg("report_sectionContent")}</h2>
           ${renderWithExplanations(extractedData.content)}
         </div>
 
         <div class="section">
-          <h2>Informações Técnicas</h2>
+          <h2>${getMsg("report_sectionTechnical")}</h2>
           ${renderWithExplanations(extractedData.technical)}
         </div>
 
         <div class="section">
-          <h2>Elementos Ocultos</h2>
+          <h2>${getMsg("report_sectionHidden")}</h2>
           ${renderWithExplanations(extractedData.hidden)}
         </div>
 
         <div class="section">
-          <h2>Análise SEO Avançada</h2>
+          <h2>${getMsg("report_sectionSeo")}</h2>
           ${seoHtml}
         </div>
         
         <div style="margin-top: 30px; text-align: center; color: #666; font-size: 0.9em;">
-          Gerado por Analisador de Página Web em ${new Date().toLocaleString()}
+          ${getMsg("report_footer")}${new Date().toLocaleString()}
         </div>
       </div>
     </body>
@@ -970,25 +1127,4 @@ function viewReport() {
   const blob = new Blob([reportHtml], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   chrome.tabs.create({ url: url });
-}
-
-function updateBadge(tabId, status) {
-  if (!chrome.action) return;
-
-  let text = "";
-  let color = "";
-
-  if (status === "success") {
-    text = "On";
-    color = "#1a971a";
-  } else if (status === "unsupported") {
-    text = "Off";
-    color = "#d93025";
-  } else if (status === "error") {
-    text = "Err";
-    color = "#f29900";
-  }
-
-  chrome.action.setBadgeText({ text, tabId });
-  chrome.action.setBadgeBackgroundColor({ color, tabId });
 }
