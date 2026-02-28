@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "IA para analisar imagens",
+  "version": "1.2.14",
+  "description": "Cole uma imagem e receba uma resposta automaticamente usando inteligência artificial.",
+  "icons": {
+    "16": "icons/digital-art_10817272.png",
+    "32": "icons/digital-art_10817272.png",
+    "48": "icons/digital-art_10817272.png",
+    "128": "icons/digital-art_10817272.png"
+  },
+  "permissions": [
+    "clipboardRead",
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/processing/processing.html", "icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/digital-art_10817272.png",
+      "32": "icons/digital-art_10817272.png",
+      "48": "icons/digital-art_10817272.png",
+      "128": "icons/digital-art_10817272.png"
+    }
+  },
+
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

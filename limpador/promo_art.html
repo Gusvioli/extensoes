@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gerador de Banners - Limpador de Histórico</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap");
+
+      :root {
+        --primary: #2563eb;
+        --primary-dark: #1e40af;
+        --text-main: #111827;
+        --text-light: #ffffff;
+        --font-family: "Inter", system-ui, -apple-system, sans-serif;
+      }
+
+      body {
+        font-family: var(--font-family);
+        background: #1f2937;
+        margin: 0;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 60px;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .label {
+        color: #9ca3af;
+        font-family: monospace;
+        font-size: 14px;
+      }
+
+      .asset-container {
+        position: relative;
+        overflow: hidden;
+        background: white;
+        box-shadow:
+          0 20px 25px -5px rgba(0, 0, 0, 0.1),
+          0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+
+      /* SVG Icon Style */
+      .icon-svg {
+        fill: currentColor;
+      }
+
+      /* --- 1. Small Promo Tile (440x280) --- */
+      #small-promo {
+        width: 440px;
+        height: 280px;
+        background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        border-radius: 0;
+        border: 1px solid #e5e7eb;
+      }
+
+      #small-promo .icon-box {
+        color: var(--primary);
+        margin-bottom: 15px;
+      }
+
+      #small-promo h1 {
+        font-size: 28px;
+        color: var(--text-main);
+        margin: 0;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      #small-promo p {
+        font-size: 16px;
+        color: #6b7280;
+        margin: 8px 0 0 0;
+        font-weight: 500;
+      }
+
+      /* --- 2. Marquee Promo Tile (1400x560) --- */
+      #marquee-promo {
+        width: 1400px;
+        height: 560px;
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 120px;
+        box-sizing: border-box;
+        position: relative;
+      }
+
+      /* Elemento decorativo de fundo */
+      #marquee-promo::before {
+        content: "";
+        position: absolute;
+        top: -100px;
+        right: -100px;
+        width: 600px;
+        height: 600px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 50%;
+        z-index: 1;
+      }
+
+      .marquee-content {
+        color: white;
+        max-width: 600px;
+        z-index: 2;
+      }
+
+      .marquee-content h1 {
+        font-size: 72px;
+        margin: 0 0 24px 0;
+        line-height: 1.1;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .marquee-content p {
+        font-size: 28px;
+        opacity: 0.9;
+        margin: 0;
+        line-height: 1.5;
+        font-weight: 400;
+      }
+
+      .marquee-visual {
+        position: relative;
+        z-index: 2;
+        width: 480px;
+        height: 480px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      }
+
+      .marquee-visual img {
+        width: 240px;
+        height: 240px;
+        filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
+      }
+
+      /* --- 3. Social Media / LinkedIn (1200x628) --- */
+      #social-promo {
+        width: 1200px;
+        height: 628px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border: 1px solid #e5e7eb;
+      }
+
+      #social-promo h1 {
+        font-size: 56px;
+        color: var(--text-main);
+        margin: 20px 0 10px 0;
+        font-weight: 800;
+      }
+
+      #social-promo .tag {
+        background: var(--primary);
+        color: white;
+        padding: 10px 24px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 20px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      /* --- 4. Store Icon (128x128) --- */
+      #store-icon {
+        width: 128px;
+        height: 128px;
+        background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+      }
+      #store-icon img {
+        width: 88px;
+        height: 88px;
+        filter: drop-shadow(0 8px 12px rgba(37, 99, 235, 0.2));
+        transform: scale(1.05);
+      }
+
+      /* Mockup de Navegador para o Social */
+      .browser-mockup {
+        width: 600px;
+        height: 300px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
+        border: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        margin-top: 30px;
+      }
+      .browser-header {
+        height: 30px;
+        background: #f3f4f6;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 6px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #d1d5db;
+      }
+      .dot.red {
+        background: #fca5a5;
+      }
+      .dot.yellow {
+        background: #fcd34d;
+      }
+      .dot.green {
+        background: #86efac;
+      }
+      .browser-body {
+        flex: 1;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+        background: #fafafa;
+      }
+
+      .download-btn {
+        margin-top: 15px;
+        padding: 10px 20px;
+        background-color: #10b981;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.2s;
+      }
+
+      .download-btn:hover {
+        background-color: #059669;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="section">
+      <div class="label">Tema / Imagem Promocional Pequena (440x280)</div>
+      <div id="small-promo" class="asset-container">
+        <div class="icon-box">
+          <img src="icon.png" width="80" height="80" alt="Ícone" />
+        </div>
+        <h1>Limpador de<br />Histórico</h1>
+        <p style="color: #4b5563">Limpeza rápida, segura e local.</p>
+      </div>
+      <button
+        class="download-btn"
+        onclick="downloadImage('small-promo', 'small_promo.png', 'image/png')"
+      >
+        Baixar PNG
+      </button>
+      <button
+        class="download-btn"
+        onclick="downloadImage('small-promo', 'small_promo.jpg', 'image/jpeg')"
+      >
+        Baixar JPEG (Sem Alfa)
+      </button>
+    </div>
+
+    <div class="section">
+      <div class="label">Imagem Marquee (1400x560)</div>
+      <div id="marquee-promo" class="asset-container">
+        <div class="marquee-content">
+          <h1>Controle total do seu histórico</h1>
+          <p>Limpeza seletiva, backup em CSV e<br />privacidade garantida.</p>
+        </div>
+        <div class="marquee-visual">
+          <img src="icon.png" alt="Ícone" />
+        </div>
+      </div>
+      <button
+        class="download-btn"
+        onclick="
+          downloadImage('marquee-promo', 'marquee_promo.png', 'image/png')
+        "
+      >
+        Baixar PNG
+      </button>
+    </div>
+
+    <div class="section">
+      <div class="label">Banner Social / LinkedIn (1200x628)</div>
+      <div id="social-promo" class="asset-container">
+        <div class="tag">Nova Extensão</div>
+        <h1>Limpador de Histórico</h1>
+        <div
+          style="
+            color: #6b7280;
+            font-size: 24px;
+            max-width: 700px;
+            margin-bottom: 10px;
+          "
+        >
+          Mantenha seu navegador leve e proteja sua privacidade.
+        </div>
+
+        <div class="browser-mockup">
+          <div class="browser-header">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+          </div>
+          <div class="browser-body">
+            <div style="font-size: 18px; color: #374151; font-weight: 600">
+              Histórico Limpo com Sucesso!
+            </div>
+            <div style="font-size: 40px">✨ 🛡️ 🚀</div>
+            <div style="margin-top: 10px; font-size: 14px; color: #9ca3af">
+              chrome://history
+            </div>
+          </div>
+        </div>
+
+        <div
+          style="
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            color: #6b7280;
+            font-weight: 500;
+          "
+        >
+          <span>✅ Backup CSV</span>
+          <span>✅ Busca Inteligente</span>
+          <span>✅ 100% Local</span>
+        </div>
+      </div>
+      <button
+        class="download-btn"
+        onclick="
+          downloadImage('social-promo', 'linkedin_post.png', 'image/png')
+        "
+      >
+        Baixar PNG
+      </button>
+    </div>
+
+    <div class="section">
+      <div class="label">Ícone da Store (128x128)</div>
+      <div id="store-icon" class="asset-container">
+        <img src="icon.png" alt="Ícone" />
+      </div>
+      <button
+        class="download-btn"
+        onclick="downloadImage('store-icon', 'store_icon.png', 'image/png')"
+      >
+        Baixar PNG
+      </button>
+    </div>
+
+    <script>
+      function downloadImage(elementId, filename, format = "image/png") {
+        const element = document.getElementById(elementId);
+        // Adicionado useCORS para ajudar a renderizar a imagem externa (icon.png) no download.
+        // Nota: Alguns navegadores podem ter políticas de segurança que bloqueiam
+        // o acesso a imagens locais (file://) por scripts. Se o ícone não aparecer
+        // na imagem baixada, isso pode ser a causa.
+        // Adicionado backgroundColor para garantir fundo branco em JPEGs (remove transparência/alfa)
+        html2canvas(element, {
+          scale: 1,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+        }).then((canvas) => {
+          const link = document.createElement("a");
+          link.download = filename;
+          link.href = canvas.toDataURL(format);
+          link.click();
+        });
+      }
+    </script>
+  </body>
+</html>
